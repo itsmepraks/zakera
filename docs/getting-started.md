@@ -1,17 +1,15 @@
 # Getting Started with Zakera
 
-This guide will help you set up and run Zakera on your local machine.
+Welcome to Zakera! This guide will help you set up and run the AI chat agent.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed:
+- Python 3.9 or higher
+- Node.js 18 or higher
+- npm or yarn
+- API key from OpenAI, Anthropic, or a local model setup
 
-- **Python 3.9+**: [Download Python](https://www.python.org/downloads/)
-- **Node.js 16+**: [Download Node.js](https://nodejs.org/)
-- **Git**: [Download Git](https://git-scm.com/downloads/)
-- **API Key**: OpenAI, Anthropic, or other AI provider
-
-## Installation Steps
+## Quick Start
 
 ### 1. Clone the Repository
 
@@ -20,195 +18,100 @@ git clone https://github.com/itsmepraks/zakera.git
 cd zakera
 ```
 
-### 2. Backend Setup
+### 2. Automated Setup
 
-#### Create Virtual Environment
-
-```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-
-# On Windows:
-venv\Scripts\activate
-```
-
-#### Install Python Dependencies
+Run the setup script:
 
 ```bash
-pip install -r requirements.txt
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 ```
 
-#### Configure Environment
+This will:
+- Create a Python virtual environment
+- Install all Python dependencies
+- Create configuration files
+- Install frontend dependencies
 
-```bash
-# Copy example environment file
-cp config/.env.example config/.env
+### 3. Configure Environment
 
-# Edit the configuration file
-# Add your API keys and settings
-nano config/.env  # or use your preferred editor
-```
+Edit `config/.env` with your settings:
 
-Required environment variables:
 ```env
-OPENAI_API_KEY=sk-...
+# Choose your AI provider
+MODEL_PROVIDER=openai
 MODEL_NAME=gpt-4-turbo-preview
-DATABASE_URL=sqlite:///./data/zakera.db
-SECRET_KEY=your-secret-key-here
+
+# Add your API key
+OPENAI_API_KEY=sk-...
 ```
 
-#### Initialize Database
+### 4. Run the Application
+
+#### Option A: Using the run script
 
 ```bash
-python scripts/init_db.py
+chmod +x scripts/run_dev.sh
+./scripts/run_dev.sh
 ```
 
-#### Run Backend Server
+#### Option B: Manual start
 
+**Terminal 1 - Backend:**
 ```bash
-uvicorn src.api.main:app --reload --port 8000
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m uvicorn src.api.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`
-
-API Documentation: `http://localhost:8000/docs`
-
-### 3. Frontend Setup
-
-#### Navigate to Frontend Directory
-
+**Terminal 2 - Frontend:**
 ```bash
 cd src/frontend
-```
-
-#### Install Node Dependencies
-
-```bash
-npm install
-```
-
-#### Configure Frontend Environment
-
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local`:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
-
-#### Run Frontend Development Server
-
-```bash
 npm run dev
 ```
 
-The UI will be available at `http://localhost:3000`
+### 5. Access the Application
 
-## First Conversation
-
-1. Open your browser to `http://localhost:3000`
-2. You'll see the Zakera chat interface
-3. Type a message like "Hello! Tell me about yourself."
-4. The AI will respond with context awareness
-
-## Testing the Installation
-
-### Test Backend API
-
-```bash
-# Test health endpoint
-curl http://localhost:8000/health
-
-# Test chat endpoint
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello", "conversation_id": null}'
-```
-
-### Run Test Suite
-
-```bash
-# Backend tests
-pytest tests/ -v
-
-# Frontend tests
-cd src/frontend
-npm test
-```
-
-## Common Issues
-
-### Issue: "Module not found"
-**Solution**: Ensure virtual environment is activated and dependencies are installed
-```bash
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Issue: "API key not found"
-**Solution**: Check that your `.env` file is in the correct location and properly formatted
-```bash
-cat config/.env  # Verify the file contents
-```
-
-### Issue: "Port already in use"
-**Solution**: Use a different port
-```bash
-uvicorn src.api.main:app --reload --port 8001
-```
-
-### Issue: Database errors
-**Solution**: Reinitialize the database
-```bash
-rm -rf data/zakera.db
-python scripts/init_db.py
-```
+- **Frontend UI**: http://localhost:3000
+- **API Backend**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/api/docs
 
 ## Next Steps
 
-- 📖 Read the [Architecture Documentation](architecture.md)
-- 🔧 Explore [Configuration Options](configuration.md)
-- 🛠️ Learn about [Tool Development](tools.md)
-- 🚀 Check the [Deployment Guide](deployment.md)
+- Explore the [API Reference](api-reference.md)
+- Learn about [Configuration Options](configuration.md)
+- Read the [Architecture Overview](architecture.md)
+- Check out [Tool Development](tools.md)
 
-## Development Workflow
+## Troubleshooting
 
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feature/your-feature
-   ```
+### Python Dependencies
 
-2. **Make your changes**
-   - Write code
-   - Add tests
-   - Update documentation
+If you encounter issues installing dependencies:
 
-3. **Run quality checks**
-   ```bash
-   black src/
-   flake8 src/
-   pytest tests/
-   ```
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt --no-cache-dir
+```
 
-4. **Commit and push**
-   ```bash
-   git add .
-   git commit -m "feat: your feature description"
-   git push origin feature/your-feature
-   ```
+### Frontend Issues
 
-5. **Create pull request**
+```bash
+cd src/frontend
+rm -rf node_modules package-lock.json
+npm install
+```
 
-## Getting Help
+### Port Already in Use
 
-- 📧 Email: [Your contact]
-- 🐛 Issues: [GitHub Issues](https://github.com/itsmepraks/zakera/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/itsmepraks/zakera/discussions)
+Change ports in:
+- Backend: `config/.env` → `API_PORT=8001`
+- Frontend: `src/frontend/package.json` → `"dev": "next dev -p 3001"`
 
-Happy coding! 🎉
+## Development Mode
+
+The application runs in development mode by default with:
+- Hot reloading for code changes
+- Detailed error messages
+- Debug logging
+
+For production deployment, see [Deployment Guide](deployment.md).
