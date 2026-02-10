@@ -5,7 +5,7 @@ import uvicorn
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from .routes import chat, conversations, health
+from .routes import chat, conversations, health, auth
 from .config import settings
 from .database import init_db
 
@@ -16,14 +16,15 @@ async def lifespan(app: FastAPI):
     print("📦 Initializing database...")
     init_db()
     print("✅ Database initialized")
+    print("🔐 Authentication system ready")
     yield
     # Shutdown
     print("👋 Shutting down Zakera...")
 
 app = FastAPI(
     title="Zakera AI Chat Agent",
-    description="Intelligent chat agent with conversation memory and tool integration",
-    version="0.2.0",
+    description="Intelligent chat agent with conversation memory, authentication, and tool integration",
+    version="0.3.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     lifespan=lifespan
@@ -40,6 +41,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(conversations.router, prefix="/api/v1", tags=["conversations"])
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 
@@ -47,12 +49,14 @@ app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 async def root():
     return {
         "message": "Zakera AI Chat Agent API",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "features": {
             "database": "✅ SQLAlchemy with persistent storage",
-            "conversations": "✅ Full CRUD operations",
+            "authentication": "✅ JWT-based user authentication",
+            "conversations": "✅ Full CRUD with user isolation",
             "messages": "✅ Persistent message history",
-            "authentication": "🚧 Coming soon"
+            "websockets": "✅ Real-time streaming with auth",
+            "ai_integration": "🚧 Coming soon"
         },
         "docs": "/api/docs",
         "timestamp": datetime.utcnow().isoformat()

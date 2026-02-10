@@ -5,7 +5,8 @@ from pydantic import BaseModel
 from datetime import datetime
 
 from ..database import get_db
-from ..models import Conversation, Message
+from ..models import Conversation, Message, User
+from ..auth import get_current_active_user
 
 router = APIRouter()
 
@@ -53,12 +54,12 @@ class ConversationDetailResponse(ConversationResponse):
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(
     conversation: ConversationCreate,
-    user_id: str = "default-user",  # TODO: Get from auth
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new conversation"""
+    """Create a new conversation for the authenticated user"""
     db_conversation = Conversation(
-        user_id=user_id,
+        user_id=current_user.id,
         title=conversation.title,
         system_prompt=conversation.system_prompt,
         model_name=conversation.model_name,
@@ -82,17 +83,21 @@ async def create_conversation(
 
 @router.get("/conversations", response_model=List[ConversationResponse])
 async def list_conversations(
-    user_id: str = "default-user",  # TODO: Get from auth
+    current_user: User = Depends(get_current_active_user),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     archived: Optional[bool] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """List all conversations for a user"""
-    query = db.query(Conversation).filter(Conversation.user_id == user_id)
+    """List all conversations for the authenticated user"""
+    query = db.query(Conversation).filter(Conversation.user_id == current_user.id)
     
     if archived is not None:
         query = query.filter(Conversation.is_archived == archived)
+    
+    if search:
+        query = query.filter(Conversation.title.contains(search))
     
     query = query.order_by(Conversation.is_pinned.desc(), Conversation.updated_at.desc())
     conversations = query.offset(skip).limit(limit).all()
@@ -115,13 +120,13 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}", response_model=ConversationDetailResponse)
 async def get_conversation(
     conversation_id: str,
-    user_id: str = "default-user",  # TODO: Get from auth
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Get a specific conversation with its messages"""
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
-        Conversation.user_id == user_id
+        Conversation.user_id == current_user.id
     ).first()
     
     if not conversation:
@@ -156,13 +161,13 @@ async def get_conversation(
 async def update_conversation(
     conversation_id: str,
     update: ConversationUpdate,
-    user_id: str = "default-user",  # TODO: Get from auth
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Update a conversation"""
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
-        Conversation.user_id == user_id
+        Conversation.user_id == current_user.id
     ).first()
     
     if not conversation:
@@ -196,13 +201,13 @@ async def update_conversation(
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
     conversation_id: str,
-    user_id: str = "default-user",  # TODO: Get from auth
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """Delete a conversation"""
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
-        Conversation.user_id == user_id
+        Conversation.user_id == current_user.id
     ).first()
     
     if not conversation:
