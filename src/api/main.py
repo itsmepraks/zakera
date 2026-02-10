@@ -3,16 +3,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 from datetime import datetime
+from contextlib import asynccontextmanager
 
 from .routes import chat, conversations, health
 from .config import settings
+from .database import init_db
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize database
+    print("🚀 Starting Zakera AI Chat Agent...")
+    print("📦 Initializing database...")
+    init_db()
+    print("✅ Database initialized")
+    yield
+    # Shutdown
+    print("👋 Shutting down Zakera...")
 
 app = FastAPI(
     title="Zakera AI Chat Agent",
     description="Intelligent chat agent with conversation memory and tool integration",
-    version="0.1.0",
+    version="0.2.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    lifespan=lifespan
 )
 
 # CORS Configuration
@@ -33,7 +47,13 @@ app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 async def root():
     return {
         "message": "Zakera AI Chat Agent API",
-        "version": "0.1.0",
+        "version": "0.2.0",
+        "features": {
+            "database": "✅ SQLAlchemy with persistent storage",
+            "conversations": "✅ Full CRUD operations",
+            "messages": "✅ Persistent message history",
+            "authentication": "🚧 Coming soon"
+        },
         "docs": "/api/docs",
         "timestamp": datetime.utcnow().isoformat()
     }
