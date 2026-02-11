@@ -1,383 +1,452 @@
 # Deployment Guide
 
-This guide covers deploying Zakera AI Chat Agent using Docker and Docker Compose.
-
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Production Deployment](#production-deployment)
-- [Monitoring and Maintenance](#monitoring-and-maintenance)
-- [Troubleshooting](#troubleshooting)
+1. [Prerequisites](#prerequisites)
+2. [Environment Configuration](#environment-configuration)
+3. [Docker Deployment](#docker-deployment)
+4. [Kubernetes Deployment](#kubernetes-deployment)
+5. [Production Checklist](#production-checklist)
+6. [Scaling](#scaling)
+7. [Backup and Recovery](#backup-and-recovery)
 
 ## Prerequisites
 
-- Docker 20.10 or higher
-- Docker Compose 2.0 or higher
-- At least 2GB of available RAM
-- 10GB of available disk space
-- API keys for your chosen AI provider (OpenAI, Anthropic, or Google)
+- Docker 20.10+
+- Docker Compose 2.0+
+- 4GB RAM minimum (8GB recommended)
+- 20GB disk space
+- Valid API keys for AI providers
 
-## Quick Start
+## Environment Configuration
 
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/itsmepraks/zakera.git
-cd zakera
-```
-
-### 2. Configure Environment Variables
-
-Create a `.env` file in the project root:
+### Production Environment Variables
 
 ```bash
-cp config/.env.example .env
-```
+# Copy and configure
+cp .env.example .env.production
 
-Edit `.env` and set your API keys:
+# Required variables
+ENVIRONMENT=production
+SECRET_KEY=your-super-secret-key-change-this
+DATABASE_URL=postgresql://user:pass@db:5432/zakera
+REDIS_URL=redis://redis:6379/0
 
-```env
-# AI Model Configuration
+# AI Provider Configuration
 MODEL_PROVIDER=openai
-MODEL_NAME=gpt-4-turbo-preview
-OPENAI_API_KEY=sk-your-openai-key
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
-GOOGLE_API_KEY=your-google-api-key
-
-# Database
-POSTGRES_PASSWORD=your-secure-postgres-password
-
-# Redis
-REDIS_PASSWORD=your-secure-redis-password
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 
 # Security
-SECRET_KEY=your-very-secret-key-change-this
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:80
-
-# Optional
-DEBUG=false
-ENABLE_METRICS=true
-```
-
-### 3. Start the Services
-
-```bash
-# Build and start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Check service status
-docker-compose ps
-```
-
-### 4. Access the Application
-
-- **Frontend**: http://localhost
-- **API**: http://localhost/api
-- **API Documentation**: http://localhost/api/docs
-- **Health Check**: http://localhost/health
-- **Metrics** (if enabled): http://localhost/metrics
-
-## Configuration
-
-### Service Architecture
-
-The Docker Compose setup includes:
-
-1. **PostgreSQL**: Primary database for persistent storage
-2. **Redis**: Caching and session management
-3. **Backend**: FastAPI application server
-4. **Nginx**: Reverse proxy and static file server
-
-### Environment Variables
-
-#### API Configuration
-
-- `API_HOST`: Host to bind the API (default: 0.0.0.0)
-- `API_PORT`: Port for the API (default: 8000)
-- `DEBUG`: Enable debug mode (default: false)
-
-#### Database Configuration
-
-- `DATABASE_URL`: PostgreSQL connection string
-- `POSTGRES_PASSWORD`: PostgreSQL password
-
-#### Cache Configuration
-
-- `REDIS_URL`: Redis connection string
-- `REDIS_PASSWORD`: Redis authentication password
-
-#### AI Model Configuration
-
-- `MODEL_PROVIDER`: AI provider (openai, anthropic, google, local)
-- `MODEL_NAME`: Specific model to use
-- `OPENAI_API_KEY`: OpenAI API key
-- `ANTHROPIC_API_KEY`: Anthropic API key
-- `GOOGLE_API_KEY`: Google API key
-
-#### Security Configuration
-
-- `SECRET_KEY`: Secret key for JWT tokens and encryption
-- `ALLOWED_ORIGINS`: CORS allowed origins (comma-separated)
-
-### Volume Management
-
-Data is persisted in Docker volumes:
-
-```bash
-# List volumes
-docker volume ls
-
-# Backup database
-docker-compose exec postgres pg_dump -U zakera zakera > backup.sql
-
-# Restore database
-docker-compose exec -T postgres psql -U zakera zakera < backup.sql
-```
-
-## Production Deployment
-
-### 1. Security Hardening
-
-```bash
-# Generate strong secrets
-openssl rand -hex 32  # For SECRET_KEY
-openssl rand -base64 32  # For passwords
-```
-
-Update `.env` with production values:
-
-```env
-DEBUG=false
-SECRET_KEY=<generated-secret-key>
-POSTGRES_PASSWORD=<strong-password>
-REDIS_PASSWORD=<strong-password>
 ALLOWED_ORIGINS=https://yourdomain.com
+CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+
+# Monitoring
+PROMETHEUS_ENABLED=true
+LOG_LEVEL=INFO
+SENTRY_DSN=https://...@sentry.io/...
+
+# Performance
+MAX_WORKERS=4
+MAX_CONNECTIONS=100
+CONNECTION_TIMEOUT=30
 ```
 
-### 2. SSL/TLS Configuration
+## Docker Deployment
 
-Update `config/nginx.conf` to add SSL:
+### Using Docker Compose (Recommended)
 
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-    
-    ssl_certificate /etc/nginx/ssl/cert.pem;
-    ssl_certificate_key /etc/nginx/ssl/key.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    
-    # ... rest of configuration
-}
-
-server {
-    listen 80;
-    server_name yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
-```
-
-### 3. Resource Limits
-
-Update `docker-compose.yml` to add resource limits:
+1. **Create production compose file** (`docker-compose.prod.yml`):
 
 ```yaml
+version: '3.8'
+
 services:
-  backend:
-    # ... existing configuration
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: zakera-api:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV_FILE=.env.production
+    env_file:
+      - .env.production
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - zakera-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     deploy:
       resources:
         limits:
           cpus: '2'
-          memory: 2G
+          memory: 4G
         reservations:
           cpus: '1'
-          memory: 1G
-```
+          memory: 2G
 
-### 4. Production Startup
-
-```bash
-# Use production compose file
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# Scale backend services
-docker-compose up -d --scale backend=3
-```
-
-## Monitoring and Maintenance
-
-### Health Checks
-
-```bash
-# Check all services
-docker-compose ps
-
-# Check individual service health
-curl http://localhost/health
-```
-
-### Logs
-
-```bash
-# View all logs
-docker-compose logs
-
-# Follow specific service logs
-docker-compose logs -f backend
-
-# View last 100 lines
-docker-compose logs --tail=100
-```
-
-### Database Maintenance
-
-```bash
-# Access PostgreSQL
-docker-compose exec postgres psql -U zakera
-
-# Clean up expired sessions
-docker-compose exec postgres psql -U zakera zakera -c "SELECT cleanup_expired_sessions();"
-
-# Vacuum database
-docker-compose exec postgres vacuumdb -U zakera -d zakera -z
-```
-
-### Redis Maintenance
-
-```bash
-# Access Redis CLI
-docker-compose exec redis redis-cli -a <your-redis-password>
-
-# Check memory usage
-docker-compose exec redis redis-cli -a <your-redis-password> INFO memory
-
-# Flush all cache (use with caution)
-docker-compose exec redis redis-cli -a <your-redis-password> FLUSHALL
-```
-
-### Updates
-
-```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild and restart services
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
-```
-
-## Troubleshooting
-
-### Service Won't Start
-
-```bash
-# Check service logs
-docker-compose logs <service-name>
-
-# Check Docker events
-docker events
-
-# Verify configuration
-docker-compose config
-```
-
-### Database Connection Issues
-
-```bash
-# Test database connectivity
-docker-compose exec backend python -c "from sqlalchemy import create_engine; engine = create_engine('postgresql://zakera:password@postgres:5432/zakera'); print('Connected!' if engine.connect() else 'Failed')"
-
-# Check PostgreSQL logs
-docker-compose logs postgres
-```
-
-### High Memory Usage
-
-```bash
-# Check resource usage
-docker stats
-
-# Limit container resources (see Production Deployment section)
-```
-
-### API Response Errors
-
-```bash
-# Check backend logs
-docker-compose logs backend
-
-# Verify environment variables
-docker-compose exec backend env | grep API
-
-# Test API endpoint
-curl -v http://localhost/api/health
-```
-
-### Redis Connection Issues
-
-```bash
-# Check Redis is running
-docker-compose exec redis redis-cli -a <password> ping
-
-# Check Redis logs
-docker-compose logs redis
-```
-
-## Advanced Configuration
-
-### Using Google Gemini
-
-```env
-MODEL_PROVIDER=google
-MODEL_NAME=gemini-pro
-GOOGLE_API_KEY=your-google-api-key
-```
-
-### Using Local Models (Ollama)
-
-```yaml
-# Add to docker-compose.yml
-services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: zakera-ollama
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zakera
+      POSTGRES_USER: zakera_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
-      - ollama_data:/root/.ollama
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - zakera-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zakera_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - zakera-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx/ssl:/etc/nginx/ssl
+      - ./src/frontend/build:/usr/share/nginx/html
+    depends_on:
+      - api
+    networks:
+      - zakera-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - zakera-network
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources
     networks:
       - zakera-network
 
 volumes:
-  ollama_data:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  zakera-network:
+    driver: bridge
 ```
 
-```env
-MODEL_PROVIDER=local
-MODEL_NAME=llama2
-LOCAL_MODEL_URL=http://ollama:11434
+2. **Deploy:**
+
+```bash
+# Build images
+docker-compose -f docker-compose.prod.yml build
+
+# Start services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Check status
+docker-compose -f docker-compose.prod.yml ps
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f api
 ```
+
+3. **Database migrations:**
+
+```bash
+docker-compose -f docker-compose.prod.yml exec api \
+  alembic upgrade head
+```
+
+## Kubernetes Deployment
+
+### Deploy to Kubernetes
+
+1. **Create namespace:**
+
+```bash
+kubectl create namespace zakera
+```
+
+2. **Create secrets:**
+
+```bash
+kubectl create secret generic zakera-secrets \
+  --from-literal=secret-key=your-secret-key \
+  --from-literal=openai-api-key=sk-... \
+  --from-literal=db-password=your-db-password \
+  -n zakera
+```
+
+3. **Apply manifests:**
+
+```bash
+kubectl apply -f k8s/ -n zakera
+```
+
+### Sample Kubernetes Manifests
+
+**API Deployment** (`k8s/api-deployment.yaml`):
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zakera-api
+  labels:
+    app: zakera-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zakera-api
+  template:
+    metadata:
+      labels:
+        app: zakera-api
+    spec:
+      containers:
+      - name: api
+        image: your-registry/zakera-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zakera-secrets
+              key: secret-key
+        - name: DATABASE_URL
+          value: postgresql://$(DB_USER):$(DB_PASSWORD)@postgres:5432/zakera
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zakera-api
+spec:
+  selector:
+    app: zakera-api
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: LoadBalancer
+```
+
+## Production Checklist
+
+### Security
+
+- [ ] Change all default passwords
+- [ ] Use strong SECRET_KEY (min 32 characters)
+- [ ] Enable HTTPS/TLS
+- [ ] Configure firewall rules
+- [ ] Set up rate limiting
+- [ ] Enable authentication on all endpoints
+- [ ] Review CORS settings
+- [ ] Implement API key rotation
+- [ ] Enable security headers
+- [ ] Set up WAF (Web Application Firewall)
+
+### Performance
+
+- [ ] Enable Redis caching
+- [ ] Configure connection pooling
+- [ ] Set appropriate worker count
+- [ ] Enable compression
+- [ ] Configure CDN for static assets
+- [ ] Optimize database indexes
+- [ ] Enable query caching
+
+### Monitoring
+
+- [ ] Set up Prometheus + Grafana
+- [ ] Configure alerting rules
+- [ ] Enable error tracking (Sentry)
+- [ ] Set up log aggregation
+- [ ] Configure uptime monitoring
+- [ ] Enable APM
+
+### Backup
+
+- [ ] Configure automated database backups
+- [ ] Test backup restoration
+- [ ] Set up off-site backup storage
+- [ ] Document recovery procedures
+
+### Documentation
+
+- [ ] Document deployment process
+- [ ] Create runbooks for common issues
+- [ ] Document environment variables
+- [ ] Create architecture diagrams
+
+## Scaling
 
 ### Horizontal Scaling
 
-```bash
-# Scale backend to 3 instances
-docker-compose up -d --scale backend=3
+**Add more API instances:**
 
-# Add load balancer configuration to nginx.conf
+```bash
+# Docker Compose
+docker-compose -f docker-compose.prod.yml up -d --scale api=5
+
+# Kubernetes
+kubectl scale deployment zakera-api --replicas=5 -n zakera
 ```
 
-## Support
+### Vertical Scaling
 
-For issues and questions:
+**Increase resources:**
 
-- GitHub Issues: https://github.com/itsmepraks/zakera/issues
-- Documentation: https://github.com/itsmepraks/zakera/tree/main/docs
+```yaml
+# docker-compose.prod.yml
+deploy:
+  resources:
+    limits:
+      cpus: '4'
+      memory: 8G
+```
+
+### Database Scaling
+
+1. **Read replicas:**
+
+```python
+# Configure in settings
+DATABASE_REPLICA_URLS = [
+    "postgresql://user:pass@replica1:5432/zakera",
+    "postgresql://user:pass@replica2:5432/zakera",
+]
+```
+
+2. **Connection pooling:**
+
+```python
+DATABASE_POOL_SIZE = 20
+DATABASE_MAX_OVERFLOW = 40
+```
+
+## Backup and Recovery
+
+### Automated Backups
+
+```bash
+#!/bin/bash
+# scripts/backup.sh
+
+BACKUP_DIR="/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Database backup
+docker-compose exec -T db pg_dump -U zakera_user zakera \
+  | gzip > "$BACKUP_DIR/db_$DATE.sql.gz"
+
+# Data directory backup
+tar -czf "$BACKUP_DIR/data_$DATE.tar.gz" ./data
+
+# Upload to S3
+aws s3 cp "$BACKUP_DIR/" s3://your-bucket/backups/ --recursive
+
+# Keep only last 30 days
+find "$BACKUP_DIR" -name "*.gz" -mtime +30 -delete
+```
+
+### Recovery
+
+```bash
+# Restore database
+gunzip < backup.sql.gz | \
+  docker-compose exec -T db psql -U zakera_user zakera
+
+# Restore data
+tar -xzf data_backup.tar.gz -C ./
+```
+
+## SSL/TLS Configuration
+
+### Using Let's Encrypt
+
+```bash
+# Install certbot
+sudo apt-get install certbot python3-certbot-nginx
+
+# Get certificate
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+
+# Auto-renewal
+sudo certbot renew --dry-run
+```
+
+## Troubleshooting
+
+See [monitoring.md](monitoring.md) for detailed troubleshooting guides.
