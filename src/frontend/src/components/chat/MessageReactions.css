@@ -1,0 +1,140 @@
+.message-reactions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  gap: 4px;
+}
+
+.reactions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.reaction-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid #e1e4e8;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.reaction-badge:hover {
+  background-color: #f6f8fa;
+  border-color: #d0d7de;
+  transform: scale(1.05);
+}
+
+.reaction-badge.user-reacted {
+  background-color: #ddf4ff;
+  border-color: #54aeff;
+}
+
+.reaction-badge.user-reacted:hover {
+  background-color: #b6e3ff;
+}
+
+.reaction-emoji {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.reaction-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #57606a;
+  min-width: 12px;
+  text-align: center;
+}
+
+.reaction-add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #e1e4e8;
+  background-color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.reaction-add-button:hover {
+  opacity: 1;
+  background-color: #f6f8fa;
+  border-color: #d0d7de;
+  transform: scale(1.05);
+}
+
+.add-icon {
+  font-size: 16px;
+  font-weight: 600;
+  color: #57606a;
+}
+
+.reaction-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  animation: slideUp 0.2s ease;
+}
+
+.picker-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.picker-emoji:hover {
+  background-color: #f6f8fa;
+  transform: scale(1.2);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reaction-badge,
+  .reaction-add-button,
+  .picker-emoji {
+    transition: none;
+    transform: none !important;
+  }
+  
+  .reaction-picker {
+    animation: none;
+  }
+}
