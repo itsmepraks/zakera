@@ -1,0 +1,131 @@
+/* Custom markdown styles for chat messages */
+
+.prose {
+  @apply text-gray-800 dark:text-gray-200;
+}
+
+.prose-invert {
+  @apply text-gray-200;
+}
+
+/* Code styling */
+.prose code {
+  @apply text-sm font-mono;
+}
+
+.prose pre {
+  @apply my-4 rounded-lg;
+}
+
+/* Links */
+.prose a {
+  @apply text-blue-600 dark:text-blue-400 hover:underline;
+  @apply transition-colors duration-200;
+}
+
+/* Headings */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  @apply font-semibold text-gray-900 dark:text-gray-100;
+  @apply tracking-tight;
+}
+
+/* Lists */
+.prose ul,
+.prose ol {
+  @apply my-3 space-y-2;
+}
+
+.prose li {
+  @apply text-gray-800 dark:text-gray-200;
+}
+
+/* Blockquotes */
+.prose blockquote {
+  @apply border-l-4 border-blue-500 pl-4 py-2 my-4;
+  @apply bg-blue-50 dark:bg-blue-900/20;
+  @apply italic text-gray-700 dark:text-gray-300;
+}
+
+/* Tables */
+.prose table {
+  @apply w-full border-collapse my-4;
+}
+
+.prose thead {
+  @apply bg-gray-50 dark:bg-gray-800;
+}
+
+.prose th {
+  @apply px-4 py-2 text-left text-xs font-medium;
+  @apply text-gray-700 dark:text-gray-300 uppercase;
+  @apply border-b border-gray-200 dark:border-gray-700;
+}
+
+.prose td {
+  @apply px-4 py-2 text-sm;
+  @apply border-b border-gray-100 dark:border-gray-800;
+}
+
+/* Horizontal rule */
+.prose hr {
+  @apply my-6 border-gray-200 dark:border-gray-700;
+}
+
+/* Strong and emphasis */
+.prose strong {
+  @apply font-semibold text-gray-900 dark:text-gray-100;
+}
+
+.prose em {
+  @apply italic;
+}
+
+/* Images */
+.prose img {
+  @apply rounded-lg shadow-md my-4;
+  @apply max-w-full h-auto;
+}
+
+/* Inline code */
+.prose :not(pre) > code {
+  @apply px-1.5 py-0.5 rounded-md;
+  @apply bg-gray-100 dark:bg-gray-800;
+  @apply text-pink-600 dark:text-pink-400;
+  @apply text-sm font-mono;
+  @apply before:content-[''] after:content-[''];
+}
+
+/* Task lists */
+.prose input[type='checkbox'] {
+  @apply mr-2 rounded;
+  @apply text-blue-600 focus:ring-blue-500;
+}
+
+/* Prism theme overrides for better dark mode support */
+.dark pre[class*='language-'],
+.dark code[class*='language-'] {
+  @apply bg-[#2d2d2d] text-gray-200;
+}
+
+/* Scrollbar styling for code blocks */
+pre::-webkit-scrollbar {
+  @apply h-2 w-2;
+}
+
+pre::-webkit-scrollbar-track {
+  @apply bg-gray-800 rounded;
+}
+
+pre::-webkit-scrollbar-thumb {
+  @apply bg-gray-600 rounded;
+  @apply hover:bg-gray-500;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
