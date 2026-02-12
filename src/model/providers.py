@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, AsyncIterator
+from typing import List, Dict, Optional, AsyncIterator, Any
 from dataclasses import dataclass
 import os
+import json
+import asyncio
+from datetime import datetime
 
 @dataclass
 class Message:
@@ -34,36 +37,252 @@ class ModelProvider(ABC):
         pass
 
 class OpenAIProvider(ModelProvider):
-    """OpenAI API provider"""
+    """OpenAI API provider with full integration"""
     
     def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4-turbo-preview"):
         super().__init__(api_key or os.getenv("OPENAI_API_KEY"), model_name)
-        self.base_url = "https://api.openai.com/v1"
+        self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.organization = os.getenv("OPENAI_ORGANIZATION")
+        self.max_retries = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
+        self.timeout = float(os.getenv("OPENAI_TIMEOUT", "60.0"))
+        
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
+    
+    def _get_headers(self) -> Dict[str, str]:
+        """Get headers for OpenAI API requests"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        if self.organization:
+            headers["OpenAI-Organization"] = self.organization
+        return headers
+    
+    def _convert_messages(self, messages: List[Message]) -> List[Dict[str, Any]]:
+        """Convert internal message format to OpenAI format"""
+        openai_messages = []
+        for msg in messages:
+            message_dict = {
+                "role": msg.role,
+                "content": msg.content
+            }
+            if msg.name:
+                message_dict["name"] = msg.name
+            openai_messages.append(message_dict)
+        return openai_messages
+    
+    async def _make_request_with_retry(self, client, method: str, url: str, **kwargs) -> Any:
+        """Make HTTP request with exponential backoff retry logic"""
+        import httpx
+        
+        last_exception = None
+        for attempt in range(self.max_retries):
+            try:
+                if method == "POST":
+                    response = await client.post(url, **kwargs)
+                else:
+                    response = await client.get(url, **kwargs)
+                
+                response.raise_for_status()
+                return response
+                
+            except httpx.HTTPStatusError as e:
+                last_exception = e
+                # Don't retry on client errors (4xx) except rate limits
+                if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+                    raise OpenAIError(f"OpenAI API error: {e.response.text}", e.response.status_code)
+                
+                # Exponential backoff for retryable errors
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt
+                    await asyncio.sleep(wait_time)
+                    
+            except httpx.TimeoutException as e:
+                last_exception = e
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt
+                    await asyncio.sleep(wait_time)
+                    
+            except Exception as e:
+                raise OpenAIError(f"Unexpected error: {str(e)}")
+        
+        # All retries exhausted
+        if isinstance(last_exception, httpx.HTTPStatusError):
+            raise OpenAIError(
+                f"OpenAI API error after {self.max_retries} retries: {last_exception.response.text}",
+                last_exception.response.status_code
+            )
+        else:
+            raise OpenAIError(f"Request failed after {self.max_retries} retries: {str(last_exception)}")
     
     async def generate(self, messages: List[Message], **kwargs) -> ModelResponse:
         """
-        Generate a response using OpenAI API
+        Generate a response using OpenAI Chat Completions API
         
-        TODO: Implement actual OpenAI API call using httpx or openai library
+        Args:
+            messages: List of conversation messages
+            **kwargs: Additional parameters:
+                - temperature (float): Sampling temperature (0-2)
+                - top_p (float): Nucleus sampling parameter
+                - max_tokens (int): Maximum tokens to generate
+                - presence_penalty (float): Presence penalty (-2 to 2)
+                - frequency_penalty (float): Frequency penalty (-2 to 2)
+                - stop (List[str]): Stop sequences
+                - functions (List[Dict]): Function definitions for function calling
+                - function_call (str|Dict): Force function calling
+                - response_format (Dict): Response format (e.g., {"type": "json_object"})
+                - seed (int): Random seed for deterministic output
+                - user (str): User identifier for abuse monitoring
+        
+        Returns:
+            ModelResponse with generated content and metadata
         """
-        # Placeholder implementation
-        return ModelResponse(
-            content="This is a placeholder response. Implement OpenAI API integration.",
-            model=self.model_name,
-            usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            finish_reason="stop"
-        )
+        import httpx
+        
+        # Build request payload
+        payload = {
+            "model": self.model_name,
+            "messages": self._convert_messages(messages),
+        }
+        
+        # Add optional parameters
+        optional_params = [
+            "temperature", "top_p", "max_tokens", "presence_penalty",
+            "frequency_penalty", "stop", "functions", "function_call",
+            "response_format", "seed", "user", "n", "logit_bias"
+        ]
+        for param in optional_params:
+            if param in kwargs:
+                payload[param] = kwargs[param]
+        
+        url = f"{self.base_url}/chat/completions"
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await self._make_request_with_retry(
+                    client, "POST", url,
+                    json=payload,
+                    headers=self._get_headers()
+                )
+                
+                result = response.json()
+                
+                # Extract response
+                if "choices" not in result or len(result["choices"]) == 0:
+                    raise OpenAIError("No response choices returned from OpenAI API")
+                
+                choice = result["choices"][0]
+                message = choice["message"]
+                
+                # Handle function calls
+                if "function_call" in message:
+                    content = json.dumps(message["function_call"])
+                else:
+                    content = message.get("content", "")
+                
+                # Extract usage information
+                usage = result.get("usage", {})
+                
+                return ModelResponse(
+                    content=content,
+                    model=result.get("model", self.model_name),
+                    usage={
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0)
+                    },
+                    finish_reason=choice.get("finish_reason", "stop")
+                )
+                
+        except OpenAIError:
+            raise
+        except Exception as e:
+            raise OpenAIError(f"Error generating response from OpenAI: {str(e)}")
     
     async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
         """
-        Stream a response using OpenAI API
+        Stream a response using OpenAI Chat Completions API with SSE
         
-        TODO: Implement actual streaming with OpenAI API
+        Args:
+            messages: List of conversation messages
+            **kwargs: Same as generate() method
+        
+        Yields:
+            Chunks of generated text as they become available
         """
-        # Placeholder implementation
-        response = "This is a streaming placeholder. Implement OpenAI streaming."
-        for word in response.split():
-            yield word + " "
+        import httpx
+        
+        # Build request payload
+        payload = {
+            "model": self.model_name,
+            "messages": self._convert_messages(messages),
+            "stream": True
+        }
+        
+        # Add optional parameters
+        optional_params = [
+            "temperature", "top_p", "max_tokens", "presence_penalty",
+            "frequency_penalty", "stop", "functions", "function_call",
+            "response_format", "seed", "user"
+        ]
+        for param in optional_params:
+            if param in kwargs:
+                payload[param] = kwargs[param]
+        
+        url = f"{self.base_url}/chat/completions"
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    "POST", url,
+                    json=payload,
+                    headers=self._get_headers()
+                ) as response:
+                    response.raise_for_status()
+                    
+                    async for line in response.aiter_lines():
+                        # OpenAI SSE format: "data: {json}\n\n"
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            
+                            # Stream end signal
+                            if data_str == "[DONE]":
+                                break
+                            
+                            try:
+                                data = json.loads(data_str)
+                                
+                                if "choices" in data and len(data["choices"]) > 0:
+                                    choice = data["choices"][0]
+                                    delta = choice.get("delta", {})
+                                    
+                                    # Yield content chunks
+                                    if "content" in delta and delta["content"]:
+                                        yield delta["content"]
+                                    
+                                    # Handle function calls in streaming
+                                    if "function_call" in delta:
+                                        function_data = delta["function_call"]
+                                        if "arguments" in function_data:
+                                            yield function_data["arguments"]
+                                            
+                            except json.JSONDecodeError:
+                                continue  # Skip invalid JSON lines
+                                
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text if hasattr(e.response, 'text') else str(e)
+            raise OpenAIError(f"OpenAI API streaming error: {error_detail}", e.response.status_code)
+        except Exception as e:
+            raise OpenAIError(f"Error streaming response from OpenAI: {str(e)}")
+
+class OpenAIError(Exception):
+    """Custom exception for OpenAI API errors"""
+    
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(self.message)
 
 class AnthropicProvider(ModelProvider):
     """Anthropic Claude API provider"""
