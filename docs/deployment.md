@@ -1,452 +1,310 @@
-# Deployment Guide
+# Zakera Deployment Guide
 
-## Table of Contents
+## AWS Deployment with Terraform
 
-1. [Prerequisites](#prerequisites)
-2. [Environment Configuration](#environment-configuration)
-3. [Docker Deployment](#docker-deployment)
-4. [Kubernetes Deployment](#kubernetes-deployment)
-5. [Production Checklist](#production-checklist)
-6. [Scaling](#scaling)
-7. [Backup and Recovery](#backup-and-recovery)
+This guide covers deploying Zakera to AWS using Terraform for infrastructure as code.
 
 ## Prerequisites
 
-- Docker 20.10+
-- Docker Compose 2.0+
-- 4GB RAM minimum (8GB recommended)
-- 20GB disk space
-- Valid API keys for AI providers
+- AWS Account with appropriate permissions
+- Terraform >= 1.0 installed
+- AWS CLI configured with credentials
+- Docker for building application images
+- Domain name (optional, for custom domain)
 
-## Environment Configuration
+## Architecture Overview
 
-### Production Environment Variables
+The deployment creates the following infrastructure:
 
-```bash
-# Copy and configure
-cp .env.example .env.production
+- **VPC**: Custom VPC with public and private subnets across multiple AZs
+- **ECS Fargate**: Containerized application deployment with auto-scaling
+- **Application Load Balancer**: HTTPS load balancer with SSL/TLS termination
+- **RDS PostgreSQL**: Managed database with automated backups and multi-AZ
+- **ElastiCache Redis**: In-memory cache for sessions and rate limiting
+- **S3**: Object storage for assets and backups
+- **CloudWatch**: Logging and monitoring with alerts
+- **IAM**: Security roles and policies with least privilege
 
-# Required variables
-ENVIRONMENT=production
-SECRET_KEY=your-super-secret-key-change-this
-DATABASE_URL=postgresql://user:pass@db:5432/zakera
-REDIS_URL=redis://redis:6379/0
+## Quick Start
 
-# AI Provider Configuration
-MODEL_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+### 1. Prepare Infrastructure State Backend
 
-# Security
-ALLOWED_ORIGINS=https://yourdomain.com
-CORS_ALLOWED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
-
-# Monitoring
-PROMETHEUS_ENABLED=true
-LOG_LEVEL=INFO
-SENTRY_DSN=https://...@sentry.io/...
-
-# Performance
-MAX_WORKERS=4
-MAX_CONNECTIONS=100
-CONNECTION_TIMEOUT=30
-```
-
-## Docker Deployment
-
-### Using Docker Compose (Recommended)
-
-1. **Create production compose file** (`docker-compose.prod.yml`):
-
-```yaml
-version: '3.8'
-
-services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    image: zakera-api:latest
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - ENV_FILE=.env.production
-    env_file:
-      - .env.production
-    depends_on:
-      - db
-      - redis
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    networks:
-      - zakera-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-
-  db:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: zakera
-      POSTGRES_USER: zakera_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - zakera-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zakera_user"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - zakera-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./config/nginx/ssl:/etc/nginx/ssl
-      - ./src/frontend/build:/usr/share/nginx/html
-    depends_on:
-      - api
-    networks:
-      - zakera-network
-
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./config/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    networks:
-      - zakera-network
-
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources
-    networks:
-      - zakera-network
-
-volumes:
-  postgres_data:
-  redis_data:
-  prometheus_data:
-  grafana_data:
-
-networks:
-  zakera-network:
-    driver: bridge
-```
-
-2. **Deploy:**
+First, create an S3 bucket and DynamoDB table for Terraform state:
 
 ```bash
-# Build images
-docker-compose -f docker-compose.prod.yml build
+# Create S3 bucket for state
+aws s3api create-bucket \
+  --bucket zakera-terraform-state \
+  --region us-east-1
 
-# Start services
-docker-compose -f docker-compose.prod.yml up -d
+# Enable versioning
+aws s3api put-bucket-versioning \
+  --bucket zakera-terraform-state \
+  --versioning-configuration Status=Enabled
 
-# Check status
-docker-compose -f docker-compose.prod.yml ps
+# Enable encryption
+aws s3api put-bucket-encryption \
+  --bucket zakera-terraform-state \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+      }
+    }]
+  }'
 
-# View logs
-docker-compose -f docker-compose.prod.yml logs -f api
+# Create DynamoDB table for state locking
+aws dynamodb create-table \
+  --table-name zakera-terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
 ```
 
-3. **Database migrations:**
+### 2. Build and Push Docker Image
 
 ```bash
-docker-compose -f docker-compose.prod.yml exec api \
-  alembic upgrade head
+# Build the application image
+docker build -t zakera:latest .
+
+# Tag for ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+docker tag zakera:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/zakera:latest
+
+# Push to ECR
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/zakera:latest
 ```
 
-## Kubernetes Deployment
+### 3. Configure Environment Variables
 
-### Deploy to Kubernetes
+Create a `terraform/terraform.tfvars` file:
 
-1. **Create namespace:**
+```hcl
+app_image = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/zakera:latest"
+
+# Domain and SSL
+certificate_arn = "arn:aws:acm:us-east-1:<account-id>:certificate/<cert-id>"
+domain_name     = "zakera.example.com"
+
+# Database credentials
+db_username = "zakera_admin"
+db_password = "<strong-password>"
+
+# API Keys
+openai_api_key    = "sk-..."
+anthropic_api_key = "sk-ant-..."
+google_api_key    = "AIza..."
+
+# Application secrets
+secret_key = "<random-secret-key>"
+```
+
+**Security Note**: Never commit `terraform.tfvars` to version control. Use AWS Secrets Manager or environment variables for sensitive data in production.
+
+### 4. Deploy Infrastructure
 
 ```bash
-kubectl create namespace zakera
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# Review the plan
+terraform plan -var-file="environments/production.tfvars"
+
+# Apply the configuration
+terraform apply -var-file="environments/production.tfvars"
 ```
 
-2. **Create secrets:**
+### 5. Configure DNS
+
+After deployment, configure your domain's DNS:
 
 ```bash
-kubectl create secret generic zakera-secrets \
-  --from-literal=secret-key=your-secret-key \
-  --from-literal=openai-api-key=sk-... \
-  --from-literal=db-password=your-db-password \
-  -n zakera
+# Get ALB DNS name
+terraform output alb_dns_name
+
+# Create Route53 record or update your DNS provider
+aws route53 change-resource-record-sets \
+  --hosted-zone-id <zone-id> \
+  --change-batch '{
+    "Changes": [{
+      "Action": "CREATE",
+      "ResourceRecordSet": {
+        "Name": "zakera.example.com",
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": "'$(terraform output -raw alb_zone_id)'",
+          "DNSName": "'$(terraform output -raw alb_dns_name)'",
+          "EvaluateTargetHealth": true
+        }
+      }
+    }]
+  }'
 ```
 
-3. **Apply manifests:**
+## Environment-Specific Deployments
+
+### Production
 
 ```bash
-kubectl apply -f k8s/ -n zakera
+terraform apply -var-file="environments/production.tfvars"
 ```
 
-### Sample Kubernetes Manifests
+### Staging
 
-**API Deployment** (`k8s/api-deployment.yaml`):
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: zakera-api
-  labels:
-    app: zakera-api
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: zakera-api
-  template:
-    metadata:
-      labels:
-        app: zakera-api
-    spec:
-      containers:
-      - name: api
-        image: your-registry/zakera-api:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: secret-key
-        - name: DATABASE_URL
-          value: postgresql://$(DB_USER):$(DB_PASSWORD)@postgres:5432/zakera
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "1000m"
-          limits:
-            memory: "4Gi"
-            cpu: "2000m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: zakera-api
-spec:
-  selector:
-    app: zakera-api
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
-  type: LoadBalancer
+```bash
+terraform apply -var-file="environments/staging.tfvars"
 ```
 
-## Production Checklist
+## Monitoring and Logging
 
-### Security
+### CloudWatch Logs
 
-- [ ] Change all default passwords
-- [ ] Use strong SECRET_KEY (min 32 characters)
-- [ ] Enable HTTPS/TLS
-- [ ] Configure firewall rules
-- [ ] Set up rate limiting
-- [ ] Enable authentication on all endpoints
-- [ ] Review CORS settings
-- [ ] Implement API key rotation
-- [ ] Enable security headers
-- [ ] Set up WAF (Web Application Firewall)
+```bash
+# View application logs
+aws logs tail /aws/ecs/zakera-production --follow
 
-### Performance
+# Search logs
+aws logs filter-log-events \
+  --log-group-name /aws/ecs/zakera-production \
+  --filter-pattern "ERROR"
+```
 
-- [ ] Enable Redis caching
-- [ ] Configure connection pooling
-- [ ] Set appropriate worker count
-- [ ] Enable compression
-- [ ] Configure CDN for static assets
-- [ ] Optimize database indexes
-- [ ] Enable query caching
+### Metrics Dashboard
 
-### Monitoring
-
-- [ ] Set up Prometheus + Grafana
-- [ ] Configure alerting rules
-- [ ] Enable error tracking (Sentry)
-- [ ] Set up log aggregation
-- [ ] Configure uptime monitoring
-- [ ] Enable APM
-
-### Backup
-
-- [ ] Configure automated database backups
-- [ ] Test backup restoration
-- [ ] Set up off-site backup storage
-- [ ] Document recovery procedures
-
-### Documentation
-
-- [ ] Document deployment process
-- [ ] Create runbooks for common issues
-- [ ] Document environment variables
-- [ ] Create architecture diagrams
+Access CloudWatch dashboard:
+- ECS service metrics (CPU, memory, request count)
+- ALB metrics (request count, latency, errors)
+- RDS metrics (connections, CPU, storage)
+- Redis metrics (cache hits, evictions)
 
 ## Scaling
 
-### Horizontal Scaling
-
-**Add more API instances:**
+### Manual Scaling
 
 ```bash
-# Docker Compose
-docker-compose -f docker-compose.prod.yml up -d --scale api=5
-
-# Kubernetes
-kubectl scale deployment zakera-api --replicas=5 -n zakera
+# Update desired count in variables
+terraform apply -var="app_count=5"
 ```
 
-### Vertical Scaling
+### Auto-scaling
 
-**Increase resources:**
+Auto-scaling is configured based on:
+- CPU utilization > 70%
+- Memory utilization > 80%
+- Request count per target
 
-```yaml
-# docker-compose.prod.yml
-deploy:
-  resources:
-    limits:
-      cpus: '4'
-      memory: 8G
-```
+## Database Management
 
-### Database Scaling
+### Backups
 
-1. **Read replicas:**
+Automated backups are configured with:
+- Daily automated snapshots
+- 7-day retention (staging) / 14-day retention (production)
+- Point-in-time recovery enabled
 
-```python
-# Configure in settings
-DATABASE_REPLICA_URLS = [
-    "postgresql://user:pass@replica1:5432/zakera",
-    "postgresql://user:pass@replica2:5432/zakera",
-]
-```
-
-2. **Connection pooling:**
-
-```python
-DATABASE_POOL_SIZE = 20
-DATABASE_MAX_OVERFLOW = 40
-```
-
-## Backup and Recovery
-
-### Automated Backups
+### Migrations
 
 ```bash
-#!/bin/bash
-# scripts/backup.sh
+# Connect to RDS via bastion or ECS task
+aws ecs execute-command \
+  --cluster zakera-production \
+  --task <task-id> \
+  --container app \
+  --interactive \
+  --command "/bin/bash"
 
-BACKUP_DIR="/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-
-# Database backup
-docker-compose exec -T db pg_dump -U zakera_user zakera \
-  | gzip > "$BACKUP_DIR/db_$DATE.sql.gz"
-
-# Data directory backup
-tar -czf "$BACKUP_DIR/data_$DATE.tar.gz" ./data
-
-# Upload to S3
-aws s3 cp "$BACKUP_DIR/" s3://your-bucket/backups/ --recursive
-
-# Keep only last 30 days
-find "$BACKUP_DIR" -name "*.gz" -mtime +30 -delete
+# Run migrations
+alembic upgrade head
 ```
 
-### Recovery
+## Security Best Practices
 
-```bash
-# Restore database
-gunzip < backup.sql.gz | \
-  docker-compose exec -T db psql -U zakera_user zakera
+1. **Secrets Management**: Use AWS Secrets Manager for sensitive data
+2. **IAM Roles**: Follow least privilege principle
+3. **Network Security**: Resources in private subnets, ALB in public
+4. **Encryption**: Enable at-rest and in-transit encryption
+5. **SSL/TLS**: Use ACM certificates for HTTPS
+6. **Regular Updates**: Keep dependencies and base images updated
 
-# Restore data
-tar -xzf data_backup.tar.gz -C ./
-```
+## Cost Optimization
 
-## SSL/TLS Configuration
-
-### Using Let's Encrypt
-
-```bash
-# Install certbot
-sudo apt-get install certbot python3-certbot-nginx
-
-# Get certificate
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
-
-# Auto-renewal
-sudo certbot renew --dry-run
-```
+- Use Reserved Instances for predictable workloads
+- Configure auto-scaling to match traffic patterns
+- Use Fargate Spot for non-critical tasks
+- Enable S3 lifecycle policies for old backups
+- Monitor and right-size RDS instances
 
 ## Troubleshooting
 
-See [monitoring.md](monitoring.md) for detailed troubleshooting guides.
+### Service Not Starting
+
+```bash
+# Check ECS task logs
+aws ecs describe-tasks --cluster zakera-production --tasks <task-id>
+
+# View CloudWatch logs
+aws logs tail /aws/ecs/zakera-production --follow
+```
+
+### High Latency
+
+1. Check ALB target health
+2. Review CloudWatch metrics
+3. Check database connection pool
+4. Verify Redis cache hit rate
+
+### Database Connection Issues
+
+1. Verify security group rules
+2. Check RDS instance status
+3. Review connection string
+4. Monitor max connections
+
+## Disaster Recovery
+
+### Backup Strategy
+
+- **Database**: Automated daily snapshots, 14-day retention
+- **Configuration**: Terraform state in S3 with versioning
+- **Application**: Docker images tagged and stored in ECR
+
+### Recovery Procedure
+
+1. Restore RDS from snapshot
+2. Deploy infrastructure with Terraform
+3. Deploy application from ECR image
+4. Update DNS records
+5. Verify functionality
+
+Estimated RTO: < 1 hour
+Estimated RPO: < 5 minutes
+
+## Cleanup
+
+To destroy all infrastructure:
+
+```bash
+terraform destroy -var-file="environments/production.tfvars"
+```
+
+**Warning**: This will delete all resources including databases and backups.
+
+## Support
+
+For deployment issues:
+- Check CloudWatch logs
+- Review Terraform outputs
+- Consult AWS documentation
+- Open an issue on GitHub
+
+## Next Steps
+
+- Set up CI/CD pipeline
+- Configure custom domain
+- Enable CloudFront CDN
+- Set up monitoring alerts
+- Implement blue-green deployments
