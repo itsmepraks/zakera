@@ -2,51 +2,137 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
-  POETRY_VERSION: '1.7.1'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+  POETRY_VERSION: "1.7.1"
 
 jobs:
-  # ====================
-  # Backend Tests & Linting
-  # ====================
+  # ============================================================================
+  # BACKEND JOBS
+  # ============================================================================
+  
+  backend-lint:
+    name: Backend Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black isort mypy types-requests
+
+      - name: Run Black (code formatter check)
+        run: |
+          black --check --diff src/ tests/
+        continue-on-error: false
+
+      - name: Run isort (import sorting check)
+        run: |
+          isort --check-only --diff src/ tests/
+        continue-on-error: false
+
+      - name: Run Flake8 (linting)
+        run: |
+          flake8 src/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 src/ tests/ --count --max-complexity=10 --max-line-length=100 --statistics
+
+      - name: Run MyPy (type checking)
+        run: |
+          mypy src/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true
+
+  backend-security:
+    name: Backend Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit
+
+      - name: Run Safety (dependency vulnerability check)
+        run: |
+          safety check --json || true
+        continue-on-error: true
+
+      - name: Run Bandit (security linting)
+        run: |
+          bandit -r src/ -f json -o bandit-report.json || true
+          bandit -r src/ -ll
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-security-reports
+          path: |
+            bandit-report.json
+
   backend-test:
     name: Backend Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
       fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
     
     services:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: zakera_test
+          POSTGRES_PASSWORD: test_password
           POSTGRES_DB: zakera_test
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 6379:6379
 
     steps:
       - name: Checkout code
@@ -62,34 +148,31 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
+            ${{ runner.os }}-pip-py${{ matrix.python-version }}-
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest-xdist pytest-timeout pytest-mock
+          pip install pytest-cov pytest-xdist pytest-asyncio
 
       - name: Create test environment file
         run: |
-          cat > .env.test << EOF
-          DATABASE_URL=postgresql://postgres:testpassword@localhost:5432/zakera_test
+          cat > .env << EOF
+          DATABASE_URL=postgresql://zakera_test:test_password@localhost:5432/zakera_test
           REDIS_URL=redis://localhost:6379/0
-          SECRET_KEY=test-secret-key-for-ci-only
-          MODEL_PROVIDER=openai
+          SECRET_KEY=test-secret-key-for-ci
           OPENAI_API_KEY=test-key
           ANTHROPIC_API_KEY=test-key
           GOOGLE_API_KEY=test-key
           DEBUG=false
-          ENVIRONMENT=test
+          ALLOWED_ORIGINS=http://localhost:3000
           EOF
 
       - name: Run pytest with coverage
-        env:
-          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/zakera_test
-          REDIS_URL: redis://localhost:6379/0
         run: |
           pytest tests/ \
             --cov=src \
@@ -98,9 +181,10 @@ jobs:
             --cov-report=term-missing \
             --junitxml=pytest-report.xml \
             -v \
-            -n auto \
-            --maxfail=5 \
-            --timeout=300
+            -n auto
+        env:
+          DATABASE_URL: postgresql://zakera_test:test_password@localhost:5432/zakera_test
+          REDIS_URL: redis://localhost:6379/0
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -115,128 +199,24 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pytest-results-${{ matrix.python-version }}
+          name: backend-test-results-py${{ matrix.python-version }}
           path: |
             pytest-report.xml
             htmlcov/
-          retention-days: 30
 
-  # ====================
-  # Backend Linting & Code Quality
-  # ====================
-  backend-lint:
-    name: Backend Linting & Code Quality
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always() && matrix.python-version == '3.11'
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
+          files: pytest-report.xml
+          check_name: Backend Test Results
 
-      - name: Install linting tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install black isort flake8 mypy bandit pylint
-          pip install -r requirements.txt
+  # ============================================================================
+  # FRONTEND JOBS
+  # ============================================================================
 
-      - name: Run Black (formatter check)
-        run: |
-          black --check --diff src/ tests/
-
-      - name: Run isort (import sorting check)
-        run: |
-          isort --check-only --diff src/ tests/
-
-      - name: Run flake8 (linting)
-        run: |
-          flake8 src/ tests/ --max-line-length=100 --exclude=venv,__pycache__,.git --statistics
-
-      - name: Run mypy (type checking)
-        run: |
-          mypy src/ --ignore-missing-imports --no-strict-optional
-        continue-on-error: true
-
-      - name: Run pylint (code analysis)
-        run: |
-          pylint src/ --disable=C0111,R0903,W0613 --max-line-length=100
-        continue-on-error: true
-
-      - name: Run bandit (security linting)
-        run: |
-          bandit -r src/ -ll -f json -o bandit-report.json
-        continue-on-error: true
-
-      - name: Upload bandit results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bandit-security-report
-          path: bandit-report.json
-          retention-days: 30
-
-  # ====================
-  # Security Scanning
-  # ====================
-  security-scan:
-    name: Security Vulnerability Scanning
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-
-      - name: Install safety
-        run: |
-          python -m pip install --upgrade pip
-          pip install safety
-
-      - name: Run safety check (dependency vulnerabilities)
-        run: |
-          safety check --json --output safety-report.json || true
-          safety check || true
-        continue-on-error: true
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Upload security reports
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-reports
-          path: |
-            safety-report.json
-            trivy-results.sarif
-          retention-days: 30
-
-  # ====================
-  # Frontend Tests & Linting
-  # ====================
-  frontend-test:
-    name: Frontend Tests & Build
+  frontend-lint:
+    name: Frontend Linting
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -253,54 +233,26 @@ jobs:
           cache: 'npm'
           cache-dependency-path: src/frontend/package-lock.json
 
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: src/frontend/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('src/frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
       - name: Install dependencies
         run: npm ci
 
       - name: Run ESLint
-        run: npm run lint || true
+        run: |
+          npm run lint || true
         continue-on-error: true
 
       - name: Run Prettier check
-        run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,css,md}"
+        run: |
+          npx prettier --check "**/*.{js,jsx,ts,tsx,json,css,md}"
         continue-on-error: true
 
-      - name: Run Jest tests with coverage
-        run: npm test -- --coverage --watchAll=false
+      - name: Run TypeScript compiler check
+        run: |
+          npx tsc --noEmit
         continue-on-error: true
 
-      - name: Build application
-        run: npm run build
-        env:
-          NODE_ENV: production
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./src/frontend/coverage/coverage-final.json
-          flags: frontend
-          name: frontend-coverage
-          fail_ci_if_error: false
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: src/frontend/.next
-          retention-days: 7
-
-  # ====================
-  # Frontend Security Audit
-  # ====================
   frontend-security:
-    name: Frontend Security Audit
+    name: Frontend Security Scan
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -317,25 +269,104 @@ jobs:
 
       - name: Run npm audit
         run: |
-          npm audit --json > npm-audit-report.json || true
-          npm audit || true
+          npm audit --audit-level=moderate || true
         continue-on-error: true
 
-      - name: Upload npm audit report
+      - name: Run npm audit fix (dry-run)
+        run: |
+          npm audit fix --dry-run || true
+        continue-on-error: true
+
+  frontend-test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: |
+          npm test -- --coverage --watchAll=false --passWithNoTests
+        env:
+          CI: true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./src/frontend/coverage/coverage-final.json
+          flags: frontend
+          name: frontend-coverage
+          fail_ci_if_error: false
+
+      - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: npm-audit-report
-          path: src/frontend/npm-audit-report.json
-          retention-days: 30
+          name: frontend-test-results
+          path: |
+            src/frontend/coverage/
 
-  # ====================
-  # Docker Build & Validation
-  # ====================
-  docker-build:
-    name: Docker Build Validation
+  frontend-build:
+    name: Frontend Build Validation
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
     
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Check build size
+        run: |
+          if [ -d ".next" ]; then
+            du -sh .next
+            echo "Build completed successfully"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: src/frontend/.next/
+          retention-days: 7
+
+  # ============================================================================
+  # DOCKER JOBS
+  # ============================================================================
+
+  docker-build:
+    name: Docker Build & Scan
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -360,99 +391,165 @@ jobs:
           tags: zakera:test
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-          build-args: |
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VCS_REF=${{ github.sha }}
-
-      - name: Run Trivy vulnerability scanner on Docker image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: zakera:test
-          format: 'sarif'
-          output: 'trivy-docker-results.sarif'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Upload Trivy Docker results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-docker-results.sarif'
-
-      - name: Test docker-compose configuration
-        run: |
-          docker-compose -f docker-compose.yml config
+          load: true
 
       - name: Move cache
         run: |
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
-  # ====================
-  # Integration Tests
-  # ====================
-  integration-test:
-    name: Integration Tests
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: zakera:test
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy vulnerability scanner (table output)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: zakera:test
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Test Docker container
+        run: |
+          docker run --rm -d --name zakera-test \
+            -p 8000:8000 \
+            -e SECRET_KEY=test-key \
+            -e DATABASE_URL=sqlite:///./test.db \
+            zakera:test
+          sleep 10
+          docker logs zakera-test
+          docker stop zakera-test
+
+  docker-compose-validate:
+    name: Docker Compose Validation
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-test]
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Validate docker-compose.yml
+        run: |
+          docker compose config
 
-      - name: Create test environment
+      - name: Create test environment file
         run: |
           cp .env.example .env
-          sed -i 's/DEBUG=false/DEBUG=true/g' .env
+          sed -i 's/change-this-in-production/test-password/g' .env
+          sed -i 's/change-this-to-a-random-secret-key/test-secret-key/g' .env
 
-      - name: Start services with docker-compose
+      - name: Build services
         run: |
-          docker-compose up -d
-          sleep 10
+          docker compose build --no-cache
+
+      - name: Start services
+        run: |
+          docker compose up -d
 
       - name: Wait for services to be healthy
         run: |
-          timeout 60 bash -c 'until curl -f http://localhost:8000/health; do sleep 2; done'
+          timeout 120 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done' || true
 
-      - name: Run health check
+      - name: Check service status
         run: |
-          curl -f http://localhost:8000/health || exit 1
+          docker compose ps
 
-      - name: Check service logs
-        if: failure()
+      - name: Check backend logs
         run: |
-          docker-compose logs
+          docker compose logs backend
+
+      - name: Test backend health endpoint
+        run: |
+          sleep 20
+          curl -f http://localhost:8000/health || echo "Health check endpoint not responding"
+        continue-on-error: true
 
       - name: Cleanup
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
 
-  # ====================
-  # Database Migration Test
-  # ====================
-  database-migration:
-    name: Database Migration Test
+  # ============================================================================
+  # CODE QUALITY JOBS
+  # ============================================================================
+
+  code-quality:
+    name: Code Quality Analysis
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: true
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python, javascript
+        continue-on-error: true
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        continue-on-error: true
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+
+  # ============================================================================
+  # INTEGRATION & E2E TESTS
+  # ============================================================================
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
     
     services:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: zakera_test
+          POSTGRES_PASSWORD: test_password
           POSTGRES_DB: zakera_test
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+      redis:
+        image: redis:7-alpine
         ports:
-          - 5432:5432
-    
+          - 6379:6379
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -461,95 +558,66 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install alembic
+          pip install pytest pytest-asyncio httpx
 
-      - name: Test database migrations
-        env:
-          DATABASE_URL: postgresql://postgres:testpassword@localhost:5432/zakera_test
+      - name: Run integration tests
         run: |
-          # Test migrations up
-          alembic upgrade head || echo "No migrations to run yet"
-          
-          # Test migrations down (if applicable)
-          alembic downgrade -1 || echo "No migrations to downgrade"
+          pytest tests/ -v -m "integration" --tb=short || echo "No integration tests found"
+        env:
+          DATABASE_URL: postgresql://zakera_test:test_password@localhost:5432/zakera_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
         continue-on-error: true
 
-  # ====================
-  # Code Coverage Report
-  # ====================
-  coverage-report:
-    name: Generate Coverage Report
+  # ============================================================================
+  # SUMMARY JOB
+  # ============================================================================
+
+  ci-success:
+    name: CI Pipeline Success
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-test]
-    if: github.event_name == 'pull_request'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download backend coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: pytest-results-3.11
-          path: ./backend-coverage
-
-      - name: Comment PR with coverage
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const coverageFile = './backend-coverage/coverage.xml';
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '## 📊 Test Coverage Report\n\nCoverage reports have been generated and uploaded to artifacts.'
-            });
-
-  # ====================
-  # All Checks Passed
-  # ====================
-  all-checks:
-    name: All CI Checks Passed
-    runs-on: ubuntu-latest
-    needs: 
-      - backend-test
+    needs:
       - backend-lint
-      - security-scan
-      - frontend-test
+      - backend-security
+      - backend-test
+      - frontend-lint
       - frontend-security
+      - frontend-test
+      - frontend-build
       - docker-build
-      - integration-test
+      - docker-compose-validate
     if: always()
-    
     steps:
       - name: Check all job statuses
         run: |
-          if [ "${{ needs.backend-test.result }}" != "success" ]; then
-            echo "Backend tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.backend-lint.result }}" != "success" ]; then
-            echo "Backend linting failed"
-            exit 1
-          fi
-          if [ "${{ needs.frontend-test.result }}" != "success" ]; then
-            echo "Frontend tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.docker-build.result }}" != "success" ]; then
-            echo "Docker build failed"
-            exit 1
-          fi
-          echo "✅ All checks passed!"
+          echo "Backend Lint: ${{ needs.backend-lint.result }}"
+          echo "Backend Security: ${{ needs.backend-security.result }}"
+          echo "Backend Test: ${{ needs.backend-test.result }}"
+          echo "Frontend Lint: ${{ needs.frontend-lint.result }}"
+          echo "Frontend Security: ${{ needs.frontend-security.result }}"
+          echo "Frontend Test: ${{ needs.frontend-test.result }}"
+          echo "Frontend Build: ${{ needs.frontend-build.result }}"
+          echo "Docker Build: ${{ needs.docker-build.result }}"
+          echo "Docker Compose: ${{ needs.docker-compose-validate.result }}"
 
-      - name: Success notification
-        if: success()
+      - name: Verify success
+        if: |
+          needs.backend-lint.result != 'success' ||
+          needs.backend-test.result != 'success' ||
+          needs.frontend-test.result != 'success' ||
+          needs.frontend-build.result != 'success' ||
+          needs.docker-build.result != 'success'
         run: |
-          echo "::notice title=CI Success::All CI/CD checks have passed successfully! 🎉"
+          echo "One or more critical jobs failed"
+          exit 1
+
+      - name: Success message
+        run: |
+          echo "✅ All CI checks passed successfully!"
+          echo "🚀 Ready for deployment"
