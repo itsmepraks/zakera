@@ -1,337 +1,177 @@
-.PHONY: help install test lint format clean docker ci backend frontend all
+# Zakefile - Build automation for Zakera AI Chat Agent
+
+.PHONY: help install dev test lint format clean docker monitoring
 
 # Default target
-.DEFAULT_GOAL := help
-
-# Colors for output
-BLUE := \033[0;34m
-GREEN := \033[0;32m
-YELLOW := \033[0;33m
-RED := \033[0;31m
-NC := \033[0m # No Color
-
-help: ## Show this help message
-	@echo "$(BLUE)Zakera CI/CD Makefile$(NC)"
+help:
+	@echo "Zakera AI Chat Agent - Available Commands"
 	@echo ""
-	@echo "$(GREEN)Available targets:$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo "Development:"
+	@echo "  make install          Install dependencies"
+	@echo "  make dev              Run development server"
+	@echo "  make test             Run tests"
+	@echo "  make test-cov         Run tests with coverage"
+	@echo "  make lint             Run linters"
+	@echo "  make format           Format code"
 	@echo ""
+	@echo "Monitoring:"
+	@echo "  make monitoring-start Start monitoring stack (Prometheus, Grafana, AlertManager)"
+	@echo "  make monitoring-stop  Stop monitoring stack"
+	@echo "  make monitoring-logs  View monitoring logs"
+	@echo "  make metrics          View current metrics"
+	@echo "  make health           Check application health"
+	@echo "  make alerts           View active alerts"
+	@echo ""
+	@echo "Models:"
+	@echo "  make ollama-install   Install and setup Ollama"
+	@echo "  make ollama-pull      Pull recommended Ollama models"
+	@echo "  make models-list      List available models"
+	@echo "  make models-health    Check model provider health"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build     Build Docker image"
+	@echo "  make docker-run       Run Docker container"
+	@echo "  make docker-stop      Stop Docker container"
+	@echo ""
+	@echo "Cleanup:"
+	@echo "  make clean            Clean temporary files"
+	@echo "  make clean-all        Clean everything including data"
 
-# ============================================================================
-# Installation targets
-# ============================================================================
+# =============================================================================
+# Development
+# =============================================================================
 
-install: install-backend install-frontend ## Install all dependencies
-	@echo "$(GREEN)✓ All dependencies installed$(NC)"
-
-install-backend: ## Install backend dependencies
-	@echo "$(BLUE)Installing backend dependencies...$(NC)"
+install:
+	@echo "📦 Installing dependencies..."
 	pip install -r requirements.txt
-	pip install black isort flake8 mypy pytest pytest-cov bandit safety
+	cd src/frontend && npm install
+	@echo "✅ Dependencies installed"
 
-install-frontend: ## Install frontend dependencies
-	@echo "$(BLUE)Installing frontend dependencies...$(NC)"
-	cd src/frontend && npm ci
+dev:
+	@echo "🚀 Starting development server..."
+	python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
-# ============================================================================
-# Testing targets
-# ============================================================================
-
-test: test-backend test-frontend ## Run all tests
-	@echo "$(GREEN)✓ All tests passed$(NC)"
-
-test-backend: ## Run backend tests
-	@echo "$(BLUE)Running backend tests...$(NC)"
+test:
+	@echo "🧪 Running tests..."
 	pytest tests/ -v
 
-test-backend-cov: ## Run backend tests with coverage
-	@echo "$(BLUE)Running backend tests with coverage...$(NC)"
-	pytest tests/ --cov=src --cov-report=html --cov-report=term-missing
-	@echo "$(GREEN)Coverage report: htmlcov/index.html$(NC)"
+test-cov:
+	@echo "🧪 Running tests with coverage..."
+	pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	@echo "📊 Coverage report: htmlcov/index.html"
 
-test-frontend: ## Run frontend tests
-	@echo "$(BLUE)Running frontend tests...$(NC)"
-	cd src/frontend && npm test -- --passWithNoTests
+lint:
+	@echo "🔍 Running linters..."
+	flake8 src/
+	mypy src/
+	@echo "✅ Linting complete"
 
-test-watch: ## Run tests in watch mode
-	@echo "$(BLUE)Running tests in watch mode...$(NC)"
-	pytest tests/ -v --watch
-
-# ============================================================================
-# Linting targets
-# ============================================================================
-
-lint: lint-backend lint-frontend ## Run all linters
-	@echo "$(GREEN)✓ All linting checks passed$(NC)"
-
-lint-backend: ## Run backend linters
-	@echo "$(BLUE)Running backend linters...$(NC)"
-	black --check src/ tests/
-	isort --check-only src/ tests/
-	flake8 src/ tests/
-	mypy src/ --ignore-missing-imports
-
-lint-frontend: ## Run frontend linters
-	@echo "$(BLUE)Running frontend linters...$(NC)"
-	cd src/frontend && npm run lint
-
-lint-fix: ## Auto-fix linting issues
-	@echo "$(BLUE)Auto-fixing linting issues...$(NC)"
+format:
+	@echo "✨ Formatting code..."
 	black src/ tests/
 	isort src/ tests/
-	cd src/frontend && npm run lint:fix
+	@echo "✅ Formatting complete"
 
-# ============================================================================
-# Formatting targets
-# ============================================================================
+# =============================================================================
+# Monitoring
+# =============================================================================
 
-format: format-backend format-frontend ## Format all code
-	@echo "$(GREEN)✓ Code formatted$(NC)"
+monitoring-start:
+	@echo "📊 Starting monitoring stack..."
+	cd monitoring && docker-compose up -d
+	@echo "✅ Monitoring stack started:"
+	@echo "   - Prometheus: http://localhost:9090"
+	@echo "   - Grafana: http://localhost:3001 (admin/admin)"
+	@echo "   - AlertManager: http://localhost:9093"
 
-format-backend: ## Format backend code
-	@echo "$(BLUE)Formatting backend code...$(NC)"
-	black src/ tests/
-	isort src/ tests/
+monitoring-stop:
+	@echo "🛑 Stopping monitoring stack..."
+	cd monitoring && docker-compose down
+	@echo "✅ Monitoring stack stopped"
 
-format-frontend: ## Format frontend code
-	@echo "$(BLUE)Formatting frontend code...$(NC)"
-	cd src/frontend && npm run format
+monitoring-logs:
+	@echo "📋 Monitoring stack logs:"
+	cd monitoring && docker-compose logs -f
 
-format-check: ## Check code formatting
-	@echo "$(BLUE)Checking code formatting...$(NC)"
-	black --check src/ tests/
-	isort --check-only src/ tests/
-	cd src/frontend && npm run format:check
+metrics:
+	@echo "📈 Current metrics:"
+	curl -s http://localhost:8000/api/v1/monitoring/metrics | head -50
 
-# ============================================================================
-# Security targets
-# ============================================================================
+health:
+	@echo "💚 Health check:"
+	curl -s http://localhost:8000/api/v1/monitoring/health?detailed=true | jq .
 
-security: security-backend security-frontend ## Run security checks
-	@echo "$(GREEN)✓ Security checks completed$(NC)"
+alerts:
+	@echo "🚨 Active alerts:"
+	curl -s http://localhost:8000/api/v1/monitoring/alerts | jq .
 
-security-backend: ## Run backend security scans
-	@echo "$(BLUE)Running backend security scans...$(NC)"
-	bandit -r src/ -ll
-	safety check || true
+performance:
+	@echo "⚡ Performance statistics:"
+	curl -s http://localhost:8000/api/v1/monitoring/performance | jq .
 
-security-frontend: ## Run frontend security scans
-	@echo "$(BLUE)Running frontend security scans...$(NC)"
-	cd src/frontend && npm audit
+# =============================================================================
+# Models
+# =============================================================================
 
-# ============================================================================
-# Docker targets
-# ============================================================================
+ollama-install:
+	@echo "🦙 Installing Ollama..."
+	@if command -v brew >/dev/null 2>&1; then \
+		brew install ollama; \
+	else \
+		curl -fsSL https://ollama.ai/install.sh | sh; \
+	fi
+	@echo "✅ Ollama installed"
+	@echo "Run 'ollama serve' to start the Ollama service"
 
-docker-build: ## Build Docker image
-	@echo "$(BLUE)Building Docker image...$(NC)"
+ollama-pull:
+	@echo "⬇️  Pulling recommended Ollama models..."
+	ollama pull llama3:8b
+	ollama pull mistral:7b
+	@echo "✅ Models downloaded"
+
+models-list:
+	@echo "🤖 Available models:"
+	curl -s http://localhost:8000/api/v1/models/ | jq .
+
+models-health:
+	@echo "💊 Model provider health:"
+	curl -s http://localhost:8000/api/v1/models/health | jq .
+
+# =============================================================================
+# Docker
+# =============================================================================
+
+docker-build:
+	@echo "🐳 Building Docker image..."
 	docker build -t zakera:latest .
-	@echo "$(GREEN)✓ Docker image built$(NC)"
+	@echo "✅ Docker image built"
 
-docker-test: ## Test Docker image
-	@echo "$(BLUE)Testing Docker image...$(NC)"
-	docker run --rm -d --name zakera-test -p 8000:8000 zakera:latest
-	sleep 10
-	docker logs zakera-test
-	docker stop zakera-test
-	@echo "$(GREEN)✓ Docker image tested$(NC)"
+docker-run:
+	@echo "🐳 Running Docker container..."
+	docker run -d -p 8000:8000 --name zakera zakera:latest
+	@echo "✅ Container started: http://localhost:8000"
 
-docker-scan: ## Scan Docker image for vulnerabilities
-	@echo "$(BLUE)Scanning Docker image...$(NC)"
-	docker scan zakera:latest || echo "$(YELLOW)Install Docker Scan or use Trivy$(NC)"
+docker-stop:
+	@echo "🛑 Stopping Docker container..."
+	docker stop zakera && docker rm zakera
+	@echo "✅ Container stopped"
 
-docker-compose-up: ## Start services with docker-compose
-	@echo "$(BLUE)Starting services...$(NC)"
-	docker-compose up -d
-	@echo "$(GREEN)✓ Services started$(NC)"
+# =============================================================================
+# Cleanup
+# =============================================================================
 
-docker-compose-down: ## Stop services
-	@echo "$(BLUE)Stopping services...$(NC)"
-	docker-compose down -v
-	@echo "$(GREEN)✓ Services stopped$(NC)"
-
-docker-compose-logs: ## View docker-compose logs
-	docker-compose logs -f
-
-# ============================================================================
-# CI/CD targets
-# ============================================================================
-
-ci: lint test security ## Run CI checks locally
-	@echo "$(GREEN)✓ All CI checks passed$(NC)"
-
-ci-backend: lint-backend test-backend security-backend ## Run backend CI checks
-	@echo "$(GREEN)✓ Backend CI checks passed$(NC)"
-
-ci-frontend: lint-frontend test-frontend security-frontend ## Run frontend CI checks
-	@echo "$(GREEN)✓ Frontend CI checks passed$(NC)"
-
-ci-full: clean install ci docker-build ## Run full CI pipeline locally
-	@echo "$(GREEN)✓ Full CI pipeline completed$(NC)"
-
-# ============================================================================
-# Build targets
-# ============================================================================
-
-build: build-backend build-frontend ## Build everything
-	@echo "$(GREEN)✓ Build completed$(NC)"
-
-build-backend: ## Build backend (check imports)
-	@echo "$(BLUE)Building backend...$(NC)"
-	python -m py_compile src/**/*.py
-
-build-frontend: ## Build frontend
-	@echo "$(BLUE)Building frontend...$(NC)"
-	cd src/frontend && npm run build
-	@echo "$(GREEN)✓ Frontend built$(NC)"
-
-# ============================================================================
-# Development targets
-# ============================================================================
-
-dev-backend: ## Run backend in development mode
-	@echo "$(BLUE)Starting backend development server...$(NC)"
-	uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
-
-dev-frontend: ## Run frontend in development mode
-	@echo "$(BLUE)Starting frontend development server...$(NC)"
-	cd src/frontend && npm run dev
-
-dev: ## Run both backend and frontend in development mode
-	@echo "$(BLUE)Starting development servers...$(NC)"
-	@echo "$(YELLOW)Run 'make dev-backend' and 'make dev-frontend' in separate terminals$(NC)"
-
-# ============================================================================
-# Database targets
-# ============================================================================
-
-db-migrate: ## Run database migrations
-	@echo "$(BLUE)Running database migrations...$(NC)"
-	alembic upgrade head
-	@echo "$(GREEN)✓ Migrations applied$(NC)"
-
-db-rollback: ## Rollback last migration
-	@echo "$(BLUE)Rolling back last migration...$(NC)"
-	alembic downgrade -1
-
-db-reset: ## Reset database
-	@echo "$(RED)⚠ Resetting database...$(NC)"
-	rm -f data/zakera.db
-	alembic upgrade head
-	python scripts/seed_db.py || echo "$(YELLOW)Seed script not found$(NC)"
-
-# ============================================================================
-# Cleanup targets
-# ============================================================================
-
-clean: clean-python clean-frontend clean-docker ## Clean all generated files
-	@echo "$(GREEN)✓ Cleanup completed$(NC)"
-
-clean-python: ## Clean Python generated files
-	@echo "$(BLUE)Cleaning Python files...$(NC)"
+clean:
+	@echo "🧹 Cleaning temporary files..."
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
-	find . -type f -name "*.pyo" -delete
-	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf htmlcov/ .coverage coverage.xml
+	find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name ".coverage" -delete
+	@echo "✅ Cleanup complete"
 
-clean-frontend: ## Clean frontend generated files
-	@echo "$(BLUE)Cleaning frontend files...$(NC)"
-	cd src/frontend && rm -rf .next/ out/ node_modules/.cache coverage/
-
-clean-docker: ## Clean Docker resources
-	@echo "$(BLUE)Cleaning Docker resources...$(NC)"
-	docker system prune -f
-
-# ============================================================================
-# Release targets
-# ============================================================================
-
-version: ## Show current version
-	@echo "$(BLUE)Current version:$(NC)"
-	@git describe --tags --always
-
-release-patch: ## Create patch release
-	@echo "$(BLUE)Creating patch release...$(NC)"
-	# Add versioning logic here
-
-release-minor: ## Create minor release
-	@echo "$(BLUE)Creating minor release...$(NC)"
-	# Add versioning logic here
-
-release-major: ## Create major release
-	@echo "$(BLUE)Creating major release...$(NC)"
-	# Add versioning logic here
-
-# ============================================================================
-# Documentation targets
-# ============================================================================
-
-docs: ## Generate documentation
-	@echo "$(BLUE)Generating documentation...$(NC)"
-	@echo "$(YELLOW)Documentation generation not yet implemented$(NC)"
-
-docs-serve: ## Serve documentation locally
-	@echo "$(BLUE)Serving documentation...$(NC)"
-	@echo "$(YELLOW)Documentation server not yet implemented$(NC)"
-
-# ============================================================================
-# Utility targets
-# ============================================================================
-
-check-deps: ## Check for outdated dependencies
-	@echo "$(BLUE)Checking for outdated dependencies...$(NC)"
-	pip list --outdated
-	cd src/frontend && npm outdated
-
-update-deps: ## Update dependencies
-	@echo "$(BLUE)Updating dependencies...$(NC)"
-	pip install --upgrade pip
-	pip install -r requirements.txt --upgrade
-	cd src/frontend && npm update
-
-pre-commit: lint test ## Run pre-commit checks
-	@echo "$(GREEN)✓ Pre-commit checks passed$(NC)"
-
-pre-push: ci docker-build ## Run pre-push checks
-	@echo "$(GREEN)✓ Pre-push checks passed$(NC)"
-
-status: ## Show repository status
-	@echo "$(BLUE)Repository Status:$(NC)"
-	@git status
-	@echo ""
-	@echo "$(BLUE)Recent commits:$(NC)"
-	@git log --oneline -5
-
-# ============================================================================
-# Backend shortcuts
-# ============================================================================
-
-backend: ci-backend ## Run all backend checks
-	@echo "$(GREEN)✓ Backend checks completed$(NC)"
-
-# ============================================================================
-# Frontend shortcuts
-# ============================================================================
-
-frontend: ci-frontend build-frontend ## Run all frontend checks
-	@echo "$(GREEN)✓ Frontend checks completed$(NC)"
-
-# ============================================================================
-# All-in-one target
-# ============================================================================
-
-all: clean install ci build docker-build ## Run everything
-	@echo "$(GREEN)✅ All tasks completed successfully!$(NC)"
-
-# ============================================================================
-# Quick shortcuts
-# ============================================================================
-
-t: test ## Shortcut for test
-f: format ## Shortcut for format
-l: lint ## Shortcut for lint
-b: build ## Shortcut for build
-d: docker-build ## Shortcut for docker-build
+clean-all: clean
+	@echo "🧹 Cleaning all generated files..."
+	rm -rf data/*.db
+	rm -rf logs/*.log
+	@echo "✅ Full cleanup complete"
