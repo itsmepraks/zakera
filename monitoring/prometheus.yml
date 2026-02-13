@@ -1,0 +1,70 @@
+# Prometheus configuration for Zakera monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'zakera'
+    environment: 'production'
+
+# AlertManager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules
+rule_files:
+  - 'alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Zakera API application
+  - job_name: 'zakera-api'
+    metrics_path: '/api/v1/monitoring/metrics'
+    static_configs:
+      - targets: ['localhost:8000']
+        labels:
+          service: 'zakera-api'
+          tier: 'application'
+    
+    # Scrape interval for application
+    scrape_interval: 10s
+    scrape_timeout: 5s
+  
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          tier: 'monitoring'
+  
+  # Node Exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          tier: 'infrastructure'
+  
+  # PostgreSQL Exporter (if using PostgreSQL)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
+          tier: 'database'
+  
+  # Ollama metrics (if available)
+  - job_name: 'ollama'
+    static_configs:
+      - targets: ['localhost:11434']
+        labels:
+          service: 'ollama'
+          tier: 'ml-inference'
+    
+    # Ollama might not have metrics endpoint
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
