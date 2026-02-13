@@ -1,0 +1,120 @@
+/* ToolIntegration Component Styles */
+
+.tool-integration.embedded {
+  @apply w-full h-full flex flex-col;
+}
+
+.tool-integration.floating {
+  @apply fixed bottom-20 right-6 z-50;
+  @apply w-[400px] max-h-[600px];
+  @apply bg-white dark:bg-gray-900 rounded-lg shadow-2xl;
+  @apply flex flex-col;
+  @apply border border-gray-200 dark:border-gray-700;
+}
+
+.tool-integration.floating.expanded {
+  @apply w-[600px] max-h-[800px];
+}
+
+.integration-header {
+  @apply flex items-center justify-between p-3;
+  @apply border-b border-gray-200 dark:border-gray-700;
+  @apply bg-gray-50 dark:bg-gray-800;
+}
+
+.view-tabs {
+  @apply flex gap-1;
+}
+
+.view-tab {
+  @apply px-4 py-2 rounded-lg text-sm font-medium;
+  @apply text-gray-700 dark:text-gray-300;
+  @apply hover:bg-gray-200 dark:hover:bg-gray-700;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-colors;
+}
+
+.view-tab.active {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.header-actions {
+  @apply flex items-center gap-2;
+}
+
+.action-btn {
+  @apply p-2 rounded-md;
+  @apply hover:bg-gray-200 dark:hover:bg-gray-700;
+  @apply transition-colors;
+}
+
+.integration-content {
+  @apply flex-1 overflow-hidden;
+}
+
+.tool-fab {
+  @apply fixed bottom-6 right-6 z-50;
+  @apply w-14 h-14 rounded-full;
+  @apply bg-blue-600 hover:bg-blue-700;
+  @apply text-white shadow-lg;
+  @apply flex items-center justify-center;
+  @apply transition-all hover:scale-110;
+}
+
+.no-tool-selected {
+  @apply flex flex-col items-center justify-center h-full p-8;
+  @apply text-gray-500 dark:text-gray-400;
+}
+
+.select-tool-btn {
+  @apply mt-4 px-6 py-2 rounded-lg;
+  @apply bg-blue-600 hover:bg-blue-700 text-white;
+  @apply transition-colors;
+}
+
+.icon {
+  @apply w-5 h-5;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .tool-integration.floating {
+    @apply w-full max-w-full;
+    @apply bottom-0 right-0 left-0;
+    @apply rounded-t-lg rounded-b-none;
+    @apply max-h-[90vh];
+  }
+
+  .tool-integration.floating.expanded {
+    @apply w-full max-h-[95vh];
+  }
+
+  .tool-fab {
+    @apply bottom-4 right-4;
+    @apply w-12 h-12;
+  }
+
+  .view-tabs {
+    @apply flex-1;
+  }
+
+  .view-tab {
+    @apply flex-1 px-2 py-1.5 text-xs;
+  }
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.tool-integration.floating {
+  animation: slideUp 0.3s ease-out;
+}

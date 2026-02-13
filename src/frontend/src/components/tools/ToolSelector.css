@@ -1,0 +1,212 @@
+/* ToolSelector Component Styles */
+
+.tool-selector {
+  @apply flex flex-col h-full bg-white dark:bg-gray-900 rounded-lg shadow-lg;
+  min-height: 400px;
+}
+
+.tool-selector.compact {
+  @apply max-h-[600px];
+}
+
+.tool-selector-header {
+  @apply flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.tool-selector-title {
+  @apply flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white;
+}
+
+.filter-toggle {
+  @apply p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors;
+}
+
+.tool-filters {
+  @apply p-4 space-y-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800;
+}
+
+.filter-search {
+  @apply relative;
+}
+
+.search-icon {
+  @apply absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5;
+}
+
+.search-input {
+  @apply w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg;
+  @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  @apply placeholder-gray-400 dark:placeholder-gray-500;
+}
+
+.filter-categories {
+  @apply flex flex-wrap gap-2;
+}
+
+.category-btn {
+  @apply px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600;
+  @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  @apply hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+}
+
+.category-btn.active {
+  @apply bg-blue-600 text-white border-blue-600 hover:bg-blue-700;
+}
+
+.filter-tags {
+  @apply space-y-2;
+}
+
+.tags-label {
+  @apply flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300;
+}
+
+.tags-list {
+  @apply flex flex-wrap gap-2;
+}
+
+.tag-btn {
+  @apply px-3 py-1 rounded-full border border-gray-300 dark:border-gray-600;
+  @apply text-xs font-medium text-gray-600 dark:text-gray-400;
+  @apply hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+}
+
+.tag-btn.active {
+  @apply bg-blue-100 dark:bg-blue-900 border-blue-500 text-blue-700 dark:text-blue-300;
+}
+
+.tools-list {
+  @apply flex-1 overflow-y-auto p-4 space-y-3;
+}
+
+.tool-card {
+  @apply border border-gray-200 dark:border-gray-700 rounded-lg;
+  @apply hover:border-blue-500 dark:hover:border-blue-400 transition-colors;
+  @apply bg-white dark:bg-gray-800;
+}
+
+.tool-card.selected {
+  @apply border-blue-500 dark:border-blue-400 ring-2 ring-blue-200 dark:ring-blue-900;
+}
+
+.tool-card-header {
+  @apply flex items-start justify-between p-4 cursor-pointer;
+}
+
+.tool-info {
+  @apply flex-1 space-y-2;
+}
+
+.tool-name {
+  @apply text-lg font-semibold text-gray-900 dark:text-white;
+}
+
+.tool-description {
+  @apply text-sm text-gray-600 dark:text-gray-400;
+}
+
+.tool-tags {
+  @apply flex flex-wrap gap-1;
+}
+
+.tool-tag {
+  @apply px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700;
+  @apply text-gray-600 dark:text-gray-400;
+}
+
+.expand-btn {
+  @apply p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+}
+
+.tool-card-details {
+  @apply px-4 pb-4 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3;
+}
+
+.tool-metadata {
+  @apply flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400;
+}
+
+.metadata-item {
+  @apply flex gap-1;
+}
+
+.tool-parameters {
+  @apply space-y-2;
+}
+
+.tool-parameters strong {
+  @apply text-sm font-medium text-gray-900 dark:text-white;
+}
+
+.no-params {
+  @apply text-sm text-gray-500 dark:text-gray-400 italic;
+}
+
+.params-list {
+  @apply space-y-2 mt-2;
+}
+
+.param-item {
+  @apply p-2 bg-gray-50 dark:bg-gray-700 rounded;
+}
+
+.param-item code {
+  @apply font-mono text-sm text-blue-600 dark:text-blue-400;
+}
+
+.param-type {
+  @apply text-xs text-gray-500 dark:text-gray-400 ml-1;
+}
+
+.required {
+  @apply text-red-500 ml-1;
+}
+
+.param-description {
+  @apply text-xs text-gray-600 dark:text-gray-400 mt-1;
+}
+
+.loading-spinner {
+  @apply w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto;
+}
+
+.loading {
+  @apply flex flex-col items-center justify-center p-8 space-y-4;
+}
+
+.error-message {
+  @apply p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800;
+  @apply text-red-700 dark:text-red-400 rounded-lg;
+}
+
+.no-tools {
+  @apply text-center py-8 text-gray-500 dark:text-gray-400;
+}
+
+.icon {
+  @apply w-5 h-5;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .tool-selector-title {
+    @apply text-lg;
+  }
+
+  .filter-categories {
+    @apply grid grid-cols-2 gap-2;
+  }
+
+  .category-btn {
+    @apply text-xs px-3 py-1.5;
+  }
+
+  .tool-card-header {
+    @apply flex-col gap-2;
+  }
+
+  .expand-btn {
+    @apply self-end;
+  }
+}

@@ -1,0 +1,204 @@
+/* ToolHistory Component Styles */
+
+.tool-history {
+  @apply flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-lg;
+  min-height: 400px;
+}
+
+.history-header {
+  @apply flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.history-title {
+  @apply flex items-center gap-2 text-xl font-semibold text-gray-900 dark:text-white;
+}
+
+.header-actions {
+  @apply flex items-center gap-2;
+}
+
+.refresh-btn {
+  @apply p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-colors;
+}
+
+.history-filters {
+  @apply p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.filter-group {
+  @apply flex items-center gap-2;
+}
+
+.filter-btn {
+  @apply px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600;
+  @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  @apply hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors;
+}
+
+.filter-btn.active {
+  @apply bg-blue-600 text-white border-blue-600 hover:bg-blue-700;
+}
+
+.history-list {
+  @apply flex-1 overflow-y-auto p-4 space-y-3;
+}
+
+.history-item {
+  @apply border border-gray-200 dark:border-gray-700 rounded-lg;
+  @apply bg-white dark:bg-gray-800;
+}
+
+.item-header {
+  @apply flex items-center justify-between p-4 cursor-pointer;
+  @apply hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors;
+}
+
+.item-info {
+  @apply flex items-center gap-3 flex-1;
+}
+
+.item-status .icon {
+  @apply w-6 h-6;
+}
+
+.item-status .icon.success {
+  @apply text-green-600 dark:text-green-400;
+}
+
+.item-status .icon.error {
+  @apply text-red-600 dark:text-red-400;
+}
+
+.item-details {
+  @apply flex flex-col;
+}
+
+.item-tool-name {
+  @apply font-semibold text-gray-900 dark:text-white;
+}
+
+.item-timestamp {
+  @apply text-sm text-gray-500 dark:text-gray-400;
+}
+
+.item-actions {
+  @apply flex items-center gap-3;
+}
+
+.execution-time {
+  @apply flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400;
+}
+
+.expand-btn {
+  @apply p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700;
+}
+
+.item-expanded {
+  @apply border-t border-gray-200 dark:border-gray-700 p-4 space-y-4;
+  @apply bg-gray-50 dark:bg-gray-750;
+}
+
+.expanded-section {
+  @apply space-y-2;
+}
+
+.section-title {
+  @apply font-medium text-gray-900 dark:text-white;
+}
+
+.code-block {
+  @apply p-3 bg-gray-900 dark:bg-gray-950 text-green-400;
+  @apply rounded-lg overflow-x-auto text-sm font-mono;
+}
+
+.error-display {
+  @apply p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800;
+  @apply text-red-700 dark:text-red-400 rounded-lg text-sm;
+}
+
+.expanded-actions {
+  @apply flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700;
+}
+
+.reexecute-btn {
+  @apply flex items-center gap-2 px-4 py-2 rounded-lg;
+  @apply bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium;
+  @apply transition-colors;
+}
+
+.history-footer {
+  @apply p-4 border-t border-gray-200 dark:border-gray-700;
+  @apply flex justify-center;
+}
+
+.load-more-btn {
+  @apply px-6 py-2 rounded-lg border border-gray-300 dark:border-gray-600;
+  @apply text-sm font-medium text-gray-700 dark:text-gray-300;
+  @apply hover:bg-gray-100 dark:hover:bg-gray-700;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-colors;
+}
+
+.loading {
+  @apply flex flex-col items-center justify-center p-8 space-y-4;
+}
+
+.loading-spinner {
+  @apply w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin;
+}
+
+.error-message {
+  @apply m-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800;
+  @apply text-red-700 dark:text-red-400 rounded-lg;
+}
+
+.no-history {
+  @apply flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400;
+}
+
+.icon-large {
+  @apply w-12 h-12 mb-4 opacity-50;
+}
+
+.icon {
+  @apply w-5 h-5;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .history-title {
+    @apply text-lg;
+  }
+
+  .item-header {
+    @apply flex-col items-start gap-3;
+  }
+
+  .item-actions {
+    @apply w-full justify-between;
+  }
+
+  .filter-group {
+    @apply flex-wrap;
+  }
+
+  .filter-btn {
+    @apply flex-1 min-w-[80px];
+  }
+}

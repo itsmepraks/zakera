@@ -1,0 +1,190 @@
+/* ToolExecutionPanel Component Styles */
+
+.tool-execution-panel {
+  @apply flex flex-col bg-white dark:bg-gray-900 rounded-lg shadow-lg;
+  min-height: 400px;
+}
+
+.panel-header {
+  @apply p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.panel-title {
+  @apply text-xl font-semibold text-gray-900 dark:text-white;
+}
+
+.panel-content {
+  @apply flex-1 p-4 space-y-6 overflow-y-auto;
+}
+
+.parameters-form {
+  @apply space-y-4;
+}
+
+.form-title {
+  @apply text-lg font-medium text-gray-900 dark:text-white mb-3;
+}
+
+.no-params-message {
+  @apply text-sm text-gray-500 dark:text-gray-400 italic;
+}
+
+.parameters-list {
+  @apply space-y-4;
+}
+
+.parameter-input {
+  @apply space-y-2;
+}
+
+.input-label {
+  @apply block text-sm font-medium text-gray-700 dark:text-gray-300;
+}
+
+.checkbox-label {
+  @apply flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300;
+}
+
+.checkbox-input {
+  @apply w-4 h-4 text-blue-600 border-gray-300 rounded;
+  @apply focus:ring-2 focus:ring-blue-500;
+}
+
+.text-input,
+.select-input {
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg;
+  @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  @apply placeholder-gray-400 dark:placeholder-gray-500;
+}
+
+.textarea-input {
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg;
+  @apply focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  @apply placeholder-gray-400 dark:placeholder-gray-500;
+  @apply font-mono text-sm;
+  resize: vertical;
+}
+
+.text-input.error,
+.select-input.error,
+.textarea-input.error {
+  @apply border-red-500 focus:ring-red-500;
+}
+
+.param-description {
+  @apply text-xs text-gray-500 dark:text-gray-400;
+}
+
+.error-text {
+  @apply text-xs text-red-600 dark:text-red-400;
+}
+
+.required {
+  @apply text-red-500 ml-1;
+}
+
+.execute-actions {
+  @apply flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700;
+}
+
+.execute-btn {
+  @apply flex items-center gap-2 px-6 py-3 rounded-lg;
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-medium;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  @apply transition-colors;
+}
+
+.result-container {
+  @apply mt-6 rounded-lg border;
+}
+
+.result-container.success {
+  @apply border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20;
+}
+
+.result-container.error {
+  @apply border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20;
+}
+
+.result-header {
+  @apply flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700;
+}
+
+.result-status {
+  @apply flex items-center gap-2 font-medium;
+}
+
+.result-status .icon.success {
+  @apply text-green-600 dark:text-green-400;
+}
+
+.result-status .icon.error {
+  @apply text-red-600 dark:text-red-400;
+}
+
+.result-meta {
+  @apply flex items-center gap-3;
+}
+
+.execution-time {
+  @apply flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400;
+}
+
+.copy-btn {
+  @apply flex items-center gap-1 px-3 py-1 rounded text-sm;
+  @apply bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600;
+  @apply text-gray-700 dark:text-gray-300;
+  @apply transition-colors;
+}
+
+.result-content {
+  @apply p-4;
+}
+
+.result-data {
+  @apply p-4 bg-gray-900 dark:bg-gray-950 text-green-400;
+  @apply rounded-lg overflow-x-auto text-sm font-mono;
+}
+
+.error-display {
+  @apply flex items-start gap-2 text-red-700 dark:text-red-400;
+}
+
+.icon {
+  @apply w-5 h-5;
+}
+
+/* Animations */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .panel-title {
+    @apply text-lg;
+  }
+
+  .execute-btn {
+    @apply w-full justify-center;
+  }
+
+  .result-header {
+    @apply flex-col items-start gap-2;
+  }
+
+  .result-meta {
+    @apply w-full justify-between;
+  }
+}
