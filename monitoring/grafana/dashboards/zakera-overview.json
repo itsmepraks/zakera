@@ -1,0 +1,166 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zakera-overview",
+    "title": "Zakera AI Chat Agent - Overview",
+    "tags": ["zakera", "ai", "chat"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "API Request Rate",
+        "targets": [{
+          "expr": "sum(rate(http_requests_total[5m])) by (method, status_code)",
+          "legendFormat": "{{method}} - {{status_code}}"
+        }],
+        "yaxes": [{"format": "reqps"}, {"format": "short"}]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "API Response Time (p95)",
+        "targets": [{
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+          "legendFormat": "{{endpoint}}"
+        }],
+        "yaxes": [{"format": "s"}, {"format": "short"}]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Model Requests by Provider",
+        "targets": [{
+          "expr": "sum(rate(model_requests_total[5m])) by (provider, status)",
+          "legendFormat": "{{provider}} - {{status}}"
+        }],
+        "yaxes": [{"format": "reqps"}, {"format": "short"}]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "graph",
+        "title": "Model Response Time",
+        "targets": [{
+          "expr": "histogram_quantile(0.95, sum(rate(model_request_duration_seconds_bucket[5m])) by (le, model))",
+          "legendFormat": "{{model}} (p95)"
+        }],
+        "yaxes": [{"format": "s"}, {"format": "short"}]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 16},
+        "type": "singlestat",
+        "title": "Active Requests",
+        "targets": [{
+          "expr": "sum(http_requests_inprogress)"
+        }],
+        "format": "none"
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 16},
+        "type": "singlestat",
+        "title": "Error Rate (5m)",
+        "targets": [{
+          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))"
+        }],
+        "format": "percentunit",
+        "thresholds": "0.05,0.10",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 16},
+        "type": "singlestat",
+        "title": "CPU Usage",
+        "targets": [{
+          "expr": "system_cpu_usage_percent"
+        }],
+        "format": "percent",
+        "thresholds": "70,85",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 16},
+        "type": "singlestat",
+        "title": "Memory Usage",
+        "targets": [{
+          "expr": "system_memory_usage_percent"
+        }],
+        "format": "percent",
+        "thresholds": "70,85",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+        "type": "graph",
+        "title": "Token Usage",
+        "targets": [
+          {
+            "expr": "sum(rate(model_tokens_total{type=\"input\"}[5m])) by (model)",
+            "legendFormat": "{{model}} (input)"
+          },
+          {
+            "expr": "sum(rate(model_tokens_total{type=\"output\"}[5m])) by (model)",
+            "legendFormat": "{{model}} (output)"
+          }
+        ],
+        "yaxes": [{"format": "short"}, {"format": "short"}]
+      },
+      {
+        "id": 10,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+        "type": "graph",
+        "title": "Tool Executions",
+        "targets": [{
+          "expr": "sum(rate(tool_executions_total[5m])) by (tool_name, status)",
+          "legendFormat": "{{tool_name}} - {{status}}"
+        }],
+        "yaxes": [{"format": "ops"}, {"format": "short"}]
+      },
+      {
+        "id": 11,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+        "type": "graph",
+        "title": "Database Query Performance",
+        "targets": [{
+          "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation))",
+          "legendFormat": "{{operation}} (p95)"
+        }],
+        "yaxes": [{"format": "s"}, {"format": "short"}]
+      },
+      {
+        "id": 12,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+        "type": "graph",
+        "title": "WebSocket Connections",
+        "targets": [{
+          "expr": "active_websocket_connections",
+          "legendFormat": "Active Connections"
+        }],
+        "yaxes": [{"format": "short"}, {"format": "short"}]
+      },
+      {
+        "id": 13,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
+        "type": "table",
+        "title": "Model Provider Status",
+        "targets": [{
+          "expr": "model_requests_total",
+          "format": "table",
+          "instant": true
+        }],
+        "transform": "table"
+      }
+    ]
+  }
+}
