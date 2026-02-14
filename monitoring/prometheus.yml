@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'zakera-production'
+    cluster: 'zakera-ai'
     environment: 'production'
 
 # Alertmanager configuration
@@ -12,89 +12,110 @@ alerting:
         - targets:
             - alertmanager:9093
 
-# Load alert rules
+# Load rules
 rule_files:
   - 'alerts.yml'
+  - 'alerts-conversations.yml'
 
 # Scrape configurations
 scrape_configs:
-  # Zakera API application
+  # Zakera AI Chat Agent
   - job_name: 'zakera-api'
-    scrape_interval: 15s
-    scrape_timeout: 10s
+    scrape_interval: 10s
+    scrape_timeout: 5s
     metrics_path: '/api/v1/monitoring/metrics'
     static_configs:
-      - targets: 
-          - 'host.docker.internal:8000'  # API running on host
+      - targets: ['host.docker.internal:8000']
         labels:
-          service: 'zakera-api'
-          component: 'backend'
+          app: 'zakera'
+          component: 'api'
     metric_relabel_configs:
-      # Drop high-cardinality labels if needed
+      # Add custom labels
       - source_labels: [__name__]
-        regex: 'http_request_duration_seconds_bucket'
+        regex: 'zakera_.*'
         action: keep
-  
+
   # Prometheus self-monitoring
   - job_name: 'prometheus'
+    scrape_interval: 30s
     static_configs:
-      - targets: 
-          - 'localhost:9090'
+      - targets: ['localhost:9090']
         labels:
-          service: 'prometheus'
-  
-  # Node Exporter for system metrics (optional)
+          component: 'prometheus'
+
+  # Node Exporter - System metrics
   - job_name: 'node-exporter'
     scrape_interval: 30s
     static_configs:
-      - targets:
-          - 'node-exporter:9100'
+      - targets: ['node-exporter:9100']
         labels:
-          service: 'node-exporter'
           component: 'system'
-  
-  # AlertManager
-  - job_name: 'alertmanager'
-    static_configs:
-      - targets:
-          - 'alertmanager:9093'
-        labels:
-          service: 'alertmanager'
-  
-  # Grafana
-  - job_name: 'grafana'
-    static_configs:
-      - targets:
-          - 'grafana:3000'
-        labels:
-          service: 'grafana'
-  
-  # Database exporter (PostgreSQL - optional)
-  - job_name: 'postgres-exporter'
+
+  # cAdvisor - Container metrics
+  - job_name: 'cadvisor'
     scrape_interval: 30s
     static_configs:
-      - targets:
-          - 'postgres-exporter:9187'
+      - targets: ['cadvisor:8080']
         labels:
-          service: 'postgres'
+          component: 'containers'
+
+  # PostgreSQL Exporter (optional)
+  - job_name: 'postgres'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
           component: 'database'
 
-# Storage configuration
-storage:
-  tsdb:
-    path: /prometheus
-    retention:
-      time: 30d
-      size: 50GB
+  # AlertManager
+  - job_name: 'alertmanager'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          component: 'alertmanager'
 
-# Remote write configuration (optional - for long-term storage)
-# remote_write:
-#   - url: 'https://prometheus-remote-storage.example.com/write'
-#     queue_config:
-#       capacity: 10000
-#       max_shards: 200
-#       min_shards: 1
-#       max_samples_per_send: 5000
-#       batch_send_deadline: 5s
-#       min_backoff: 30ms
-#       max_backoff: 100ms
+# Recording rules for common queries
+recording_rules:
+  - name: conversation_aggregations
+    interval: 30s
+    rules:
+      # Conversation success rate
+      - record: zakera:conversation_success_rate
+        expr: |
+          rate(zakera_conversations_completed_total[5m])
+          /
+          rate(zakera_conversations_started_total[5m])
+      
+      # Message throughput
+      - record: zakera:message_throughput_per_minute
+        expr: |
+          rate(zakera_messages_total[1m]) * 60
+      
+      # Average conversation duration
+      - record: zakera:avg_conversation_duration_seconds
+        expr: |
+          rate(zakera_conversation_duration_seconds_sum[5m])
+          /
+          rate(zakera_conversation_duration_seconds_count[5m])
+      
+      # Database query p95
+      - record: zakera:db_query_p95_seconds
+        expr: |
+          histogram_quantile(0.95, 
+            rate(zakera_db_query_duration_seconds_bucket[5m])
+          )
+      
+      # Total cost per hour
+      - record: zakera:total_cost_per_hour
+        expr: |
+          sum(rate(zakera_model_cost_total[1h]))
+      
+      # Error rate percentage
+      - record: zakera:error_rate_percentage
+        expr: |
+          (
+            rate(zakera_http_requests_total{status=~"5.."}[5m])
+            /
+            rate(zakera_http_requests_total[5m])
+          ) * 100
