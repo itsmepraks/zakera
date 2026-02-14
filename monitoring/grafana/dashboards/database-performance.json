@@ -1,0 +1,149 @@
+{
+  "dashboard": {
+    "title": "Database Performance & Health",
+    "tags": ["zakera", "database", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Query Rate by Operation",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(db_queries_total[5m])) by (operation)",
+            "legendFormat": "{{operation}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "qps"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Query Duration by Table (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, table))",
+            "legendFormat": "{{table}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Connection Pool Status",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "db_connection_pool_size",
+            "legendFormat": "Pool Size"
+          },
+          {
+            "expr": "db_connection_pool_available",
+            "legendFormat": "Available"
+          },
+          {
+            "expr": "db_connection_pool_size - db_connection_pool_available",
+            "legendFormat": "In Use"
+          }
+        ],
+        "yaxes": [
+          {"format": "short"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Database Errors",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(db_connection_errors_total[5m]))",
+            "legendFormat": "Connection Errors"
+          },
+          {
+            "expr": "sum(rate(db_queries_total{status=\"error\"}[5m]))",
+            "legendFormat": "Query Errors"
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [0.1], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "name": "Database Errors Alert"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Conversation Table Queries",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(rate(db_queries_total{table=\"conversations\"}[5m])) by (operation)",
+            "legendFormat": "{{operation}}"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Message Table Queries",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(rate(db_queries_total{table=\"messages\"}[5m])) by (operation)",
+            "legendFormat": "{{operation}}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Database Operations Latency Heatmap",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(increase(db_query_duration_seconds_bucket[1m])) by (le)",
+            "format": "heatmap"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Slow Queries (> 1s)",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "topk(10, sum(db_queries_slow_total) by (operation, table))",
+            "format": "table",
+            "instant": true
+          }
+        ]
+      }
+    ]
+  }
+}
