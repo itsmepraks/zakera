@@ -1,0 +1,163 @@
+{
+  "dashboard": {
+    "title": "Zakera - Model Performance & Cost Analysis",
+    "tags": ["zakera", "models", "ai", "cost"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Model Usage Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum by (model) (zakera_model_requests_total)",
+            "legendFormat": "{{model}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Provider Response Time Comparison",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_model_response_duration_seconds_bucket{provider=\"openai\"}[5m]))",
+            "legendFormat": "OpenAI p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_model_response_duration_seconds_bucket{provider=\"anthropic\"}[5m]))",
+            "legendFormat": "Anthropic p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_model_response_duration_seconds_bucket{provider=\"ollama\"}[5m]))",
+            "legendFormat": "Ollama p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_model_response_duration_seconds_bucket{provider=\"gemini\"}[5m]))",
+            "legendFormat": "Gemini p95"
+          }
+        ],
+        "yaxes": [{"label": "Response Time", "format": "s"}]
+      },
+      {
+        "id": 3,
+        "title": "Token Usage by Provider",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(zakera_model_tokens_total{type=\"prompt\"}[5m])",
+            "legendFormat": "{{provider}} - Prompt"
+          },
+          {
+            "expr": "rate(zakera_model_tokens_total{type=\"completion\"}[5m])",
+            "legendFormat": "{{provider}} - Completion"
+          }
+        ],
+        "yaxes": [{"label": "Tokens/sec", "format": "short"}]
+      },
+      {
+        "id": 4,
+        "title": "Cost per Provider (Hourly)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(zakera_model_cost_total[1h])",
+            "legendFormat": "{{provider}} - {{model}}"
+          }
+        ],
+        "yaxes": [{"label": "USD/hour", "format": "currencyUSD"}]
+      },
+      {
+        "id": 5,
+        "title": "Model Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "(rate(zakera_model_errors_total[5m]) / rate(zakera_model_requests_total[5m])) * 100",
+            "legendFormat": "{{provider}} - {{error_type}}"
+          }
+        ],
+        "yaxes": [{"label": "Error Rate %", "format": "percent"}]
+      },
+      {
+        "id": 6,
+        "title": "Model Fallback Triggered",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(zakera_model_fallback_total[5m])",
+            "legendFormat": "{{from_provider}} → {{to_provider}}"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Tokens per Request (Avg)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(zakera_model_tokens_total[5m]) / rate(zakera_model_requests_total[5m])",
+            "legendFormat": "{{model}}"
+          }
+        ],
+        "yaxes": [{"label": "Avg Tokens", "format": "short"}]
+      },
+      {
+        "id": 8,
+        "title": "Cost Efficiency (Cost per 1K tokens)",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "(zakera_model_cost_total / zakera_model_tokens_total) * 1000",
+            "legendFormat": "{{model}}",
+            "instant": true
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 9,
+        "title": "Streaming vs Non-Streaming",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(zakera_model_requests_total{streaming=\"true\"}[5m])",
+            "legendFormat": "Streaming"
+          },
+          {
+            "expr": "rate(zakera_model_requests_total{streaming=\"false\"}[5m])",
+            "legendFormat": "Non-Streaming"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Top Models by Usage",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (model, provider) (zakera_model_requests_total))",
+            "format": "table",
+            "instant": true
+          }
+        ]
+      }
+    ]
+  }
+}
