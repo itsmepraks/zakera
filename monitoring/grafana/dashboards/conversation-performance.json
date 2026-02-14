@@ -1,209 +1,140 @@
 {
   "dashboard": {
-    "title": "Conversation Performance & Analytics",
-    "tags": ["zakera", "conversations", "analytics"],
+    "title": "Zakera - Conversation Performance",
+    "tags": ["zakera", "conversations", "performance"],
     "timezone": "browser",
-    "schemaVersion": 27,
+    "schemaVersion": 16,
     "version": 1,
-    "refresh": "1m",
+    "refresh": "10s",
     "time": {
-      "from": "now-24h",
+      "from": "now-1h",
       "to": "now"
     },
     "panels": [
       {
         "id": 1,
-        "title": "Conversations Created (24h)",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+        "title": "Conversation Creation Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
         "targets": [
           {
-            "expr": "sum(increase(conversation_created_total[24h]))",
-            "legendFormat": "Created"
+            "expr": "rate(zakera_conversations_created_total[5m]) * 60",
+            "legendFormat": "Conversations/min"
           }
         ],
-        "options": {
-          "colorMode": "background",
-          "graphMode": "area"
-        }
+        "yaxes": [
+          {"label": "Rate", "format": "short"}
+        ]
       },
       {
         "id": 2,
-        "title": "Average Messages per Conversation",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+        "title": "Message Throughput",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
         "targets": [
           {
-            "expr": "avg(conversation_message_count)",
-            "legendFormat": "Avg Messages"
+            "expr": "rate(zakera_messages_total{role=\"user\"}[5m])",
+            "legendFormat": "User messages"
+          },
+          {
+            "expr": "rate(zakera_messages_total{role=\"assistant\"}[5m])",
+            "legendFormat": "Assistant responses"
           }
         ]
       },
       {
         "id": 3,
-        "title": "Conversation Success Rate",
-        "type": "gauge",
-        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
-        "targets": [
-          {
-            "expr": "sum(conversation_successful_total) / sum(conversation_started_total) * 100",
-            "legendFormat": "Success %"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "thresholds": {
-              "steps": [
-                {"value": 0, "color": "red"},
-                {"value": 85, "color": "yellow"},
-                {"value": 95, "color": "green"}
-              ]
-            },
-            "min": 0,
-            "max": 100
-          }
-        }
-      },
-      {
-        "id": 4,
-        "title": "Total Cost (24h)",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
-        "targets": [
-          {
-            "expr": "sum(increase(conversation_cost_total[24h]))",
-            "legendFormat": "Cost"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "currencyUSD"
-          }
-        }
-      },
-      {
-        "id": 5,
-        "title": "Active Users",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
-        "targets": [
-          {
-            "expr": "active_users",
-            "legendFormat": "Users"
-          }
-        ]
-      },
-      {
-        "id": 6,
-        "title": "Total Tokens (24h)",
-        "type": "stat",
-        "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
-        "targets": [
-          {
-            "expr": "sum(increase(conversation_tokens_total[24h]))",
-            "legendFormat": "Tokens"
-          }
-        ]
-      },
-      {
-        "id": 7,
         "title": "Conversation Duration Distribution",
         "type": "heatmap",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
         "targets": [
           {
-            "expr": "sum(increase(conversation_duration_seconds_bucket[5m])) by (le)",
-            "format": "heatmap",
+            "expr": "rate(zakera_conversation_duration_seconds_bucket[5m])",
             "legendFormat": "{{le}}"
           }
         ]
       },
       {
-        "id": 8,
-        "title": "Message Rate by Role",
+        "id": 4,
+        "title": "Messages per Conversation",
         "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
         "targets": [
           {
-            "expr": "sum(rate(conversation_messages_total{role=\"user\"}[5m]))",
-            "legendFormat": "User Messages"
+            "expr": "histogram_quantile(0.95, rate(zakera_conversation_messages_count_bucket[5m]))",
+            "legendFormat": "p95"
           },
           {
-            "expr": "sum(rate(conversation_messages_total{role=\"assistant\"}[5m]))",
-            "legendFormat": "Assistant Messages"
-          },
-          {
-            "expr": "sum(rate(conversation_messages_total{role=\"system\"}[5m]))",
-            "legendFormat": "System Messages"
-          }
-        ],
-        "yaxes": [
-          {"format": "reqps"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 9,
-        "title": "Conversation Lifecycle",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
-        "targets": [
-          {
-            "expr": "sum(rate(conversation_created_total[5m]))",
-            "legendFormat": "Created"
-          },
-          {
-            "expr": "sum(rate(conversation_archived_total[5m]))",
-            "legendFormat": "Archived"
-          },
-          {
-            "expr": "sum(rate(conversation_deleted_total[5m]))",
-            "legendFormat": "Deleted"
+            "expr": "histogram_quantile(0.50, rate(zakera_conversation_messages_count_bucket[5m]))",
+            "legendFormat": "p50"
           }
         ]
       },
       {
-        "id": 10,
-        "title": "Top Conversation Tags",
-        "type": "piechart",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "id": 5,
+        "title": "Active Users",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
         "targets": [
           {
-            "expr": "topk(10, sum(conversation_tags_total) by (tag))",
-            "legendFormat": "{{tag}}"
+            "expr": "zakera_active_users_total",
+            "legendFormat": "Active Users"
           }
         ]
       },
       {
-        "id": 11,
-        "title": "Search Performance",
+        "id": 6,
+        "title": "Conversation Archive Rate",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(search_duration_seconds_bucket[5m])) by (le, search_type))",
-            "legendFormat": "{{search_type}} (p95)"
+            "expr": "rate(zakera_conversations_archived_total[5m])",
+            "legendFormat": "Archived/sec"
+          },
+          {
+            "expr": "rate(zakera_conversations_deleted_total[5m])",
+            "legendFormat": "Deleted/sec"
           }
-        ],
-        "yaxes": [
-          {"format": "s"},
-          {"format": "short"}
         ]
       },
       {
-        "id": 12,
-        "title": "Conversation Sharing Activity",
+        "id": 7,
+        "title": "Message Success Rate",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
         "targets": [
           {
-            "expr": "sum(rate(conversation_shares_created_total[5m]))",
-            "legendFormat": "Shares Created"
-          },
+            "expr": "(rate(zakera_messages_successful_total[5m]) / rate(zakera_messages_total[5m])) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "yaxes": [
+          {"label": "Percentage", "format": "percent", "max": 100}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Top Conversations by Messages",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
           {
-            "expr": "sum(rate(conversation_shares_accessed_total[5m]))",
-            "legendFormat": "Shares Accessed"
+            "expr": "topk(10, zakera_conversation_message_count)",
+            "format": "table",
+            "instant": true
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Conversation Tags Distribution",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "sum by (tag) (zakera_conversations_by_tag)",
+            "legendFormat": "{{tag}}"
           }
         ]
       }
