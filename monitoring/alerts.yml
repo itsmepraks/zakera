@@ -1,130 +1,205 @@
-# Prometheus alert rules for Zakera
-
 groups:
-  - name: zakera_app_alerts
+  - name: zakera_critical_alerts
     interval: 30s
     rules:
-      # High error rate
-      - alert: HighErrorRate
-        expr: |
-          (
-            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
-            /
-            sum(rate(http_requests_total[5m]))
-          ) > 0.05
-        for: 5m
-        labels:
-          severity: warning
-          component: api
-        annotations:
-          summary: "High error rate detected"
-          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
-      
-      # Critical error rate
-      - alert: CriticalErrorRate
-        expr: |
-          (
-            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
-            /
-            sum(rate(http_requests_total[5m]))
-          ) > 0.10
-        for: 2m
+      # ========================================================================
+      # Database Alerts
+      # ========================================================================
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connection_pool_available == 0
+        for: 1m
         labels:
           severity: critical
-          component: api
+          component: database
         annotations:
-          summary: "Critical error rate detected"
-          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
-      
-      # Slow response time
-      - alert: SlowResponseTime
-        expr: |
-          histogram_quantile(0.95,
-            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)
-          ) > 2
-        for: 10m
-        labels:
-          severity: warning
-          component: api
-        annotations:
-          summary: "Slow API response time"
-          description: "95th percentile response time is {{ $value }}s on {{ $labels.endpoint }}"
-      
-      # Model request failures
-      - alert: HighModelFailureRate
-        expr: |
-          (
-            sum(rate(model_requests_total{status="error"}[10m])) by (model, provider)
-            /
-            sum(rate(model_requests_total[10m])) by (model, provider)
-          ) > 0.20
-        for: 5m
-        labels:
-          severity: warning
-          component: ml-inference
-        annotations:
-          summary: "High model failure rate"
-          description: "{{ $labels.model }} via {{ $labels.provider }} failure rate: {{ $value | humanizePercentage }}"
-      
-      # All model providers down
-      - alert: AllModelProvidersDown
-        expr: |
-          sum(up{job="zakera-api"}) by (instance) > 0
-          and
-          sum(model_requests_total{status="success"}) by (instance) == 0
-        for: 5m
-        labels:
-          severity: critical
-          component: ml-inference
-        annotations:
-          summary: "All model providers unavailable"
-          description: "No successful model requests in the last 5 minutes"
-      
-      # Tool execution failures
-      - alert: HighToolFailureRate
-        expr: |
-          (
-            sum(rate(tool_executions_total{status="error"}[10m])) by (tool_name)
-            /
-            sum(rate(tool_executions_total[10m])) by (tool_name)
-          ) > 0.30
-        for: 5m
-        labels:
-          severity: warning
-          component: tools
-        annotations:
-          summary: "High tool failure rate"
-          description: "Tool {{ $labels.tool_name }} failure rate: {{ $value | humanizePercentage }}"
-      
-      # Database connection issues
-      - alert: DatabaseConnectionFailures
+          summary: "Database connection pool exhausted"
+          description: "No available database connections. Current pool size: {{ $value }}"
+          
+      - alert: DatabaseConnectionErrors
         expr: rate(db_connection_errors_total[5m]) > 0.1
         for: 2m
         labels:
           severity: critical
           component: database
         annotations:
-          summary: "Database connection failures detected"
-          description: "{{ $value }} database connection errors per second"
-      
-      # Slow database queries
+          summary: "High database connection error rate"
+          description: "Database connection errors: {{ $value }} errors/sec"
+          
       - alert: SlowDatabaseQueries
-        expr: |
-          histogram_quantile(0.95,
-            sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation, table)
-          ) > 1
-        for: 10m
+        expr: histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation)) > 1.0
+        for: 5m
         labels:
           severity: warning
           component: database
         annotations:
-          summary: "Slow database queries"
-          description: "95th percentile query time: {{ $value }}s for {{ $labels.operation }} on {{ $labels.table }}"
+          summary: "Slow database queries detected"
+          description: "95th percentile query time for {{ $labels.operation }}: {{ $value }}s"
+          
+      - alert: DatabaseQueryErrors
+        expr: rate(db_queries_total{status="error"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database query error rate"
+          description: "Query errors: {{ $value }} errors/sec"
+          
+      - alert: DatabaseTransactionRollbacks
+        expr: rate(db_transaction_total{status="rolled_back"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High transaction rollback rate"
+          description: "Transaction rollbacks: {{ $value }}/sec"
+
+  - name: zakera_conversation_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # Conversation Alerts
+      # ========================================================================
+      - alert: LowConversationSuccessRate
+        expr: sum(rate(conversation_successful_total[10m])) / sum(rate(conversation_started_total[10m])) * 100 < 90
+        for: 5m
+        labels:
+          severity: warning
+          component: conversation
+        annotations:
+          summary: "Low conversation success rate"
+          description: "Conversation success rate: {{ $value }}% (threshold: 90%)"
+          
+      - alert: NoConversationsCreated
+        expr: rate(conversation_created_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: conversation
+        annotations:
+          summary: "No conversations created in 30 minutes"
+          description: "System may not be receiving traffic"
+          
+      - alert: HighConversationCost
+        expr: rate(conversation_cost_total[1h]) > 10.0
+        for: 5m
+        labels:
+          severity: warning
+          component: conversation
+          cost: true
+        annotations:
+          summary: "High conversation costs"
+          description: "Conversation costs: ${{ $value }}/hour (threshold: $10/hour)"
+          
+      - alert: ConversationDurationTooLong
+        expr: histogram_quantile(0.95, sum(rate(conversation_duration_seconds_bucket[10m])) by (le)) > 3600
+        for: 10m
+        labels:
+          severity: info
+          component: conversation
+        annotations:
+          summary: "Very long conversation durations"
+          description: "95th percentile conversation duration: {{ $value }}s (> 1 hour)"
+
+  - name: zakera_model_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # Model Performance Alerts
+      # ========================================================================
+      - alert: HighModelLatency
+        expr: histogram_quantile(0.95, sum(rate(model_request_duration_seconds_bucket[5m])) by (le, model)) > 10.0
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "High model latency detected"
+          description: "Model {{ $labels.model }} p95 latency: {{ $value }}s (threshold: 10s)"
+          
+      - alert: ModelRequestFailures
+        expr: rate(model_requests_total{status="error"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+          component: model
+        annotations:
+          summary: "High model request failure rate"
+          description: "Model failures: {{ $value }} errors/sec"
+          
+      - alert: FrequentModelFallbacks
+        expr: rate(model_fallback_total[10m]) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "Frequent model fallbacks"
+          description: "Fallbacks from {{ $labels.primary_model }} to {{ $labels.fallback_model }}: {{ $value }}/sec"
+          
+      - alert: ModelProviderDown
+        expr: up{job="zakera-api"} == 0 or absent(model_requests_total{provider=~".+"})
+        for: 2m
+        labels:
+          severity: critical
+          component: model
+        annotations:
+          summary: "Model provider appears down"
+          description: "No requests to {{ $labels.provider }} in 2 minutes"
+
+  - name: zakera_api_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # API Performance Alerts
+      # ========================================================================
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)) > 5.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency"
+          description: "Endpoint {{ $labels.endpoint }} p95 latency: {{ $value }}s"
+          
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High API error rate"
+          description: "Error rate: {{ $value }}% (threshold: 5%)"
+          
+      - alert: APIDown
+        expr: up{job="zakera-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API is down"
+          description: "Zakera API is not responding"
+          
+      - alert: RateLimitExceeded
+        expr: rate(rate_limit_exceeded_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Rate limits frequently exceeded"
+          description: "Rate limit exceeded {{ $value }} times/sec for endpoint {{ $labels.endpoint }}"
 
   - name: zakera_system_alerts
     interval: 30s
     rules:
-      # High CPU usage
+      # ========================================================================
+      # System Resource Alerts
+      # ========================================================================
       - alert: HighCPUUsage
         expr: system_cpu_usage_percent > 80
         for: 5m
@@ -133,9 +208,8 @@ groups:
           component: system
         annotations:
           summary: "High CPU usage"
-          description: "CPU usage is {{ $value }}% (threshold: 80%)"
-      
-      # Critical CPU usage
+          description: "CPU usage: {{ $value }}% (threshold: 80%)"
+          
       - alert: CriticalCPUUsage
         expr: system_cpu_usage_percent > 95
         for: 2m
@@ -144,20 +218,18 @@ groups:
           component: system
         annotations:
           summary: "Critical CPU usage"
-          description: "CPU usage is {{ $value }}% (threshold: 95%)"
-      
-      # High memory usage
+          description: "CPU usage: {{ $value }}% (threshold: 95%)"
+          
       - alert: HighMemoryUsage
-        expr: system_memory_usage_percent > 80
+        expr: system_memory_usage_percent > 85
         for: 5m
         labels:
           severity: warning
           component: system
         annotations:
           summary: "High memory usage"
-          description: "Memory usage is {{ $value }}% (threshold: 80%)"
-      
-      # Critical memory usage
+          description: "Memory usage: {{ $value }}% (threshold: 85%)"
+          
       - alert: CriticalMemoryUsage
         expr: system_memory_usage_percent > 95
         for: 2m
@@ -166,48 +238,123 @@ groups:
           component: system
         annotations:
           summary: "Critical memory usage"
-          description: "Memory usage is {{ $value }}% (threshold: 95%)"
-      
-      # Low disk space
+          description: "Memory usage: {{ $value }}% (threshold: 95%)"
+          
       - alert: LowDiskSpace
-        expr: system_disk_usage_percent > 80
+        expr: system_disk_usage_percent{mount_point="/"} > 80
         for: 10m
         labels:
           severity: warning
           component: system
         annotations:
           summary: "Low disk space"
-          description: "Disk usage is {{ $value }}% on {{ $labels.mount_point }}"
-      
-      # Critical disk space
+          description: "Disk usage on {{ $labels.mount_point }}: {{ $value }}%"
+          
       - alert: CriticalDiskSpace
-        expr: system_disk_usage_percent > 90
+        expr: system_disk_usage_percent{mount_point="/"} > 90
         for: 5m
         labels:
           severity: critical
           component: system
         annotations:
           summary: "Critical disk space"
-          description: "Disk usage is {{ $value }}% on {{ $labels.mount_point }}"
-      
-      # Application down
-      - alert: ZakeraDown
-        expr: up{job="zakera-api"} == 0
-        for: 1m
+          description: "Disk usage on {{ $labels.mount_point }}: {{ $value }}%"
+
+  - name: zakera_search_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # Search Performance Alerts
+      # ========================================================================
+      - alert: SlowSearchQueries
+        expr: histogram_quantile(0.95, sum(rate(search_duration_seconds_bucket[5m])) by (le, search_type)) > 3.0
+        for: 5m
         labels:
-          severity: critical
-          component: application
+          severity: warning
+          component: search
         annotations:
-          summary: "Zakera application is down"
-          description: "Zakera API on {{ $labels.instance }} is not responding"
-      
-      # High request rate
-      - alert: HighRequestRate
-        expr: sum(rate(http_requests_total[5m])) > 1000
+          summary: "Slow search queries"
+          description: "Search type {{ $labels.search_type }} p95 duration: {{ $value }}s"
+          
+      - alert: HighSearchErrorRate
+        expr: rate(search_requests_total{status="error"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          component: search
+        annotations:
+          summary: "High search error rate"
+          description: "Search errors: {{ $value }} errors/sec"
+          
+      - alert: FrequentNoResults
+        expr: rate(search_no_results_total[10m]) / rate(search_requests_total[10m]) > 0.5
+        for: 10m
+        labels:
+          severity: info
+          component: search
+        annotations:
+          summary: "High rate of searches returning no results"
+          description: "No results rate: {{ $value }}% for {{ $labels.search_type }}"
+
+  - name: zakera_user_activity_alerts
+    interval: 1m
+    rules:
+      # ========================================================================
+      # User Activity Alerts
+      # ========================================================================
+      - alert: NoUserActivity
+        expr: rate(user_activity_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: info
+          component: user
+        annotations:
+          summary: "No user activity in 30 minutes"
+          description: "System may be idle or experiencing issues"
+          
+      - alert: LoginFailureSpike
+        expr: rate(user_logins_total{status="failed"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: user
+          security: true
+        annotations:
+          summary: "High login failure rate"
+          description: "Login failures: {{ $value }}/sec - possible attack"
+          
+      - alert: ActiveUsersDropped
+        expr: active_users < 1 and rate(user_activity_total[10m]) > 0
         for: 5m
         labels:
           severity: info
-          component: api
+          component: user
         annotations:
-          summary: "High request rate"
-          description: "Request rate is {{ $value }} req/s"
+          summary: "Active user count dropped"
+          description: "Active users: {{ $value }} but activity detected"
+
+  - name: zakera_export_alerts
+    interval: 1m
+    rules:
+      # ========================================================================
+      # Export Alerts
+      # ========================================================================
+      - alert: ExportJobsStuck
+        expr: export_requests_total{status="processing"} > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: export
+        annotations:
+          summary: "Export jobs appear stuck"
+          description: "{{ $value }} export jobs in processing state for > 10 minutes"
+          
+      - alert: HighExportFailureRate
+        expr: rate(export_requests_total{status="failed"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: export
+        annotations:
+          summary: "High export failure rate"
+          description: "Export failures: {{ $value }}/sec"
