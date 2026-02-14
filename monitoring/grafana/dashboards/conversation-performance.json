@@ -1,0 +1,212 @@
+{
+  "dashboard": {
+    "title": "Conversation Performance & Analytics",
+    "tags": ["zakera", "conversations", "analytics"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Conversations Created (24h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(conversation_created_total[24h]))",
+            "legendFormat": "Created"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Average Messages per Conversation",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(conversation_message_count)",
+            "legendFormat": "Avg Messages"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Conversation Success Rate",
+        "type": "gauge",
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(conversation_successful_total) / sum(conversation_started_total) * 100",
+            "legendFormat": "Success %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 85, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            },
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Total Cost (24h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(conversation_cost_total[24h]))",
+            "legendFormat": "Cost"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Users",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+        "targets": [
+          {
+            "expr": "active_users",
+            "legendFormat": "Users"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Total Tokens (24h)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(conversation_tokens_total[24h]))",
+            "legendFormat": "Tokens"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Conversation Duration Distribution",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(conversation_duration_seconds_bucket[5m])) by (le)",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Message Rate by Role",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(conversation_messages_total{role=\"user\"}[5m]))",
+            "legendFormat": "User Messages"
+          },
+          {
+            "expr": "sum(rate(conversation_messages_total{role=\"assistant\"}[5m]))",
+            "legendFormat": "Assistant Messages"
+          },
+          {
+            "expr": "sum(rate(conversation_messages_total{role=\"system\"}[5m]))",
+            "legendFormat": "System Messages"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Conversation Lifecycle",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "sum(rate(conversation_created_total[5m]))",
+            "legendFormat": "Created"
+          },
+          {
+            "expr": "sum(rate(conversation_archived_total[5m]))",
+            "legendFormat": "Archived"
+          },
+          {
+            "expr": "sum(rate(conversation_deleted_total[5m]))",
+            "legendFormat": "Deleted"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Top Conversation Tags",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "topk(10, sum(conversation_tags_total) by (tag))",
+            "legendFormat": "{{tag}}"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Search Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(search_duration_seconds_bucket[5m])) by (le, search_type))",
+            "legendFormat": "{{search_type}} (p95)"
+          }
+        ],
+        "yaxes": [
+          {"format": "s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Conversation Sharing Activity",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "sum(rate(conversation_shares_created_total[5m]))",
+            "legendFormat": "Shares Created"
+          },
+          {
+            "expr": "sum(rate(conversation_shares_accessed_total[5m]))",
+            "legendFormat": "Shares Accessed"
+          }
+        ]
+      }
+    ]
+  }
+}
