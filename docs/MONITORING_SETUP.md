@@ -1,35 +1,31 @@
-# Monitoring and Observability Setup Guide
+# Monitoring & Observability Setup Guide
 
-Complete guide to setting up and using the comprehensive monitoring system for Zakera AI Chat Agent.
+Complete guide to setting up and using the Zakera monitoring and observability system.
 
 ## Overview
 
-The monitoring stack provides complete visibility into:
-- **Conversation Performance** - Success rates, duration, cost tracking
-- **API Performance** - Request rates, latency, error rates
-- **Database Health** - Query performance, connection pools, errors
-- **Model Performance** - Provider usage, latency, token consumption
-- **System Resources** - CPU, memory, disk usage
-- **User Activity** - Registrations, logins, active users
-- **Search Performance** - Query times, result counts
-- **Logs** - Structured logging with correlation IDs
+Zakera includes a comprehensive monitoring stack providing:
+
+- **Real-time metrics** via Prometheus
+- **Visual dashboards** via Grafana
+- **Intelligent alerting** via AlertManager
+- **Log aggregation** via Loki
+- **System monitoring** via Node Exporter & cAdvisor
 
 ## Quick Start
 
-### Start the Monitoring Stack
+### Start Monitoring Stack
 
 ```bash
-# From project root
-cd monitoring
-
 # Start all monitoring services
+cd monitoring
 docker-compose up -d
 
-# Verify all services are running
+# Verify services
 docker-compose ps
 
 # View logs
-docker-compose logs -f
+docker-compose logs -f grafana
 ```
 
 ### Access Dashboards
@@ -37,284 +33,258 @@ docker-compose logs -f
 - **Grafana**: http://localhost:3001 (admin/admin)
 - **Prometheus**: http://localhost:9090
 - **AlertManager**: http://localhost:9093
-- **Node Exporter**: http://localhost:9100/metrics
 - **cAdvisor**: http://localhost:8080
-- **Loki**: http://localhost:3100
 
-### Start the Application
+### Default Login
 
-```bash
-# In a new terminal, start the API
-cd ..
-make dev
-
-# Or with Docker
-docker run -p 8000:8000 zakera:latest
+```
+Username: admin
+Password: admin
 ```
 
-The application will automatically start sending metrics to Prometheus.
+**⚠️ Change default password in production!**
 
-## Components
+## Architecture
 
-### 1. Prometheus
-
-**Purpose**: Metrics collection and storage
-
-**Configuration**: `monitoring/prometheus.yml`
-
-**Key Features**:
-- Scrapes metrics every 15s
-- 30-day retention
-- 50GB storage limit
-- Alert rule evaluation
-- Automatic target discovery
-
-**Metrics Endpoint**: http://localhost:9090
-
-**Query Examples**:
-```promql
-# Request rate
-rate(http_requests_total[5m])
-
-# Success rate
-sum(conversation_successful_total) / sum(conversation_started_total)
-
-# p95 latency
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-
-# Active conversations
-conversations_active_total
+```
+┌─────────────────────────────────────────────────┐
+│                Zakera AI Agent                   │
+│          (Exposes /metrics endpoint)             │
+└────────────────┬────────────────────────────────┘
+                 │
+                 │ Scrapes metrics every 10s
+                 ▼
+┌─────────────────────────────────────────────────┐
+│              Prometheus                          │
+│   - Stores time-series metrics                  │
+│   - Evaluates alert rules                       │
+│   - Serves PromQL queries                       │
+└────┬─────────────────────────┬──────────────────┘
+     │                         │
+     │ Sends alerts            │ Query metrics
+     ▼                         ▼
+┌─────────────┐        ┌──────────────────────────┐
+│AlertManager │        │       Grafana            │
+│- Routes     │        │ - Visualizes metrics     │
+│- Deduplicates│       │ - Creates dashboards     │
+│- Notifies   │        │ - Sends notifications    │
+└─────────────┘        └──────────────────────────┘
+     │
+     │ Email/Slack/Discord
+     ▼
+┌─────────────┐
+│ Operators   │
+└─────────────┘
 ```
 
-### 2. Grafana
+## Grafana Dashboards
 
-**Purpose**: Visualization and dashboards
+### 1. AI Chat Agent Overview
 
-**Configuration**: `monitoring/grafana/`
+**Purpose**: High-level system health and performance
 
-**Dashboards**:
-1. **AI Chat Agent - Overview** 
-   - High-level system metrics
-   - Request rates and latency
-   - Success rates
-   - Resource usage
+**Panels**:
+- System health status
+- Active conversations
+- Messages per minute
+- Average response time
+- API request rate
+- Error rate
+- Model provider distribution
+- Token usage by model
+- Database connection pool
+- Database query performance
+- Cost per hour
+- Conversation success rate
 
-2. **Conversation Performance & Analytics**
-   - Conversation lifecycle
-   - Message rates by role
-   - Cost and token tracking
-   - Tag usage analytics
-   - Sharing activity
+**Access**: Default dashboard on login
 
-3. **Database Performance & Health**
-   - Query performance
-   - Connection pool status
-   - Slow query detection
-   - Error rates
+### 2. Conversation Performance
 
-**Default Credentials**:
-- Username: `admin`
-- Password: `admin`
-- **⚠️ Change on first login!**
+**Purpose**: Deep dive into conversation metrics
 
-### 3. AlertManager
+**Panels**:
+- Conversation creation rate
+- Message throughput
+- Conversation duration distribution
+- Messages per conversation
+- Active users
+- Archive/delete rates
+- Message success rate
+- Top conversations by messages
+- Tag distribution
 
-**Purpose**: Alert routing and notifications
+**Use Case**: Optimize conversation handling
 
-**Configuration**: `monitoring/alertmanager.yml`
+### 3. Database Performance
 
-**Notification Channels**:
-- Email
-- Slack
-- Discord
-- PagerDuty
-- Webhook
+**Purpose**: Database health and optimization
 
-**Alert Groups**:
-- Critical (immediate notification)
-- Warning (5-minute delay)
-- Info (15-minute delay)
+**Panels**:
+- Query performance by operation (p95)
+- Query rate monitoring
+- Connection pool status
+- Transaction success/rollback rates
+- Database size growth
+- Table row counts
+- Slow query detection
+- Database errors
+- Cache hit rate
+- Conversation load time
+- Message persistence latency
 
-### 4. Node Exporter
+**Use Case**: Identify database bottlenecks
 
-**Purpose**: System-level metrics
+### 4. Model Performance & Cost Analysis
 
-**Metrics Collected**:
-- CPU usage and load
-- Memory usage
-- Disk I/O
-- Network traffic
-- Filesystem usage
+**Purpose**: Track AI model usage and costs
 
-### 5. cAdvisor
+**Panels**:
+- Model usage distribution
+- Provider response time comparison
+- Token usage by provider
+- Cost per provider (hourly)
+- Model error rates
+- Fallback triggers
+- Average tokens per request
+- Cost efficiency (per 1K tokens)
+- Streaming vs non-streaming
+- Top models by usage
 
-**Purpose**: Container metrics
-
-**Metrics Collected**:
-- Container CPU usage
-- Container memory usage
-- Container network I/O
-- Container filesystem usage
-
-### 6. Loki
-
-**Purpose**: Log aggregation and querying
-
-**Configuration**: `monitoring/loki-config.yml`
-
-**Features**:
-- JSON log parsing
-- Label extraction
-- 30-day retention
-- Full-text search
-- Integration with Grafana
-
-### 7. Promtail
-
-**Purpose**: Log shipping to Loki
-
-**Configuration**: `monitoring/promtail-config.yml`
-
-**Log Sources**:
-- Application logs
-- Conversation logs
-- Error logs
-- Access logs
+**Use Case**: Optimize costs and model selection
 
 ## Metrics Reference
 
 ### Conversation Metrics
 
 ```promql
-# Conversations created
-conversation_created_total
-
 # Active conversations
-conversations_active_total
+zakera_conversations_active_total
+
+# Conversation creation rate
+rate(zakera_conversations_created_total[5m])
 
 # Success rate
-sum(conversation_successful_total) / sum(conversation_started_total)
+rate(zakera_conversations_completed_total[5m]) / 
+rate(zakera_conversations_started_total[5m])
 
-# Average messages per conversation
-avg(conversation_message_count)
+# Duration (p95)
+histogram_quantile(0.95, rate(zakera_conversation_duration_seconds_bucket[5m]))
 
-# Cost tracking
-rate(conversation_cost_total[1h])
-
-# Token usage
-rate(conversation_tokens_total[5m])
-```
-
-### API Metrics
-
-```promql
-# Request rate
-rate(http_requests_total[5m])
-
-# Error rate
-rate(http_requests_total{status_code=~"5.."}[5m])
-
-# Latency (p95)
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-
-# Requests by endpoint
-sum(rate(http_requests_total[5m])) by (endpoint)
+# Messages per conversation (p95)
+histogram_quantile(0.95, rate(zakera_conversation_messages_count_bucket[5m]))
 ```
 
 ### Database Metrics
 
 ```promql
-# Query rate
-rate(db_queries_total[5m])
+# Query latency (p95)
+histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket[5m]))
 
-# Slow queries
-rate(db_queries_slow_total[5m])
+# Connection pool usage
+zakera_db_connections_active / zakera_db_pool_size
 
-# Connection pool
-db_connection_pool_available
+# Transaction success rate
+rate(zakera_db_transactions_committed_total[5m]) /
+rate(zakera_db_transactions_total[5m])
 
-# Query latency
-histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m]))
+# Database size
+zakera_db_size_bytes
+
+# Query rate by operation
+rate(zakera_db_queries_total{operation="select"}[5m])
 ```
 
 ### Model Metrics
 
 ```promql
-# Requests by provider
-sum(rate(model_requests_total[5m])) by (provider)
+# Cost per hour
+rate(zakera_model_cost_total[1h])
 
 # Token usage
-rate(model_tokens_total[5m])
+rate(zakera_model_tokens_total[5m])
 
-# Cost per hour
-rate(model_cost_total[1h])
+# Error rate
+rate(zakera_model_errors_total[5m]) /
+rate(zakera_model_requests_total[5m])
 
-# Fallback rate
-rate(model_fallback_total[5m])
+# Response time (p95)
+histogram_quantile(0.95, rate(zakera_model_response_duration_seconds_bucket[5m]))
 ```
 
 ### Search Metrics
 
 ```promql
-# Search requests
-rate(search_requests_total[5m])
+# Search performance (p95)
+histogram_quantile(0.95, rate(zakera_search_duration_seconds_bucket[5m]))
 
-# Search latency
-histogram_quantile(0.95, rate(search_duration_seconds_bucket[5m]))
+# Search rate
+rate(zakera_search_queries_total[5m])
 
 # No results rate
-rate(search_no_results_total[5m]) / rate(search_requests_total[5m])
+rate(zakera_search_no_results_total[5m]) /
+rate(zakera_search_queries_total[5m])
 ```
 
 ## Alert Rules
 
 ### Critical Alerts
 
+**High Conversation Failure Rate**
+- Trigger: >10% failures over 5 minutes
+- Severity: Critical
+- Action: Check error logs, verify model providers
+
 **Database Connection Pool Exhausted**
-- Trigger: No available connections
-- Duration: 1 minute
-- Action: Scale up pool or investigate leaks
+- Trigger: All connections in use
+- Severity: Critical
+- Action: Increase pool size or investigate slow queries
 
-**API Down**
-- Trigger: Service not responding
-- Duration: 1 minute
-- Action: Restart service, check logs
+**Message Persistence Failures**
+- Trigger: Any failures over 3 minutes
+- Severity: Critical
+- Action: Check database connectivity and disk space
 
-**High Error Rate**
-- Trigger: > 5% error rate
-- Duration: 3 minutes
-- Action: Check logs, investigate errors
+**Model Provider Down**
+- Trigger: Provider unavailable for 2 minutes
+- Severity: Critical
+- Action: Verify API keys, check provider status
 
 ### Warning Alerts
 
-**High Model Latency**
-- Trigger: p95 > 10 seconds
-- Duration: 5 minutes
-- Action: Check provider status, consider fallback
-
-**Slow Database Queries**
+**High Database Query Latency**
 - Trigger: p95 > 1 second
-- Duration: 5 minutes
-- Action: Review query plans, add indexes
+- Severity: Warning
+- Action: Optimize queries, add indexes
 
-**High Conversation Cost**
-- Trigger: > $10/hour
-- Duration: 5 minutes
-- Action: Review usage, check for abuse
+**High Model Error Rate**
+- Trigger: >5% errors
+- Severity: Warning
+- Action: Check API limits, verify configurations
+
+**Slow Conversation Search**
+- Trigger: p95 > 3 seconds
+- Severity: Warning
+- Action: Optimize search queries, rebuild indexes
+
+**High Hourly Cost**
+- Trigger: >$10/hour
+- Severity: Warning
+- Action: Review model selection, implement rate limiting
 
 ### Info Alerts
 
-**No User Activity**
-- Trigger: No activity for 30 minutes
-- Duration: 30 minutes
-- Action: Verify system is operating normally
+**Frequent Token Limit Exceeded**
+- Trigger: >0.1/second
+- Severity: Info
+- Action: Consider increasing max_tokens
 
-**Long Conversation Durations**
-- Trigger: p95 > 1 hour
-- Duration: 10 minutes
-- Action: Monitor for user experience issues
+**High Cache Miss Rate**
+- Trigger: >30% misses
+- Severity: Info
+- Action: Adjust cache configuration
 
-## Setting Up Notifications
+## Setting Up Alerts
 
 ### Email Notifications
 
@@ -324,11 +294,13 @@ Edit `monitoring/alertmanager.yml`:
 receivers:
   - name: 'email'
     email_configs:
-      - to: 'alerts@example.com'
-        from: 'zakera@example.com'
+      - to: 'ops@example.com'
+        from: 'alertmanager@example.com'
         smarthost: 'smtp.gmail.com:587'
-        auth_username: 'your-email@gmail.com'
+        auth_username: 'alertmanager@example.com'
         auth_password: 'your-app-password'
+        headers:
+          Subject: '[Zakera] {{ .GroupLabels.severity | toUpper }}: {{ .GroupLabels.alertname }}'
 ```
 
 ### Slack Notifications
@@ -337,10 +309,10 @@ receivers:
 receivers:
   - name: 'slack'
     slack_configs:
-      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        channel: '#alerts'
-        title: 'Zakera Alert'
-        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+      - api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+        channel: '#zakera-alerts'
+        title: '{{ .GroupLabels.severity | toUpper }}: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
 ```
 
 ### Discord Notifications
@@ -350,581 +322,344 @@ receivers:
   - name: 'discord'
     webhook_configs:
       - url: 'https://discord.com/api/webhooks/YOUR/WEBHOOK'
+        send_resolved: true
 ```
 
-## Dashboard Guide
+## Monitoring Best Practices
 
-### AI Chat Agent - Overview
+### 1. Review Dashboards Daily
 
-**Purpose**: High-level system health and performance
+- Check overview dashboard for anomalies
+- Review cost trends
+- Monitor error rates
+- Check database performance
 
-**Key Panels**:
-- Active Conversations (stat)
-- Total Messages 24h (stat)
-- Success Rate 5m (gauge)
-- Average Response Time (stat)
-- Requests per Second (graph)
-- Response Time Percentiles (graph)
-- Model Requests by Provider (graph)
-- Token Usage (graph)
-- Database Query Performance (graph)
-- Error Rate by Type (graph)
-- System Resources (graph)
+### 2. Set Appropriate Alert Thresholds
 
-**Use Cases**:
-- Quick health check
-- Performance at a glance
-- Identify issues quickly
+Start conservative and adjust based on your traffic:
 
-### Conversation Performance & Analytics
+```yaml
+# Low traffic: more sensitive
+- expr: error_rate > 0.01  # 1%
 
-**Purpose**: Deep dive into conversation metrics
-
-**Key Panels**:
-- Conversations Created 24h (stat)
-- Average Messages per Conversation (stat)
-- Conversation Success Rate (gauge)
-- Total Cost 24h (stat with currency)
-- Active Users (stat)
-- Total Tokens (stat)
-- Conversation Duration Distribution (heatmap)
-- Message Rate by Role (graph)
-- Conversation Lifecycle (graph)
-- Top Tags (pie chart)
-- Search Performance (graph)
-- Sharing Activity (graph)
-
-**Use Cases**:
-- Analyze user behavior
-- Track costs
-- Identify popular features
-- Monitor conversation quality
-
-### Database Performance & Health
-
-**Purpose**: Database optimization and troubleshooting
-
-**Key Panels**:
-- Query Rate by Operation (graph)
-- Query Duration by Table p95 (graph)
-- Connection Pool Status (graph)
-- Database Errors (graph with alert)
-- Conversation Table Queries (graph)
-- Message Table Queries (graph)
-- Operations Latency Heatmap (heatmap)
-- Slow Queries Table (table)
-
-**Use Cases**:
-- Identify slow queries
-- Monitor connection pool
-- Track query patterns
-- Optimize database performance
-
-## Using the Monitoring System
-
-### Daily Operations
-
-**Morning Checkup**:
-```bash
-# 1. Open Overview Dashboard
-open http://localhost:3001
-
-# 2. Check for active alerts
-open http://localhost:9093
-
-# 3. Review error logs
-# In Grafana: Explore > Loki > {level="ERROR"}
+# High traffic: less sensitive
+- expr: error_rate > 0.05  # 5%
 ```
 
-**Troubleshooting Workflow**:
+### 3. Use Recording Rules
 
-1. **High Latency Detected**
-   - Check Overview dashboard
-   - Identify slow component (API, Model, Database)
-   - Drill down to specific dashboard
-   - Review metrics and logs
-   - Apply fixes
+Pre-calculate common queries for dashboard performance:
 
-2. **Error Rate Spike**
-   - Check error rate graph
-   - Click on spike to see time range
-   - Query logs for that time range
-   - Identify error patterns
-   - Fix and deploy
+```yaml
+- record: zakera:conversation_success_rate
+  expr: |
+    rate(zakera_conversations_completed_total[5m]) /
+    rate(zakera_conversations_started_total[5m])
+```
 
-3. **High Costs**
-   - Check Conversation Performance dashboard
-   - Review cost by model
-   - Identify expensive conversations
-   - Analyze usage patterns
-   - Optimize model selection
+### 4. Organize Alerts by Severity
 
-### Custom Queries
+- **Critical**: Immediate action required
+- **Warning**: Action needed soon
+- **Info**: Awareness only
 
-**Find Expensive Conversations**:
+### 5. Set Up Alert Routing
+
+Route different severities to different channels:
+
+```yaml
+routes:
+  - match:
+      severity: critical
+    receiver: pagerduty
+  - match:
+      severity: warning
+    receiver: slack
+  - match:
+      severity: info
+    receiver: email
+```
+
+## Custom Queries
+
+### Conversation Analytics
+
 ```promql
-topk(10, rate(conversation_cost_total[1h]))
+# Average conversation length (messages)
+avg(zakera_conversation_message_count)
+
+# Conversations by hour of day
+sum by (hour) (
+  hour(timestamp(zakera_conversations_created_total))
+)
+
+# Most active users
+topk(10, sum by (user_id) (zakera_conversations_created_total))
+
+# Tag popularity
+topk(10, zakera_conversations_by_tag)
 ```
 
-**Identify Slow Endpoints**:
+### Cost Analysis
+
 ```promql
-histogram_quantile(0.99, 
-  sum(rate(http_request_duration_seconds_bucket[5m])) 
-  by (le, endpoint)
-) > 1
+# Daily cost estimate
+sum(rate(zakera_model_cost_total[24h])) * 24
+
+# Cost by model
+sum by (model) (zakera_model_cost_total)
+
+# Most expensive conversations
+topk(10, zakera_conversation_cost)
+
+# Cost efficiency by provider
+(zakera_model_cost_total / zakera_model_tokens_total) * 1000
 ```
 
-**Database Connection Pressure**:
+### Performance Analysis
+
 ```promql
-(db_connection_pool_size - db_connection_pool_available) / db_connection_pool_size * 100
-```
+# Slowest endpoints (p95)
+topk(10, histogram_quantile(0.95, 
+  rate(zakera_http_request_duration_seconds_bucket[5m])
+))
 
-**Most Used Tags**:
-```promql
-topk(20, sum(conversation_tags_total) by (tag))
-```
+# Database bottlenecks
+topk(5, histogram_quantile(0.95,
+  rate(zakera_db_query_duration_seconds_bucket[5m])
+))
 
-## Performance Optimization
-
-### Dashboard Best Practices
-
-1. **Use appropriate time ranges**
-   - Real-time monitoring: Last 15 minutes
-   - Debugging: Last hour
-   - Analysis: Last 24 hours
-   - Trends: Last 7 days
-
-2. **Set auto-refresh wisely**
-   - Critical dashboards: 30 seconds
-   - Analysis dashboards: 1-5 minutes
-   - Historical dashboards: Manual only
-
-3. **Limit panel queries**
-   - Use aggregation where possible
-   - Avoid high-cardinality labels
-   - Set query timeouts
-
-### Query Optimization
-
-**Good**:
-```promql
-rate(http_requests_total[5m])
-```
-
-**Better**:
-```promql
-sum(rate(http_requests_total[5m])) by (endpoint)
-```
-
-**Best**:
-```promql
-topk(10, sum(rate(http_requests_total[5m])) by (endpoint))
+# Model performance comparison
+avg by (provider) (
+  rate(zakera_model_response_duration_seconds_sum[5m]) /
+  rate(zakera_model_response_duration_seconds_count[5m])
+)
 ```
 
 ## Troubleshooting
 
 ### Metrics Not Appearing
 
-```bash
-# Check if Prometheus can reach API
-curl http://localhost:9090/api/v1/targets
+1. **Check Prometheus targets**:
+   - Go to http://localhost:9090/targets
+   - Ensure Zakera API target is UP
+   - Check scrape errors
 
-# Check if API is exposing metrics
-curl http://localhost:8000/api/v1/monitoring/metrics
+2. **Verify metrics endpoint**:
+   ```bash
+   curl http://localhost:8000/api/v1/monitoring/metrics
+   ```
 
-# Check Prometheus logs
-docker-compose logs prometheus
-
-# Check for scrape errors
-# In Prometheus UI: Status > Targets
-```
+3. **Check Prometheus logs**:
+   ```bash
+   docker-compose logs prometheus
+   ```
 
 ### Dashboards Not Loading
 
-```bash
-# Restart Grafana
-docker-compose restart grafana
+1. **Check Grafana datasource**:
+   - Configuration → Data Sources
+   - Test Prometheus connection
 
-# Check Grafana logs
-docker-compose logs grafana
+2. **Verify dashboard files**:
+   ```bash
+   ls -la monitoring/grafana/dashboards/
+   ```
 
-# Verify datasource connection
-# In Grafana: Configuration > Data Sources > Test
-```
+3. **Check Grafana logs**:
+   ```bash
+   docker-compose logs grafana
+   ```
 
 ### Alerts Not Firing
 
-```bash
-# Check alert rules
-curl http://localhost:9090/api/v1/rules
+1. **Check AlertManager**:
+   - Go to http://localhost:9093
+   - Verify alert rules loaded
 
-# Check AlertManager status
-curl http://localhost:9093/api/v1/status
+2. **Test alert expression**:
+   - Go to Prometheus
+   - Run alert query in PromQL
+   - Check if condition is met
 
-# Verify AlertManager config
-docker-compose exec alertmanager cat /etc/alertmanager/alertmanager.yml
-```
-
-### High Resource Usage
-
-```bash
-# Check Prometheus disk usage
-docker-compose exec prometheus du -sh /prometheus
-
-# Reduce retention if needed
-# Edit prometheus.yml: storage.tsdb.retention.time
-
-# Clean up old data
-docker-compose restart prometheus
-```
+3. **Verify notification config**:
+   - Check `alertmanager.yml`
+   - Test receiver configuration
 
 ## Advanced Configuration
 
-### Production Deployment
+### High-Availability Setup
 
-**Prometheus**:
+For production, run multiple instances:
+
 ```yaml
-# Use persistent storage
-volumes:
-  - /data/prometheus:/prometheus
+# docker-compose.yml
+prometheus-1:
+  image: prom/prometheus
+  # ... configuration
 
-# Enable remote write for backup
-remote_write:
-  - url: 'https://remote-storage.example.com/write'
+prometheus-2:
+  image: prom/prometheus
+  # ... configuration
+
+# Use Thanos for long-term storage
+thanos:
+  image: thanosio/thanos
+  # ... configuration
 ```
 
-**Grafana**:
-```yaml
-# Use external database
-environment:
-  - GF_DATABASE_TYPE=postgres
-  - GF_DATABASE_HOST=postgres:5432
-  - GF_DATABASE_NAME=grafana
-  - GF_DATABASE_USER=grafana
-  - GF_DATABASE_PASSWORD=secure_password
+### Custom Metrics
 
-# Enable HTTPS
-  - GF_SERVER_PROTOCOL=https
-  - GF_SERVER_CERT_FILE=/etc/grafana/cert.pem
-  - GF_SERVER_CERT_KEY=/etc/grafana/cert.key
-```
-
-### High Availability
-
-**Prometheus HA**:
-```yaml
-# Run multiple Prometheus instances
-# Use Thanos for long-term storage and querying
-```
-
-**AlertManager HA**:
-```yaml
-# Configure multiple AlertManager instances
-# Use gossip protocol for clustering
-```
-
-### Custom Dashboards
-
-Create custom dashboards in Grafana:
-
-1. Go to Create > Dashboard
-2. Add Panel
-3. Write PromQL query
-4. Configure visualization
-5. Save dashboard
-6. Export JSON
-7. Place in `monitoring/grafana/dashboards/`
-
-## Metrics Collection in Code
-
-### Recording Conversation Metrics
+Add your own metrics in application code:
 
 ```python
-from src.monitoring.metrics import (
-    record_conversation_created,
-    record_conversation_message,
-    record_conversation_complete
+from src.monitoring.conversation_metrics import (
+    conversations_created,
+    track_message_save
 )
 
-# When conversation is created
-record_conversation_created(model="gpt-4-turbo", user_type="regular")
+# Increment counter
+conversations_created.labels(
+    model="gpt-4",
+    has_system_prompt="true"
+).inc()
 
-# When message is sent
-record_conversation_message(role="user", model="gpt-4-turbo", tokens=50)
-
-# When conversation completes
-record_conversation_complete(
-    model="gpt-4-turbo",
-    message_count=10,
-    duration=300.5,  # seconds
-    total_tokens=500,
-    total_cost=0.015  # USD
-)
+# Use context manager
+with track_message_save(role="user", model="gpt-4"):
+    save_message_to_database()
 ```
 
-### Recording Search Metrics
+### Dashboard Customization
 
-```python
-from src.monitoring.metrics import record_search
-
-start_time = time.time()
-# Perform search
-results = search_messages(query="test")
-duration = time.time() - start_time
-
-record_search(
-    search_type="messages",
-    duration=duration,
-    results_count=len(results),
-    status="success"
-)
-```
-
-### Recording Database Metrics
-
-```python
-from src.monitoring.metrics import record_db_query
-
-start_time = time.time()
-# Execute query
-result = db.query(Conversation).all()
-duration = time.time() - start_time
-
-record_db_query(
-    operation="select",
-    table="conversations",
-    duration=duration,
-    status="success"
-)
-```
-
-## Alert Configuration
-
-### Email Setup
-
-1. Edit `monitoring/alertmanager.yml`
-2. Configure SMTP settings
-3. Add email addresses
-4. Restart AlertManager
-
-```bash
-docker-compose restart alertmanager
-```
-
-### Slack Setup
-
-1. Create Slack webhook
-2. Edit `monitoring/alertmanager.yml`
-3. Add webhook URL
-4. Configure channel
-5. Restart AlertManager
-
-### Testing Alerts
-
-```bash
-# Trigger test alert
-curl -X POST http://localhost:9093/api/v1/alerts \
-  -H "Content-Type: application/json" \
-  -d '[{
-    "labels": {"alertname": "TestAlert", "severity": "warning"},
-    "annotations": {"summary": "Test alert"}
-  }]'
-
-# Check AlertManager UI
-open http://localhost:9093
-```
-
-## Log Analysis
-
-### Using Loki in Grafana
-
-1. Go to Explore
-2. Select Loki datasource
-3. Write LogQL query:
-
-```logql
-# All error logs
-{job="zakera"} |= "ERROR"
-
-# Logs for specific conversation
-{job="conversations"} | json | conversation_id="conv-123"
-
-# Slow requests
-{job="zakera"} | json | duration > 1000
-
-# Authentication failures
-{job="zakera"} | json | message =~ "login failed"
-```
-
-### Log Patterns
-
-```logql
-# Rate of errors
-rate({level="ERROR"}[5m])
-
-# Top error types
-topk(10, sum by (error_type) (rate({job="errors"}[5m])))
-
-# User activity timeline
-{job="zakera"} | json | user_id != ""
-```
+1. **Clone existing dashboard** in Grafana
+2. **Modify panels** as needed
+3. **Export JSON**:
+   - Settings → JSON Model
+   - Copy to `monitoring/grafana/dashboards/`
+4. **Restart Grafana** to load new dashboard
 
 ## Maintenance
 
 ### Regular Tasks
 
 **Daily**:
-- Review active alerts
-- Check dashboard anomalies
-- Monitor resource usage
+- Review overview dashboard
+- Check for active alerts
+- Monitor cost trends
 
 **Weekly**:
-- Review alert noise
-- Update dashboard panels
-- Check disk usage
+- Review alert effectiveness
+- Check dashboard accuracy
+- Clean up old data
 
 **Monthly**:
+- Optimize slow queries
 - Review retention policies
-- Archive old dashboards
 - Update alert thresholds
-- Review metric cardinality
+- Archive old dashboards
 
-### Data Cleanup
+### Data Retention
+
+**Prometheus**:
+- Default: 30 days
+- Configured in `prometheus.yml`
+- Increase: `--storage.tsdb.retention.time=90d`
+
+**Grafana**:
+- Dashboards: Persistent
+- Annotations: 90 days default
+
+**Loki**:
+- Default: 30 days
+- Configured in `loki-config.yml`
+
+### Backup
 
 ```bash
-# Clean up old Prometheus data
-docker-compose exec prometheus promtool tsdb clean-tombstones /prometheus
+# Backup Prometheus data
+docker run -v prometheus-data:/prometheus \
+  -v $(pwd)/backup:/backup \
+  busybox tar -czf /backup/prometheus.tar.gz /prometheus
 
-# Clean up Loki data (older than 30 days done automatically)
-
-# Clean up Grafana unused dashboards
-# Via UI: Dashboards > Manage > Delete unused
+# Backup Grafana data
+docker run -v grafana-data:/grafana \
+  -v $(pwd)/backup:/backup \
+  busybox tar -czf /backup/grafana.tar.gz /grafana
 ```
 
-## Security
+## Production Deployment
+
+### Scaling Prometheus
+
+For high-traffic deployments:
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 30s  # Increase for less load
+  evaluation_interval: 30s
+
+# Use remote storage
+remote_write:
+  - url: "http://your-remote-storage/api/v1/write"
+```
 
 ### Securing Grafana
 
 ```yaml
-# In docker-compose.yml
+# docker-compose.yml
 environment:
-  - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-  - GF_AUTH_ANONYMOUS_ENABLED=false
-  - GF_AUTH_BASIC_ENABLED=true
+  - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+  - GF_SERVER_ROOT_URL=https://grafana.yourdomain.com
   - GF_AUTH_DISABLE_LOGIN_FORM=false
-  - GF_USERS_ALLOW_SIGN_UP=false
+  - GF_AUTH_ANONYMOUS_ENABLED=false
 ```
 
-### Securing Prometheus
+### SSL/TLS
+
+Add reverse proxy (nginx/traefik) for SSL:
 
 ```yaml
-# Add basic auth
-# In prometheus.yml
-basic_auth:
-  username: admin
-  password_file: /etc/prometheus/password
+# docker-compose.yml
+nginx:
+  image: nginx:alpine
+  ports:
+    - "443:443"
+  volumes:
+    - ./nginx.conf:/etc/nginx/nginx.conf
+    - ./certs:/etc/nginx/certs
 ```
 
-### Network Security
+## Monitoring Checklist
 
-```yaml
-# Expose only necessary ports
-# Use reverse proxy (nginx/traefik)
-# Enable TLS/SSL
-# Restrict access with firewall rules
-```
+Before going to production:
 
-## Backup and Recovery
-
-### Backup Metrics
-
-```bash
-# Backup Prometheus data
-docker-compose exec prometheus tar -czf /backup/prometheus.tar.gz /prometheus
-
-# Backup Grafana dashboards
-curl -u admin:admin http://localhost:3001/api/search | \
-  jq -r '.[] | .uri' | \
-  xargs -I {} curl -u admin:admin http://localhost:3001/api/dashboards/{} > dashboards_backup.json
-```
-
-### Restore
-
-```bash
-# Restore Prometheus data
-docker-compose down
-tar -xzf prometheus.tar.gz -C /data/
-docker-compose up -d
-
-# Import Grafana dashboards
-# Via UI: Create > Import > Upload JSON
-```
-
-## Performance Tuning
-
-### Prometheus
-
-```yaml
-# Adjust scrape interval
-scrape_interval: 30s  # Reduce load
-
-# Adjust retention
-retention.time: 15d  # Save disk space
-
-# Adjust query timeout
-query.timeout: 2m
-```
-
-### Grafana
-
-```yaml
-# Enable caching
-GF_RENDERING_SERVER_URL: http://renderer:8081/render
-GF_RENDERING_CALLBACK_URL: http://grafana:3000/
-
-# Optimize queries
-GF_DATABASE_CACHE_MODE: shared
-```
-
-## Makefile Commands
-
-```bash
-# Start monitoring
-make monitoring-start
-
-# Stop monitoring
-make monitoring-stop
-
-# Restart monitoring
-make monitoring-restart
-
-# View logs
-make monitoring-logs
-
-# Check health
-make monitoring-health
-
-# Access Grafana
-make monitoring-dashboard
-```
+- [ ] All dashboards loading correctly
+- [ ] Metrics being collected (check Prometheus targets)
+- [ ] Alerts configured and tested
+- [ ] Notification channels configured
+- [ ] Alert thresholds appropriate for your load
+- [ ] Data retention configured
+- [ ] Backup strategy in place
+- [ ] SSL/TLS configured
+- [ ] Default passwords changed
+- [ ] Access controls configured
+- [ ] Documentation updated
+- [ ] Team trained on dashboards
 
 ## Resources
 
 - [Prometheus Documentation](https://prometheus.io/docs/)
 - [Grafana Documentation](https://grafana.com/docs/)
 - [AlertManager Guide](https://prometheus.io/docs/alerting/latest/alertmanager/)
-- [Loki Documentation](https://grafana.com/docs/loki/)
-- [PromQL Guide](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+- [PromQL Tutorial](https://prometheus.io/docs/prometheus/latest/querying/basics/)
 
 ## Support
 
-For issues or questions:
-1. Check this documentation
-2. Review dashboard annotations
-3. Check service logs
-4. Consult Prometheus/Grafana docs
-5. Open GitHub issue
+For issues with monitoring:
 
----
-
-**Your monitoring system is production-ready and provides complete visibility into your AI chat agent!** 📊🚀
+1. Check logs: `docker-compose logs [service]`
+2. Verify configuration files
+3. Test metrics endpoint: `/api/v1/monitoring/metrics`
+4. Review Prometheus targets: http://localhost:9090/targets
+5. Check AlertManager status: http://localhost:9093
