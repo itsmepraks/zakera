@@ -1,9 +1,9 @@
 {
   "dashboard": {
-    "title": "AI Chat Agent - Overview",
-    "tags": ["zakera", "overview", "ai"],
+    "title": "Zakera AI Chat Agent - Overview",
+    "tags": ["zakera", "ai", "chat", "overview"],
     "timezone": "browser",
-    "schemaVersion": 27,
+    "schemaVersion": 16,
     "version": 1,
     "refresh": "30s",
     "time": {
@@ -13,13 +13,38 @@
     "panels": [
       {
         "id": 1,
-        "title": "Active Conversations",
+        "title": "System Health Status",
         "type": "stat",
         "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
         "targets": [
           {
-            "expr": "sum(conversations_active_total)",
-            "legendFormat": "Active Conversations"
+            "expr": "zakera_health_status",
+            "legendFormat": "Health Status"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"value": 1, "text": "Healthy", "color": "green"},
+              {"value": 0, "text": "Unhealthy", "color": "red"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Active Conversations",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "zakera_conversations_active_total",
+            "legendFormat": "Active"
           }
         ],
         "options": {
@@ -29,47 +54,19 @@
         }
       },
       {
-        "id": 2,
-        "title": "Total Messages (24h)",
+        "id": 3,
+        "title": "Messages per Minute",
         "type": "stat",
-        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
         "targets": [
           {
-            "expr": "sum(increase(conversation_messages_total[24h]))",
-            "legendFormat": "Messages"
+            "expr": "rate(zakera_messages_total[1m]) * 60",
+            "legendFormat": "Messages/min"
           }
         ],
         "options": {
           "colorMode": "value",
           "graphMode": "area"
-        }
-      },
-      {
-        "id": 3,
-        "title": "Success Rate (5m)",
-        "type": "gauge",
-        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
-        "targets": [
-          {
-            "expr": "sum(rate(model_requests_total{status=\"success\"}[5m])) / sum(rate(model_requests_total[5m])) * 100",
-            "legendFormat": "Success %"
-          }
-        ],
-        "options": {
-          "showThresholdLabels": true,
-          "showThresholdMarkers": true
-        },
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "thresholds": {
-              "steps": [
-                {"value": 0, "color": "red"},
-                {"value": 90, "color": "yellow"},
-                {"value": 95, "color": "green"}
-              ]
-            }
-          }
         }
       },
       {
@@ -79,21 +76,20 @@
         "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(model_request_duration_seconds_bucket[5m])) by (le))",
-            "legendFormat": "p95"
+            "expr": "rate(zakera_chat_response_duration_seconds_sum[5m]) / rate(zakera_chat_response_duration_seconds_count[5m])",
+            "legendFormat": "Avg Response (s)"
           }
         ],
         "options": {
-          "colorMode": "value",
-          "unit": "s"
+          "unit": "s",
+          "colorMode": "value"
         },
         "fieldConfig": {
           "defaults": {
-            "unit": "s",
             "thresholds": {
               "steps": [
                 {"value": 0, "color": "green"},
-                {"value": 3, "color": "yellow"},
+                {"value": 2, "color": "yellow"},
                 {"value": 5, "color": "red"}
               ]
             }
@@ -102,134 +98,139 @@
       },
       {
         "id": 5,
-        "title": "Requests per Second",
+        "title": "API Request Rate",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
         "targets": [
           {
-            "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
-            "legendFormat": "{{endpoint}}"
+            "expr": "rate(zakera_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
           }
         ],
         "yaxes": [
-          {"format": "reqps"},
-          {"format": "short"}
+          {"label": "Requests/sec", "format": "reqps"}
         ]
       },
       {
         "id": 6,
-        "title": "Response Time (p50, p95, p99)",
+        "title": "Error Rate",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "p50 - {{endpoint}}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "p95 - {{endpoint}}"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-            "legendFormat": "p99 - {{endpoint}}"
+            "expr": "rate(zakera_http_requests_total{status=~\"4..|5..\"}[5m])",
+            "legendFormat": "{{status}} errors"
           }
         ],
         "yaxes": [
-          {"format": "s"},
-          {"format": "short"}
-        ]
+          {"label": "Errors/sec", "format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [0.05], "type": "gt"},
+              "query": {"params": ["A", "5m", "now"]},
+              "type": "query"
+            }
+          ],
+          "name": "High Error Rate",
+          "message": "Error rate is above 5%"
+        }
       },
       {
         "id": 7,
-        "title": "Model Requests by Provider",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "title": "Model Provider Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 12},
         "targets": [
           {
-            "expr": "sum(rate(model_requests_total[5m])) by (provider)",
+            "expr": "sum by (provider) (zakera_model_requests_total)",
             "legendFormat": "{{provider}}"
           }
-        ],
-        "yaxes": [
-          {"format": "reqps"},
-          {"format": "short"}
         ]
       },
       {
         "id": 8,
-        "title": "Token Usage (Input vs Output)",
+        "title": "Token Usage by Model",
         "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "gridPos": {"h": 8, "w": 16, "x": 8, "y": 12},
         "targets": [
           {
-            "expr": "sum(rate(model_tokens_total{type=\"input\"}[5m]))",
-            "legendFormat": "Input Tokens"
-          },
-          {
-            "expr": "sum(rate(model_tokens_total{type=\"output\"}[5m]))",
-            "legendFormat": "Output Tokens"
+            "expr": "rate(zakera_model_tokens_total[5m])",
+            "legendFormat": "{{model}} - {{provider}}"
           }
         ],
         "yaxes": [
-          {"format": "tps"},
-          {"format": "short"}
+          {"label": "Tokens/sec", "format": "short"}
         ]
       },
       {
         "id": 9,
-        "title": "Database Query Performance",
+        "title": "Database Connection Pool",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation))",
-            "legendFormat": "{{operation}} (p95)"
+            "expr": "zakera_db_connections_active",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "zakera_db_connections_idle",
+            "legendFormat": "Idle"
+          },
+          {
+            "expr": "zakera_db_pool_size",
+            "legendFormat": "Pool Size"
           }
-        ],
-        "yaxes": [
-          {"format": "s"},
-          {"format": "short"}
         ]
       },
       {
         "id": 10,
-        "title": "Error Rate by Type",
+        "title": "Database Query Performance",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
         "targets": [
           {
-            "expr": "sum(rate(app_errors_total[5m])) by (error_type)",
-            "legendFormat": "{{error_type}}"
+            "expr": "histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(zakera_db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50"
           }
         ],
         "yaxes": [
-          {"format": "eps"},
-          {"format": "short"}
+          {"label": "Duration", "format": "s"}
         ]
       },
       {
         "id": 11,
-        "title": "System Resources",
+        "title": "Cost per Hour",
         "type": "graph",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
         "targets": [
           {
-            "expr": "system_cpu_usage_percent",
-            "legendFormat": "CPU %"
-          },
-          {
-            "expr": "system_memory_usage_percent",
-            "legendFormat": "Memory %"
-          },
-          {
-            "expr": "system_disk_usage_percent{mount_point=\"/\"}",
-            "legendFormat": "Disk %"
+            "expr": "rate(zakera_model_cost_total[1h])",
+            "legendFormat": "{{provider}}"
           }
         ],
         "yaxes": [
-          {"format": "percent", "max": 100},
-          {"format": "short"}
+          {"label": "USD/hour", "format": "currencyUSD"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Conversation Success Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(zakera_conversations_completed_total[5m]) / rate(zakera_conversations_started_total[5m]) * 100",
+            "legendFormat": "Success Rate %"
+          }
+        ],
+        "yaxes": [
+          {"label": "Percentage", "format": "percent", "max": 100}
         ]
       }
     ]
