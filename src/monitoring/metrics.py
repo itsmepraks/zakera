@@ -1,6 +1,6 @@
-"""Prometheus metrics collection"""
+"""Prometheus metrics collection with comprehensive conversation tracking"""
 
-from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, REGISTRY
+from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, REGISTRY, Summary
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi import Request, Response
 import time
@@ -37,6 +37,83 @@ http_response_size_bytes = Histogram(
     "http_response_size_bytes",
     "HTTP response size in bytes",
     ["method", "endpoint"]
+)
+
+# =============================================================================
+# Conversation Metrics
+# =============================================================================
+
+conversation_created_total = Counter(
+    "conversation_created_total",
+    "Total number of conversations created",
+    ["model", "user_type"]
+)
+
+conversation_started_total = Counter(
+    "conversation_started_total",
+    "Total number of conversation sessions started",
+    ["model"]
+)
+
+conversation_successful_total = Counter(
+    "conversation_successful_total",
+    "Total number of successful conversations (>= 1 message exchange)",
+    ["model"]
+)
+
+conversations_active_total = Gauge(
+    "conversations_active_total",
+    "Number of currently active conversations",
+    ["model"]
+)
+
+conversation_messages_total = Counter(
+    "conversation_messages_total",
+    "Total number of messages in conversations",
+    ["role", "model"]
+)
+
+conversation_message_count = Histogram(
+    "conversation_message_count",
+    "Number of messages per conversation",
+    ["model"],
+    buckets=(1, 5, 10, 20, 50, 100, 200, 500, 1000)
+)
+
+conversation_duration_seconds = Histogram(
+    "conversation_duration_seconds",
+    "Conversation duration in seconds",
+    ["model"],
+    buckets=(60, 300, 600, 1800, 3600, 7200, 14400, 28800)
+)
+
+conversation_tokens_total = Counter(
+    "conversation_tokens_total",
+    "Total tokens used in conversations",
+    ["model", "token_type"]
+)
+
+conversation_cost_total = Counter(
+    "conversation_cost_total",
+    "Total cost of conversations in USD",
+    ["model"]
+)
+
+conversation_archived_total = Counter(
+    "conversation_archived_total",
+    "Total number of archived conversations"
+)
+
+conversation_deleted_total = Counter(
+    "conversation_deleted_total",
+    "Total number of deleted conversations",
+    ["delete_type"]  # soft, hard
+)
+
+conversation_tags_total = Counter(
+    "conversation_tags_total",
+    "Total usage of conversation tags",
+    ["tag"]
 )
 
 # =============================================================================
@@ -78,6 +155,65 @@ active_model_requests = Gauge(
     "active_model_requests",
     "Number of active model requests",
     ["model", "provider"]
+)
+
+model_response_quality = Histogram(
+    "model_response_quality",
+    "Quality score of model responses (user feedback)",
+    ["model", "provider"],
+    buckets=(1, 2, 3, 4, 5)
+)
+
+# =============================================================================
+# Search Metrics
+# =============================================================================
+
+search_requests_total = Counter(
+    "search_requests_total",
+    "Total number of search requests",
+    ["search_type", "status"]  # search_type: messages, conversations, all
+)
+
+search_duration_seconds = Histogram(
+    "search_duration_seconds",
+    "Search request duration in seconds",
+    ["search_type"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
+)
+
+search_results_count = Histogram(
+    "search_results_count",
+    "Number of search results returned",
+    ["search_type"],
+    buckets=(0, 1, 5, 10, 20, 50, 100, 200)
+)
+
+search_no_results_total = Counter(
+    "search_no_results_total",
+    "Total number of searches with no results",
+    ["search_type"]
+)
+
+# =============================================================================
+# Sharing Metrics
+# =============================================================================
+
+conversation_shares_created_total = Counter(
+    "conversation_shares_created_total",
+    "Total number of conversation shares created",
+    ["share_type"]  # public, private
+)
+
+conversation_shares_accessed_total = Counter(
+    "conversation_shares_accessed_total",
+    "Total number of times shared conversations were accessed",
+    ["share_type"]
+)
+
+active_shares = Gauge(
+    "active_shares",
+    "Number of active conversation shares",
+    ["share_type"]
 )
 
 # =============================================================================
@@ -129,7 +265,13 @@ db_query_duration_seconds = Histogram(
     "db_query_duration_seconds",
     "Database query duration in seconds",
     ["operation", "table"],
-    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0)
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5)
+)
+
+db_queries_slow_total = Counter(
+    "db_queries_slow_total",
+    "Total number of slow queries (> 1s)",
+    ["operation", "table"]
 )
 
 db_connection_pool_size = Gauge(
@@ -144,7 +286,46 @@ db_connection_pool_available = Gauge(
 
 db_connection_errors_total = Counter(
     "db_connection_errors_total",
-    "Total number of database connection errors"
+    "Total number of database connection errors",
+    ["error_type"]
+)
+
+db_transaction_total = Counter(
+    "db_transaction_total",
+    "Total number of database transactions",
+    ["status"]  # committed, rolled_back
+)
+
+# =============================================================================
+# User Activity Metrics
+# =============================================================================
+
+user_registrations_total = Counter(
+    "user_registrations_total",
+    "Total number of user registrations"
+)
+
+user_logins_total = Counter(
+    "user_logins_total",
+    "Total number of user logins",
+    ["status"]  # success, failed
+)
+
+active_users = Gauge(
+    "active_users",
+    "Number of active users in the last hour"
+)
+
+user_sessions_total = Counter(
+    "user_sessions_total",
+    "Total number of user sessions",
+    ["status"]  # started, ended, expired
+)
+
+user_activity_total = Counter(
+    "user_activity_total",
+    "Total user activity events",
+    ["activity_type"]  # message_sent, conversation_created, search_performed
 )
 
 # =============================================================================
@@ -219,17 +400,6 @@ app_uptime_seconds = Gauge(
     "Application uptime in seconds"
 )
 
-active_users = Gauge(
-    "active_users",
-    "Number of active users"
-)
-
-user_sessions_total = Counter(
-    "user_sessions_total",
-    "Total number of user sessions",
-    ["status"]  # started, ended
-)
-
 # =============================================================================
 # Cache Metrics
 # =============================================================================
@@ -260,6 +430,23 @@ rate_limit_exceeded_total = Counter(
     "rate_limit_exceeded_total",
     "Total number of rate limit exceeded events",
     ["endpoint", "user_id"]
+)
+
+# =============================================================================
+# Export Metrics
+# =============================================================================
+
+export_requests_total = Counter(
+    "export_requests_total",
+    "Total number of export requests",
+    ["format", "status"]
+)
+
+export_duration_seconds = Histogram(
+    "export_duration_seconds",
+    "Export generation duration in seconds",
+    ["format"],
+    buckets=(1, 5, 10, 30, 60, 120, 300)
 )
 
 # =============================================================================
@@ -414,6 +601,80 @@ system_metrics_collector = SystemMetricsCollector()
 # Helper Functions
 # =============================================================================
 
+def record_conversation_created(model: str, user_type: str = "regular"):
+    """Record conversation creation"""
+    conversation_created_total.labels(
+        model=model,
+        user_type=user_type
+    ).inc()
+    conversation_started_total.labels(model=model).inc()
+
+def record_conversation_message(role: str, model: str, tokens: int = 0):
+    """Record conversation message"""
+    conversation_messages_total.labels(
+        role=role,
+        model=model
+    ).inc()
+    
+    if tokens > 0:
+        conversation_tokens_total.labels(
+            model=model,
+            token_type="message"
+        ).inc(tokens)
+
+def record_conversation_complete(model: str, message_count: int, duration: float, total_tokens: int, total_cost: float):
+    """Record conversation completion"""
+    conversation_successful_total.labels(model=model).inc()
+    conversation_message_count.labels(model=model).observe(message_count)
+    conversation_duration_seconds.labels(model=model).observe(duration)
+    
+    if total_tokens > 0:
+        conversation_tokens_total.labels(
+            model=model,
+            token_type="conversation"
+        ).inc(total_tokens)
+    
+    if total_cost > 0:
+        conversation_cost_total.labels(model=model).inc(total_cost)
+
+def record_conversation_archived():
+    """Record conversation archival"""
+    conversation_archived_total.inc()
+
+def record_conversation_deleted(delete_type: str = "soft"):
+    """Record conversation deletion"""
+    conversation_deleted_total.labels(delete_type=delete_type).inc()
+
+def record_conversation_tag(tag: str):
+    """Record conversation tag usage"""
+    conversation_tags_total.labels(tag=tag).inc()
+
+def record_search(search_type: str, duration: float, results_count: int, status: str = "success"):
+    """Record search operation"""
+    search_requests_total.labels(
+        search_type=search_type,
+        status=status
+    ).inc()
+    
+    search_duration_seconds.labels(
+        search_type=search_type
+    ).observe(duration)
+    
+    search_results_count.labels(
+        search_type=search_type
+    ).observe(results_count)
+    
+    if results_count == 0:
+        search_no_results_total.labels(search_type=search_type).inc()
+
+def record_share_created(share_type: str = "public"):
+    """Record share creation"""
+    conversation_shares_created_total.labels(share_type=share_type).inc()
+
+def record_share_accessed(share_type: str = "public"):
+    """Record share access"""
+    conversation_shares_accessed_total.labels(share_type=share_type).inc()
+
 def record_model_request(
     model: str,
     provider: str,
@@ -495,3 +756,27 @@ def record_db_query(
         operation=operation,
         table=table
     ).observe(duration)
+    
+    # Track slow queries
+    if duration > 1.0:
+        db_queries_slow_total.labels(
+            operation=operation,
+            table=table
+        ).inc()
+
+def record_db_transaction(status: str):
+    """Record database transaction"""
+    db_transaction_total.labels(status=status).inc()
+
+def record_user_activity(activity_type: str):
+    """Record user activity"""
+    user_activity_total.labels(activity_type=activity_type).inc()
+
+def record_export(format: str, duration: float, status: str):
+    """Record export operation"""
+    export_requests_total.labels(
+        format=format,
+        status=status
+    ).inc()
+    
+    export_duration_seconds.labels(format=format).observe(duration)
