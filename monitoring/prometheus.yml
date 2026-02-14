@@ -1,20 +1,18 @@
-# Prometheus configuration for Zakera monitoring
-
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'zakera'
+    cluster: 'zakera-production'
     environment: 'production'
 
-# AlertManager configuration
+# Alertmanager configuration
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
             - alertmanager:9093
 
-# Load rules
+# Load alert rules
 rule_files:
   - 'alerts.yml'
 
@@ -22,49 +20,81 @@ rule_files:
 scrape_configs:
   # Zakera API application
   - job_name: 'zakera-api'
+    scrape_interval: 15s
+    scrape_timeout: 10s
     metrics_path: '/api/v1/monitoring/metrics'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: 
+          - 'host.docker.internal:8000'  # API running on host
         labels:
           service: 'zakera-api'
-          tier: 'application'
-    
-    # Scrape interval for application
-    scrape_interval: 10s
-    scrape_timeout: 5s
+          component: 'backend'
+    metric_relabel_configs:
+      # Drop high-cardinality labels if needed
+      - source_labels: [__name__]
+        regex: 'http_request_duration_seconds_bucket'
+        action: keep
   
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: 
+          - 'localhost:9090'
         labels:
           service: 'prometheus'
-          tier: 'monitoring'
   
-  # Node Exporter (system metrics)
-  - job_name: 'node'
+  # Node Exporter for system metrics (optional)
+  - job_name: 'node-exporter'
+    scrape_interval: 30s
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets:
+          - 'node-exporter:9100'
         labels:
           service: 'node-exporter'
-          tier: 'infrastructure'
+          component: 'system'
   
-  # PostgreSQL Exporter (if using PostgreSQL)
-  - job_name: 'postgres'
+  # AlertManager
+  - job_name: 'alertmanager'
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets:
+          - 'alertmanager:9093'
+        labels:
+          service: 'alertmanager'
+  
+  # Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets:
+          - 'grafana:3000'
+        labels:
+          service: 'grafana'
+  
+  # Database exporter (PostgreSQL - optional)
+  - job_name: 'postgres-exporter'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'postgres-exporter:9187'
         labels:
           service: 'postgres'
-          tier: 'database'
-  
-  # Ollama metrics (if available)
-  - job_name: 'ollama'
-    static_configs:
-      - targets: ['localhost:11434']
-        labels:
-          service: 'ollama'
-          tier: 'ml-inference'
-    
-    # Ollama might not have metrics endpoint
-    metrics_path: '/api/metrics'
-    scrape_interval: 30s
+          component: 'database'
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention:
+      time: 30d
+      size: 50GB
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: 'https://prometheus-remote-storage.example.com/write'
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 200
+#       min_shards: 1
+#       max_samples_per_send: 5000
+#       batch_send_deadline: 5s
+#       min_backoff: 30ms
+#       max_backoff: 100ms
