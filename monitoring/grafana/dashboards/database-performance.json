@@ -1,148 +1,204 @@
 {
   "dashboard": {
-    "title": "Database Performance & Health",
+    "title": "Zakera - Database Performance",
     "tags": ["zakera", "database", "performance"],
     "timezone": "browser",
-    "schemaVersion": 27,
+    "schemaVersion": 16,
     "version": 1,
-    "refresh": "30s",
-    "time": {
-      "from": "now-6h",
-      "to": "now"
-    },
+    "refresh": "10s",
     "panels": [
       {
         "id": 1,
-        "title": "Query Rate by Operation",
+        "title": "Query Performance (p95)",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
         "targets": [
           {
-            "expr": "sum(rate(db_queries_total[5m])) by (operation)",
-            "legendFormat": "{{operation}}"
+            "expr": "histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket{operation=\"select\"}[5m]))",
+            "legendFormat": "SELECT p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket{operation=\"insert\"}[5m]))",
+            "legendFormat": "INSERT p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket{operation=\"update\"}[5m]))",
+            "legendFormat": "UPDATE p95"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_db_query_duration_seconds_bucket{operation=\"delete\"}[5m]))",
+            "legendFormat": "DELETE p95"
           }
         ],
-        "yaxes": [
-          {"format": "qps"},
-          {"format": "short"}
-        ]
+        "yaxes": [{"label": "Duration", "format": "s"}]
       },
       {
         "id": 2,
-        "title": "Query Duration by Table (p95)",
+        "title": "Query Rate by Operation",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, table))",
-            "legendFormat": "{{table}}"
+            "expr": "rate(zakera_db_queries_total{operation=\"select\"}[5m])",
+            "legendFormat": "SELECT"
+          },
+          {
+            "expr": "rate(zakera_db_queries_total{operation=\"insert\"}[5m])",
+            "legendFormat": "INSERT"
+          },
+          {
+            "expr": "rate(zakera_db_queries_total{operation=\"update\"}[5m])",
+            "legendFormat": "UPDATE"
           }
-        ],
-        "yaxes": [
-          {"format": "s"},
-          {"format": "short"}
         ]
       },
       {
         "id": 3,
         "title": "Connection Pool Status",
         "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
         "targets": [
           {
-            "expr": "db_connection_pool_size",
-            "legendFormat": "Pool Size"
+            "expr": "zakera_db_connections_active",
+            "legendFormat": "Active"
           },
           {
-            "expr": "db_connection_pool_available",
-            "legendFormat": "Available"
+            "expr": "zakera_db_connections_idle",
+            "legendFormat": "Idle"
           },
           {
-            "expr": "db_connection_pool_size - db_connection_pool_available",
-            "legendFormat": "In Use"
+            "expr": "zakera_db_connections_overflow",
+            "legendFormat": "Overflow"
           }
-        ],
-        "yaxes": [
-          {"format": "short"},
-          {"format": "short"}
         ]
       },
       {
         "id": 4,
-        "title": "Database Errors",
+        "title": "Transaction Success Rate",
         "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
         "targets": [
           {
-            "expr": "sum(rate(db_connection_errors_total[5m]))",
-            "legendFormat": "Connection Errors"
+            "expr": "(rate(zakera_db_transactions_committed_total[5m]) / rate(zakera_db_transactions_total[5m])) * 100",
+            "legendFormat": "Commit Rate %"
           },
           {
-            "expr": "sum(rate(db_queries_total{status=\"error\"}[5m]))",
-            "legendFormat": "Query Errors"
+            "expr": "(rate(zakera_db_transactions_rolled_back_total[5m]) / rate(zakera_db_transactions_total[5m])) * 100",
+            "legendFormat": "Rollback Rate %"
           }
         ],
-        "alert": {
-          "conditions": [
-            {
-              "evaluator": {"params": [0.1], "type": "gt"},
-              "operator": {"type": "and"},
-              "query": {"params": ["A", "5m", "now"]},
-              "reducer": {"params": [], "type": "avg"},
-              "type": "query"
-            }
-          ],
-          "name": "Database Errors Alert"
-        }
+        "yaxes": [{"format": "percent", "max": 100}]
       },
       {
         "id": 5,
-        "title": "Conversation Table Queries",
+        "title": "Database Size Growth",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+        "targets": [
+          {
+            "expr": "zakera_db_size_bytes",
+            "legendFormat": "Database Size"
+          }
+        ],
+        "yaxes": [{"label": "Size", "format": "bytes"}]
+      },
+      {
+        "id": 6,
+        "title": "Table Row Counts",
         "type": "graph",
         "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
         "targets": [
           {
-            "expr": "sum(rate(db_queries_total{table=\"conversations\"}[5m])) by (operation)",
-            "legendFormat": "{{operation}}"
-          }
-        ]
-      },
-      {
-        "id": 6,
-        "title": "Message Table Queries",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
-        "targets": [
+            "expr": "zakera_db_table_rows{table=\"conversations\"}",
+            "legendFormat": "Conversations"
+          },
           {
-            "expr": "sum(rate(db_queries_total{table=\"messages\"}[5m])) by (operation)",
-            "legendFormat": "{{operation}}"
+            "expr": "zakera_db_table_rows{table=\"messages\"}",
+            "legendFormat": "Messages"
+          },
+          {
+            "expr": "zakera_db_table_rows{table=\"users\"}",
+            "legendFormat": "Users"
           }
         ]
       },
       {
         "id": 7,
-        "title": "Database Operations Latency Heatmap",
-        "type": "heatmap",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "title": "Slow Queries (>1s)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
         "targets": [
           {
-            "expr": "sum(increase(db_query_duration_seconds_bucket[1m])) by (le)",
-            "format": "heatmap"
+            "expr": "sum(rate(zakera_db_query_duration_seconds_bucket{le=\"1\"}[5m]))",
+            "legendFormat": "Slow Queries"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Database Errors",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(zakera_db_errors_total[5m])",
+            "legendFormat": "{{error_type}}"
           }
         ]
       },
       {
-        "id": 8,
-        "title": "Slow Queries (> 1s)",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "id": 9,
+        "title": "Query Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
         "targets": [
           {
-            "expr": "topk(10, sum(db_queries_slow_total) by (operation, table))",
-            "format": "table",
-            "instant": true
+            "expr": "(rate(zakera_db_cache_hits_total[5m]) / (rate(zakera_db_cache_hits_total[5m]) + rate(zakera_db_cache_misses_total[5m]))) * 100",
+            "legendFormat": "Cache Hit Rate %"
           }
-        ]
+        ],
+        "yaxes": [{"format": "percent", "max": 100}]
+      },
+      {
+        "id": 10,
+        "title": "Conversation Load Time (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_conversation_load_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95 Load Time"
+          }
+        ],
+        "yaxes": [{"label": "Duration", "format": "s"}]
+      },
+      {
+        "id": 11,
+        "title": "Message Persistence Latency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(zakera_message_save_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95 Save Time"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(zakera_message_save_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50 Save Time"
+          }
+        ],
+        "yaxes": [{"label": "Duration", "format": "s"}]
       }
     ]
   }
