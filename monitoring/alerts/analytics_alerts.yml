@@ -1,0 +1,109 @@
+groups:
+  - name: analytics_alerts
+    interval: 30s
+    rules:
+      # Analytics API availability
+      - alert: AnalyticsEndpointDown
+        expr: up{job="zakera-api", endpoint=~".*analytics.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: analytics
+        annotations:
+          summary: "Analytics endpoint is down"
+          description: "Analytics API endpoint has been down for more than 2 minutes."
+
+      # High analytics query duration
+      - alert: SlowAnalyticsQueries
+        expr: |
+          histogram_quantile(0.95, 
+            rate(analytics_query_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: analytics
+        annotations:
+          summary: "Analytics queries are slow"
+          description: "95th percentile query duration is {{ $value }}s (threshold: 5s)."
+
+      # Low cache hit rate
+      - alert: LowAnalyticsCacheHitRate
+        expr: |
+          rate(analytics_cache_hits_total[5m]) / 
+          (rate(analytics_cache_hits_total[5m]) + rate(analytics_cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: analytics
+        annotations:
+          summary: "Low analytics cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 50%)."
+
+      # High model retry rate
+      - alert: HighModelRetryRate
+        expr: rate(model_retry_attempts_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "High model retry rate detected"
+          description: "Model {{ $labels.model }} retry rate is {{ $value }}/s."
+
+      # Circuit breaker opened
+      - alert: CircuitBreakerOpen
+        expr: model_circuit_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: model
+        annotations:
+          summary: "Circuit breaker opened for {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} circuit breaker is open. Service degraded."
+
+      # Low provider health
+      - alert: LowProviderHealth
+        expr: model_provider_health_score < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "Low health score for {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} health score is {{ $value }} (threshold: 0.7)."
+
+      # High provider error rate
+      - alert: HighProviderErrorRate
+        expr: model_provider_error_rate > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: model
+        annotations:
+          summary: "High error rate for {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} error rate is {{ $value | humanizePercentage }}."
+
+      # Analytics request spike
+      - alert: AnalyticsRequestSpike
+        expr: |
+          rate(analytics_requests_total[5m]) > 
+          avg_over_time(rate(analytics_requests_total[5m])[1h:5m]) * 2
+        for: 5m
+        labels:
+          severity: info
+          component: analytics
+        annotations:
+          summary: "Analytics request spike detected"
+          description: "Request rate is {{ $value }}/s, 2x the hourly average."
+
+      # Request deduplication effectiveness
+      - alert: LowDeduplicationRate
+        expr: rate(model_request_dedup_total[5m]) < 0.1
+        for: 15m
+        labels:
+          severity: info
+          component: model
+        annotations:
+          summary: "Low request deduplication rate"
+          description: "Deduplication rate is {{ $value }}/s. May indicate unique requests or cache issues."
