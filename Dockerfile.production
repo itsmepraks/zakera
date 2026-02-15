@@ -1,0 +1,78 @@
+# Multi-stage Dockerfile for production deployment
+# Optimized for size and security
+
+# Stage 1: Build stage
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --user --no-cache-dir --upgrade pip && \
+    pip install --user --no-cache-dir -r requirements.txt
+
+# Stage 2: Runtime stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Create non-root user
+RUN groupadd -r zakera && useradd -r -g zakera zakera
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies from builder
+COPY --from=builder /root/.local /root/.local
+
+# Make sure scripts in .local are usable
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy application code
+COPY --chown=zakera:zakera src/ ./src/
+COPY --chown=zakera:zakera alembic/ ./alembic/
+COPY --chown=zakera:zakera alembic.ini ./
+COPY --chown=zakera:zakera config/ ./config/
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data && \
+    chown -R zakera:zakera /app/logs /app/data
+
+# Switch to non-root user
+USER zakera
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/v1/monitoring/health || exit 1
+
+# Set build arguments
+ARG BUILD_DATE
+ARG VCS_REF
+ARG VERSION
+
+# Labels
+LABEL org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Prakriti Bista" \
+      org.opencontainers.image.url="https://github.com/itsmepraks/zakera" \
+      org.opencontainers.image.version=$VERSION \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.title="Zakera AI Chat Agent" \
+      org.opencontainers.image.description="Production-ready AI chat agent with analytics"
+
+# Start application
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
