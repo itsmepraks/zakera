@@ -1,0 +1,121 @@
+{
+  "dashboard": {
+    "title": "Zakera Analytics Dashboard",
+    "tags": ["analytics", "zakera"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Analytics Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(analytics_requests_total[5m])",
+            "legendFormat": "{{endpoint}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Analytics Query Duration",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(analytics_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95 - {{query_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(analytics_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50 - {{query_type}}",
+            "refId": "B"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(analytics_cache_hits_total[5m]) / (rate(analytics_cache_hits_total[5m]) + rate(analytics_cache_misses_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "textMode": "value_and_name",
+          "colorMode": "background"
+        }
+      },
+      {
+        "id": 4,
+        "title": "Model Retry Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(model_retry_attempts_total[5m])",
+            "legendFormat": "{{model}} - {{error_category}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Provider Health Score",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "model_provider_health_score",
+            "legendFormat": "{{provider}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.5, "color": "yellow"},
+                {"value": 0.8, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Circuit Breaker State",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "model_circuit_breaker_state",
+            "legendFormat": "{{provider}} - {{state}}",
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
