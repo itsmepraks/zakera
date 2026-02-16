@@ -1,0 +1,33 @@
+apiVersion: v2
+name: zakera
+description: A Helm chart for Zakera AI Chat Agent
+type: application
+version: 0.6.0
+appVersion: "0.6.0"
+
+keywords:
+  - ai
+  - chatbot
+  - llm
+  - fastapi
+  - machine-learning
+
+maintainers:
+  - name: Prakriti Bista
+    email: 53210833+itsmepraks@users.noreply.github.com
+    url: https://praks.me
+
+home: https://github.com/itsmepraks/zakera
+sources:
+  - https://github.com/itsmepraks/zakera
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  
+  - name: redis
+    version: "18.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled

@@ -1,15 +1,24 @@
+# Terraform Variables
+
 variable "aws_region" {
-  description = "AWS region to deploy resources"
+  description = "AWS region for deployment"
   type        = string
   default     = "us-east-1"
 }
 
 variable "environment" {
-  description = "Environment name (production, staging, development)"
+  description = "Environment name"
   type        = string
   default     = "production"
 }
 
+variable "project_name" {
+  description = "Project name"
+  type        = string
+  default     = "zakera"
+}
+
+# Network Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -17,68 +26,43 @@ variable "vpc_cidr" {
 }
 
 variable "availability_zones" {
-  description = "List of availability zones"
+  description = "Availability zones"
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }
 
-variable "app_image" {
-  description = "Docker image for the application"
+# EKS Configuration
+variable "cluster_version" {
+  description = "Kubernetes version"
   type        = string
+  default     = "1.28"
 }
 
-variable "app_port" {
-  description = "Port exposed by the application"
+variable "node_instance_types" {
+  description = "EC2 instance types for nodes"
+  type        = list(string)
+  default     = ["t3.medium", "t3.large"]
+}
+
+variable "node_desired_size" {
+  description = "Desired number of nodes"
   type        = number
-  default     = 8000
+  default     = 3
 }
 
-variable "app_count" {
-  description = "Number of application instances to run"
+variable "node_min_size" {
+  description = "Minimum number of nodes"
   type        = number
   default     = 2
 }
 
-variable "fargate_cpu" {
-  description = "Fargate CPU units"
+variable "node_max_size" {
+  description = "Maximum number of nodes"
   type        = number
-  default     = 1024
+  default     = 10
 }
 
-variable "fargate_memory" {
-  description = "Fargate memory in MB"
-  type        = number
-  default     = 2048
-}
-
-variable "certificate_arn" {
-  description = "ARN of ACM certificate for HTTPS"
-  type        = string
-}
-
-variable "domain_name" {
-  description = "Domain name for the application"
-  type        = string
-}
-
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "zakera"
-}
-
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  sensitive   = true
-}
-
+# Database Configuration
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -86,55 +70,59 @@ variable "db_instance_class" {
 }
 
 variable "db_allocated_storage" {
-  description = "Allocated storage for RDS in GB"
+  description = "Allocated storage in GB"
   type        = number
   default     = 100
 }
 
 variable "db_backup_retention_period" {
-  description = "Number of days to retain database backups"
+  description = "Backup retention period in days"
   type        = number
   default     = 7
 }
 
+# Redis Configuration
 variable "redis_node_type" {
   description = "ElastiCache node type"
   type        = string
-  default     = "cache.t3.medium"
+  default     = "cache.t3.micro"
 }
 
-variable "redis_num_nodes" {
-  description = "Number of ElastiCache nodes"
+variable "redis_num_cache_nodes" {
+  description = "Number of cache nodes"
   type        = number
-  default     = 2
+  default     = 1
 }
 
-variable "openai_api_key" {
-  description = "OpenAI API key"
+# Domain Configuration
+variable "domain_name" {
+  description = "Domain name for the application"
   type        = string
-  sensitive   = true
+  default     = "zakera.io"
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic API key"
+variable "certificate_arn" {
+  description = "ACM certificate ARN for SSL"
   type        = string
-  sensitive   = true
+  default     = ""
 }
 
-variable "google_api_key" {
-  description = "Google API key for Gemini"
-  type        = string
-  sensitive   = true
+# Monitoring
+variable "enable_cloudwatch" {
+  description = "Enable CloudWatch monitoring"
+  type        = bool
+  default     = true
 }
 
-variable "secret_key" {
-  description = "Secret key for application"
-  type        = string
-  sensitive   = true
+variable "log_retention_days" {
+  description = "CloudWatch log retention in days"
+  type        = number
+  default     = 30
 }
 
-variable "tags" {
-  description = "Common tags for all resources"
+# Tags
+variable "additional_tags" {
+  description = "Additional tags"
   type        = map(string)
   default     = {}
 }

@@ -1,0 +1,8 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zakera
+  labels:
+    name: zakera
+    environment: production

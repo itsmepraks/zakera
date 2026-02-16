@@ -28,10 +28,19 @@ httpx==0.26.0
 aiohttp==3.9.1
 requests==2.31.0
 
-# Security
+# Security - Authentication & Authorization
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
+pyotp==2.9.0  # TOTP for MFA
+authlib==1.3.0  # OAuth2 client
+itsdangerous==2.1.2  # Secure token signing
+qrcode[pil]==7.4.2  # QR code generation for MFA
+user-agents==2.2.0  # User agent parsing
+
+# Security - Additional
+python-geoip==1.2  # IP geolocation (optional)
+pycryptodome==3.20.0  # Additional crypto functions
 
 # Utilities
 python-dotenv==1.0.0
