@@ -1,0 +1,163 @@
+# Default values for zakera
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/itsmepraks/zakera
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/api/v1/monitoring/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api.zakera.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: zakera-tls
+      hosts:
+        - api.zakera.io
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteMany
+  size: 10Gi
+
+# Application configuration
+config:
+  logLevel: INFO
+  enableMetrics: true
+  enableAuditLogging: true
+  rateLimitPerMinute: 60
+  rateLimitPerHour: 1000
+  
+  # Token settings
+  accessTokenExpireMinutes: 15
+  refreshTokenExpireDays: 7
+  
+  # Memory settings
+  defaultMaxTokens: 4000
+  summarizationStrategy: adaptive
+  
+  # Model settings
+  defaultModel: gpt-4-turbo
+  enableModelFallback: true
+  fallbackStrategy: sequential
+
+# Database (PostgreSQL)
+postgresql:
+  enabled: true
+  auth:
+    username: zakera
+    password: ""  # Set via secrets
+    database: zakera
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      limits:
+        memory: 1Gi
+        cpu: 1000m
+      requests:
+        memory: 256Mi
+        cpu: 250m
+
+# Cache (Redis)
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: ""  # Set via secrets
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 500m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+
+# Monitoring
+prometheus:
+  enabled: true
+  retention: 30d
+
+grafana:
+  enabled: true
+  adminPassword: ""  # Set via secrets
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - zakera
+        topologyKey: kubernetes.io/hostname
