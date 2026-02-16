@@ -1,0 +1,26 @@
+# Pod Disruption Budgets for High Availability
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zakera-api-pdb
+  namespace: zakera
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: zakera
+      component: api
+  unhealthyPodEvictionPolicy: AlwaysAllow
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: prometheus-pdb
+  namespace: zakera
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: prometheus
