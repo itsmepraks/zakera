@@ -1,12 +1,22 @@
-"""AI Model Integration Package"""
-from .providers import ModelProvider, OpenAIProvider, AnthropicProvider
-from .memory import ConversationMemory
-from .prompts import PromptTemplate
+"""Model package for AI chat agent.
+
+Provides multi-provider LLM support including:
+- OpenAI (GPT-3.5, GPT-4)
+- Anthropic (Claude)
+- Google (Gemini)
+- Mistral AI
+- Ollama (Local models)
+- HuggingFace (Transformers)
+"""
+
+from .providers import OpenAIProvider, AnthropicProvider, GoogleProvider
+from .providers_mistral import MistralProvider
+from .model_manager import ModelManager
 
 __all__ = [
-    "ModelProvider",
     "OpenAIProvider",
     "AnthropicProvider",
-    "ConversationMemory",
-    "PromptTemplate"
+    "GoogleProvider",
+    "MistralProvider",
+    "ModelManager",
 ]
