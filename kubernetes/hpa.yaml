@@ -1,29 +1,41 @@
----
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: zakera-api-hpa
-  namespace: zakera
+  namespace: zakera-prod
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: zakera-api
-  minReplicas: 3
+  minReplicas: 2
   maxReplicas: 10
   metrics:
+  # CPU-based scaling
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
         averageUtilization: 70
+  
+  # Memory-based scaling
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
         averageUtilization: 80
+  
+  # Custom metric - requests per second
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"
+  
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -35,8 +47,9 @@ spec:
         value: 2
         periodSeconds: 60
       selectPolicy: Min
+    
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 0
       policies:
       - type: Percent
         value: 100

@@ -1,48 +1,56 @@
----
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: zakera-config
-  namespace: zakera
+  namespace: zakera-prod
 data:
-  # Application
-  API_HOST: "0.0.0.0"
-  API_PORT: "8000"
-  ENVIRONMENT: "production"
-  LOG_LEVEL: "INFO"
+  # Application environment
+  environment: "production"
   
-  # Features
-  ENABLE_METRICS: "true"
-  ENABLE_AUDIT_LOGGING: "true"
-  ENABLE_RATE_LIMITING: "true"
+  # Model configuration
+  default_model: "llama-3.1-70b-versatile"
+  enable_groq: "true"
+  enable_ollama: "false"
+  enable_openai: "true"
+  enable_anthropic: "true"
+  enable_model_fallback: "true"
+  fallback_strategy: "sequential"
   
-  # CORS
-  ALLOWED_ORIGINS: "https://zakera.io,https://app.zakera.io"
-  
-  # Token settings
-  ACCESS_TOKEN_EXPIRE_MINUTES: "15"
-  REFRESH_TOKEN_EXPIRE_DAYS: "7"
-  
-  # Rate limiting
-  RATE_LIMIT_PER_MINUTE: "60"
-  RATE_LIMIT_PER_HOUR: "1000"
-  
-  # MFA
-  MFA_ISSUER_NAME: "Zakera"
-  REQUIRE_MFA_FOR_ADMINS: "true"
-  
-  # Memory
-  DEFAULT_MAX_TOKENS: "4000"
-  SUMMARIZATION_STRATEGY: "adaptive"
-  
-  # Models
-  DEFAULT_MODEL: "gpt-4-turbo"
-  ENABLE_MODEL_FALLBACK: "true"
-  FALLBACK_STRATEGY: "sequential"
-  
-  # Redis
-  REDIS_URL: "redis://zakera-redis:6379/0"
+  # Server configuration
+  host: "0.0.0.0"
+  port: "8000"
+  workers: "4"
   
   # Monitoring
-  PROMETHEUS_PORT: "9090"
-  METRICS_NAMESPACE: "zakera"
+  enable_metrics: "true"
+  enable_alerts: "true"
+  log_level: "INFO"
+  log_format: "json"
+  
+  # Rate limiting
+  rate_limit_enabled: "true"
+  rate_limit_per_minute: "60"
+  
+  # CORS configuration
+  allowed_origins: "https://zakera.example.com,https://www.zakera.example.com"
+  
+  # Database
+  database_pool_size: "20"
+  database_max_overflow: "10"
+  
+  # Redis
+  redis_url: "redis://zakera-redis:6379/0"
+  
+  # Feature flags
+  enable_tools: "true"
+  enable_memory: "true"
+  enable_streaming: "true"
+  
+  # Performance
+  max_concurrent_requests: "100"
+  request_timeout: "300"
+  
+  # Security
+  enable_rate_limiting: "true"
+  enable_authentication: "true"
+  jwt_expiration: "86400"

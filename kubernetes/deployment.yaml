@@ -1,13 +1,12 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: zakera-api
-  namespace: zakera
+  namespace: zakera-prod
   labels:
-    app: zakera
-    component: api
-    version: v0.6.0
+    app: zakera-api
+    tier: backend
+    version: v1
 spec:
   replicas: 3
   strategy:
@@ -17,191 +16,176 @@ spec:
       maxUnavailable: 0
   selector:
     matchLabels:
-      app: zakera
-      component: api
+      app: zakera-api
   template:
     metadata:
       labels:
-        app: zakera
-        component: api
-        version: v0.6.0
+        app: zakera-api
+        tier: backend
+        version: v1
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"
         prometheus.io/path: "/api/v1/monitoring/metrics"
     spec:
-      serviceAccountName: zakera
+      serviceAccountName: zakera-sa
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       
+      # Init container for database migrations
       initContainers:
-      - name: db-migration
+      - name: migrate-db
         image: zakera:latest
-        command: ["alembic", "upgrade", "head"]
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: database-url
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "200m"
+        command: ["python", "-m", "alembic", "upgrade", "head"]
+        envFrom:
+        - configMapRef:
+            name: zakera-config
+        - secretRef:
+            name: zakera-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
       
       containers:
-      - name: zakera
+      - name: zakera-api
         image: zakera:latest
         imagePullPolicy: Always
+        
         ports:
         - name: http
           containerPort: 8000
           protocol: TCP
-        - name: metrics
-          containerPort: 9090
-          protocol: TCP
         
         env:
-        # Application settings
-        - name: API_HOST
-          value: "0.0.0.0"
-        - name: API_PORT
-          value: "8000"
-        - name: LOG_LEVEL
-          value: "INFO"
+        # Environment variables from ConfigMap
         - name: ENVIRONMENT
-          value: "production"
+          valueFrom:
+            configMapKeyRef:
+              name: zakera-config
+              key: environment
         
-        # Database
+        - name: DEFAULT_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: zakera-config
+              key: default_model
+        
+        - name: ENABLE_METRICS
+          valueFrom:
+            configMapKeyRef:
+              name: zakera-config
+              key: enable_metrics
+        
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: zakera-config
+              key: log_level
+        
+        # Secrets
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zakera-secrets
+              key: openai-api-key
+        
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zakera-secrets
+              key: anthropic-api-key
+        
+        - name: GROQ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: zakera-secrets
+              key: groq-api-key
+        
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
               name: zakera-secrets
               key: database-url
         
-        # Security
         - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
               name: zakera-secrets
               key: secret-key
         
-        # OpenAI
-        - name: OPENAI_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: openai-api-key
-              optional: true
+        # Resource limits and requests
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
         
-        # Anthropic
-        - name: ANTHROPIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: anthropic-api-key
-              optional: true
-        
-        # Google
-        - name: GOOGLE_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: google-api-key
-              optional: true
-        
-        # OAuth2
-        - name: GOOGLE_CLIENT_ID
-          valueFrom:
-            configMapKeyRef:
-              name: zakera-config
-              key: google-client-id
-              optional: true
-        - name: GOOGLE_CLIENT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: zakera-secrets
-              key: google-client-secret
-              optional: true
-        
-        # Redis (for caching)
-        - name: REDIS_URL
-          value: "redis://zakera-redis:6379/0"
-        
-        # Monitoring
-        - name: ENABLE_METRICS
-          value: "true"
-        - name: ENABLE_AUDIT_LOGGING
-          value: "true"
-        
-        # Health checks
+        # Liveness probe - checks if container is alive
         livenessProbe:
           httpGet:
             path: /api/v1/monitoring/health/live
-            port: 8000
-            scheme: HTTP
+            port: http
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
-          successThreshold: 1
           failureThreshold: 3
         
+        # Readiness probe - checks if container is ready to serve traffic
         readinessProbe:
           httpGet:
             path: /api/v1/monitoring/health/ready
-            port: 8000
-            scheme: HTTP
+            port: http
           initialDelaySeconds: 10
           periodSeconds: 5
           timeoutSeconds: 3
-          successThreshold: 1
           failureThreshold: 3
         
-        # Startup probe for slow starts
+        # Startup probe - gives more time for application startup
         startupProbe:
           httpGet:
-            path: /api/v1/monitoring/health/live
-            port: 8000
+            path: /api/v1/monitoring/health/ready
+            port: http
           initialDelaySeconds: 0
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 30
         
-        # Resource management
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "2000m"
-        
         # Volume mounts
         volumeMounts:
-        - name: logs
-          mountPath: /app/logs
         - name: data
           mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
         - name: config
           mountPath: /app/config
           readOnly: true
+        
+        # Security context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
       
+      # Volumes
       volumes:
-      - name: logs
-        emptyDir: {}
       - name: data
         persistentVolumeClaim:
-          claimName: zakera-data
+          claimName: zakera-data-pvc
+      
+      - name: logs
+        emptyDir: {}
+      
       - name: config
         configMap:
           name: zakera-config
       
-      # Affinity rules for HA
+      # Node affinity for optimal placement
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -212,5 +196,12 @@ spec:
                 - key: app
                   operator: In
                   values:
-                  - zakera
+                  - zakera-api
               topologyKey: kubernetes.io/hostname
+      
+      # Toleration for spot instances
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "spot"
+        effect: "NoSchedule"
