@@ -38,6 +38,7 @@ A modern, production-ready AI chat agent with conversational memory, multi-provi
 - Custom prompt templates
 - Analytics and usage tracking
 - WebSocket support with authentication
+- **📥 Conversation Export**: Stream exports in JSON, Markdown, Text, CSV formats with progress updates
 
 ## 🏗️ Architecture
 
@@ -252,6 +253,7 @@ Structured JSON logs with:
 ### Setup Guides
 - [Local Models Setup](docs/LOCAL_MODELS.md) - Ollama and HuggingFace configuration
 - [Monitoring Guide](docs/MONITORING.md) - Observability setup
+- [Conversation Export](docs/CONVERSATION_EXPORT.md) - Export conversations in multiple formats
 - [API Reference](docs/api-reference.md) - Complete API documentation
 - [Tool Development](docs/tools.md) - Creating custom tools
 - [Configuration Guide](docs/configuration.md) - Environment setup
@@ -471,6 +473,7 @@ spec:
 **Chat & Conversations:**
 - `POST /api/v1/chat/send` - Send chat message
 - `GET /api/v1/conversations` - List conversations
+- `GET /api/v1/conversations/{id}/export` - Export conversation (JSON, Markdown, Text, CSV)
 - `WebSocket /api/v1/chat/ws` - Real-time chat
 
 **Models:**
@@ -577,6 +580,7 @@ Project Link: [https://github.com/itsmepraks/zakera](https://github.com/itsmepra
 
 ## 🎯 Roadmap
 
+- [x] Conversation export with streaming (JSON, Markdown, Text, CSV)
 - [ ] Voice input/output support
 - [ ] Multi-language support
 - [ ] Plugin marketplace
@@ -597,4 +601,5 @@ Project Link: [https://github.com/itsmepraks/zakera](https://github.com/itsmepra
 - [📚 Documentation](docs/)
 - [🤖 Model Setup](docs/LOCAL_MODELS.md)
 - [📊 Monitoring](docs/MONITORING.md)
+- [📥 Export Guide](docs/CONVERSATION_EXPORT.md)
 - [🛠️ API Docs](http://localhost:8000/api/docs)
