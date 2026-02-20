@@ -1,9 +1,16 @@
-.typing-indicator-container {
+/* Typing Indicator Styles */
+
+.typing-indicator {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 16px;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.typing-indicator-content {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 16px 20px;
-  animation: fadeIn 0.3s ease-in;
 }
 
 .typing-indicator-avatar {
@@ -18,65 +25,63 @@
 }
 
 .avatar-icon {
-  color: white;
-  font-weight: 600;
-  font-size: 16px;
+  font-size: 20px;
 }
 
 .typing-indicator-bubble {
-  background-color: #f1f3f4;
-  border-radius: 18px;
+  background: #f3f4f6;
+  border-radius: 16px;
   padding: 12px 16px;
   max-width: 200px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 20px;
-}
-
-.typing-indicator .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #8e8e93;
-  animation: typing 1.4s infinite ease-in-out;
-}
-
-.typing-indicator .dot:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.typing-indicator .dot:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-indicator .dot:nth-child(3) {
-  animation-delay: 0.4s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  animation: bubbleIn 0.3s ease-out;
 }
 
 .typing-text {
-  font-size: 12px;
-  color: #8e8e93;
-  display: none;
+  font-size: 13px;
+  color: #6b7280;
+  margin-right: 8px;
+  display: inline-block;
 }
 
-@keyframes typing {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.7;
+.typing-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9ca3af;
+  animation: bounce 1.4s infinite ease-in-out;
+}
+
+.dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .typing-indicator-bubble {
+    background: #374151;
   }
-  30% {
-    transform: translateY(-10px);
-    opacity: 1;
+  
+  .typing-text {
+    color: #9ca3af;
+  }
+  
+  .dot {
+    background: #6b7280;
   }
 }
 
+/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -88,13 +93,35 @@
   }
 }
 
+@keyframes bubbleIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .typing-indicator .dot {
+  .typing-indicator,
+  .typing-indicator-bubble {
     animation: none;
-    opacity: 0.7;
   }
   
-  .typing-indicator-container {
+  .dot {
     animation: none;
+    opacity: 0.6;
   }
 }

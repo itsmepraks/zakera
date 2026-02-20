@@ -1,146 +1,136 @@
 /**
- * Message Reactions Component
- * Allows users to react to messages with emojis
+ * MessageReactions Component
+ * 
+ * Allows users to react to messages with emoji reactions.
+ * Shows reaction counts and provides an emoji picker.
  */
-import React, { useState, useCallback, useMemo } from 'react';
-import { Reaction, ReactionType } from '../../types/reactions';
-import '../../styles/chat-enhancements.css';
 
-interface MessageReactionsProps {
-  /** Message ID */
-  messageId: number;
-  /** Existing reactions on the message */
-  reactions: Reaction[];
-  /** Current user ID */
-  currentUserId: number;
-  /** Callback when user adds/removes a reaction */
-  onReactionToggle: (messageId: number, reactionType: ReactionType) => void;
-  /** Whether reactions are disabled */
-  disabled?: boolean;
+import React, { useState, useRef, useEffect } from 'react';
+import './MessageReactions.css';
+
+interface Reaction {
+  emoji: string;
+  count: number;
+  users: string[];
+  userReacted: boolean;
 }
 
-const AVAILABLE_REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
-  { type: 'thumbs_up', emoji: '👍', label: 'Like' },
-  { type: 'heart', emoji: '❤️', label: 'Love' },
-  { type: 'laugh', emoji: '😂', label: 'Funny' },
-  { type: 'celebrate', emoji: '🎉', label: 'Celebrate' },
-  { type: 'thinking', emoji: '🤔', label: 'Thinking' },
-  { type: 'thumbs_down', emoji: '👎', label: 'Dislike' },
-];
+interface MessageReactionsProps {
+  messageId: string;
+  reactions?: Reaction[];
+  onReact?: (emoji: string) => void;
+  onRemoveReaction?: (emoji: string) => void;
+  className?: string;
+}
+
+const POPULAR_EMOJIS = ['👍', '❤️', '😄', '😮', '👎', '🎉', '😍', '🤔'];
 
 export const MessageReactions: React.FC<MessageReactionsProps> = ({
   messageId,
-  reactions,
-  currentUserId,
-  onReactionToggle,
-  disabled = false,
+  reactions = [],
+  onReact,
+  onRemoveReaction,
+  className = ''
 }) => {
   const [showPicker, setShowPicker] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [hoveredReaction, setHoveredReaction] = useState<string | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
-  // Aggregate reactions by type
-  const aggregatedReactions = useMemo(() => {
-    const reactionMap = new Map<ReactionType, { count: number; userReacted: boolean }>();
+  // Close picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowPicker(false);
+      }
+    };
 
-    reactions.forEach((reaction) => {
-      const existing = reactionMap.get(reaction.type) || { count: 0, userReacted: false };
-      reactionMap.set(reaction.type, {
-        count: existing.count + 1,
-        userReacted: existing.userReacted || reaction.userId === currentUserId,
-      });
-    });
-
-    return reactionMap;
-  }, [reactions, currentUserId]);
-
-  const handleReactionClick = useCallback(
-    (reactionType: ReactionType) => {
-      if (disabled) return;
-
-      setIsAnimating(true);
-      onReactionToggle(messageId, reactionType);
-      setShowPicker(false);
-
-      // Reset animation state
-      setTimeout(() => setIsAnimating(false), 300);
-    },
-    [messageId, onReactionToggle, disabled]
-  );
-
-  const togglePicker = useCallback(() => {
-    if (!disabled) {
-      setShowPicker((prev) => !prev);
+    if (showPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
-  }, [disabled]);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPicker]);
+
+  const handleReactionClick = (emoji: string, userReacted: boolean) => {
+    if (userReacted && onRemoveReaction) {
+      onRemoveReaction(emoji);
+    } else if (!userReacted && onReact) {
+      onReact(emoji);
+    }
+    setShowPicker(false);
+  };
+
+  const handleAddReactionClick = (emoji: string) => {
+    if (onReact) {
+      onReact(emoji);
+    }
+    setShowPicker(false);
+  };
 
   return (
-    <div className="message-reactions-container">
-      {/* Display aggregated reactions */}
-      {aggregatedReactions.size > 0 && (
-        <div className="reactions-display">
-          {AVAILABLE_REACTIONS.map(({ type, emoji }) => {
-            const reaction = aggregatedReactions.get(type);
-            if (!reaction) return null;
+    <div className={`message-reactions ${className}`}>
+      {/* Existing Reactions */}
+      <div className="reactions-list">
+        {reactions.map((reaction) => (
+          <button
+            key={reaction.emoji}
+            className={`reaction-bubble ${
+              reaction.userReacted ? 'user-reacted' : ''
+            }`}
+            onClick={() => handleReactionClick(reaction.emoji, reaction.userReacted)}
+            onMouseEnter={() => setHoveredReaction(reaction.emoji)}
+            onMouseLeave={() => setHoveredReaction(null)}
+            aria-label={`${reaction.emoji} reaction, ${reaction.count} ${reaction.count === 1 ? 'person' : 'people'}`}
+          >
+            <span className="reaction-emoji">{reaction.emoji}</span>
+            <span className="reaction-count">{reaction.count}</span>
+            
+            {/* Tooltip */}
+            {hoveredReaction === reaction.emoji && (
+              <div className="reaction-tooltip">
+                {reaction.users.slice(0, 3).join(', ')}
+                {reaction.users.length > 3 && ` and ${reaction.users.length - 3} more`}
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
 
-            return (
-              <button
-                key={type}
-                className={`reaction-bubble ${
-                  reaction.userReacted ? 'user-reacted' : ''
-                } ${isAnimating ? 'animating' : ''}`}
-                onClick={() => handleReactionClick(type)}
-                disabled={disabled}
-                aria-label={`${emoji} ${reaction.count}`}
-                title={reaction.userReacted ? 'Remove reaction' : 'Add reaction'}
-              >
-                <span className="reaction-emoji">{emoji}</span>
-                <span className="reaction-count">{reaction.count}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Reaction picker button */}
-      <div className="reaction-picker-wrapper">
+      {/* Add Reaction Button */}
+      <div className="add-reaction-container" ref={pickerRef}>
         <button
-          className={`reaction-add-button ${showPicker ? 'active' : ''}`}
-          onClick={togglePicker}
-          disabled={disabled}
+          className="add-reaction-btn"
+          onClick={() => setShowPicker(!showPicker)}
           aria-label="Add reaction"
           aria-expanded={showPicker}
         >
-          <span className="add-icon">😊</span>
-          <span className="add-icon-plus">+</span>
+          <span className="add-icon">➕</span>
+          <span className="add-emoji">😊</span>
         </button>
 
-        {/* Reaction picker popup */}
+        {/* Emoji Picker */}
         {showPicker && (
-          <div className="reaction-picker" role="menu">
-            {AVAILABLE_REACTIONS.map(({ type, emoji, label }) => (
-              <button
-                key={type}
-                className="reaction-option"
-                onClick={() => handleReactionClick(type)}
-                role="menuitem"
-                aria-label={label}
-                title={label}
-              >
-                <span className="reaction-option-emoji">{emoji}</span>
-              </button>
-            ))}
+          <div className="emoji-picker" role="dialog" aria-label="Emoji picker">
+            <div className="emoji-picker-header">
+              <span>React with an emoji</span>
+            </div>
+            <div className="emoji-picker-grid">
+              {POPULAR_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  className="emoji-option"
+                  onClick={() => handleAddReactionClick(emoji)}
+                  aria-label={`React with ${emoji}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* Click outside to close picker */}
-      {showPicker && (
-        <div
-          className="reaction-picker-backdrop"
-          onClick={() => setShowPicker(false)}
-          aria-hidden="true"
-        />
-      )}
     </div>
   );
 };

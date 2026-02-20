@@ -1,43 +1,38 @@
 /**
- * Typing Indicator Component
- * Shows animated dots when AI is generating a response
+ * TypingIndicator Component
+ * 
+ * Displays an animated typing indicator showing when the AI is generating a response.
+ * Features smooth animations and customizable styling.
  */
+
 import React from 'react';
-import '../../styles/chat-enhancements.css';
+import './TypingIndicator.css';
 
 interface TypingIndicatorProps {
-  /** Whether to show the typing indicator */
-  isTyping: boolean;
-  /** Name/role of who is typing */
-  typingEntity?: string;
-  /** Custom class name */
+  isTyping?: boolean;
+  message?: string;
   className?: string;
 }
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
-  isTyping,
-  typingEntity = 'AI Assistant',
-  className = '',
+  isTyping = true,
+  message = 'AI is thinking',
+  className = ''
 }) => {
   if (!isTyping) return null;
 
   return (
-    <div 
-      className={`typing-indicator-container ${className}`}
-      role="status"
-      aria-live="polite"
-      aria-label={`${typingEntity} is typing`}
-    >
-      <div className="typing-indicator">
-        <div className="typing-avatar">
+    <div className={`typing-indicator ${className}`} role="status" aria-live="polite">
+      <div className="typing-indicator-content">
+        <div className="typing-indicator-avatar">
           <span className="avatar-icon">🤖</span>
         </div>
-        <div className="typing-content">
-          <span className="typing-text">{typingEntity} is typing</span>
+        <div className="typing-indicator-bubble">
+          <span className="typing-text" aria-label={message}>{message}</span>
           <div className="typing-dots">
-            <span className="dot dot-1"></span>
-            <span className="dot dot-2"></span>
-            <span className="dot dot-3"></span>
+            <span className="dot" />
+            <span className="dot" />
+            <span className="dot" />
           </div>
         </div>
       </div>
