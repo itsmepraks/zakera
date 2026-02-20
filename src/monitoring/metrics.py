@@ -449,6 +449,18 @@ export_duration_seconds = Histogram(
     buckets=(1, 5, 10, 30, 60, 120, 300)
 )
 
+export_messages_total = Counter(
+    "export_messages_total",
+    "Total number of messages exported",
+    ["format"]
+)
+
+export_errors_total = Counter(
+    "export_errors_total",
+    "Total number of export errors",
+    ["format", "error_type"]
+)
+
 # =============================================================================
 # Middleware
 # =============================================================================
@@ -772,7 +784,7 @@ def record_user_activity(activity_type: str):
     """Record user activity"""
     user_activity_total.labels(activity_type=activity_type).inc()
 
-def record_export(format: str, duration: float, status: str):
+def record_export(format: str, duration: float, status: str, messages_count: int = 0):
     """Record export operation"""
     export_requests_total.labels(
         format=format,
@@ -780,3 +792,6 @@ def record_export(format: str, duration: float, status: str):
     ).inc()
     
     export_duration_seconds.labels(format=format).observe(duration)
+    
+    if messages_count > 0:
+        export_messages_total.labels(format=format).inc(messages_count)
