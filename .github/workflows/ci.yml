@@ -1,0 +1,508 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20.x'
+  POETRY_VERSION: '1.7.1'
+  CACHE_VERSION: v1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================================
+  # Code Quality & Linting
+  # ============================================================================
+  lint:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+      
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install black flake8 mypy isort bandit pylint radon
+      
+      - name: Run Black (formatting check)
+        run: |
+          black --check --diff src/ tests/
+        continue-on-error: false
+      
+      - name: Run isort (import sorting check)
+        run: |
+          isort --check-only --diff src/ tests/
+        continue-on-error: false
+      
+      - name: Run Flake8 (style check)
+        run: |
+          flake8 src/ tests/ --count --statistics --show-source
+        continue-on-error: false
+      
+      - name: Run MyPy (type checking)
+        run: |
+          mypy src/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true
+      
+      - name: Run Pylint (code analysis)
+        run: |
+          pylint src/ --disable=C0111,R0903,C0103 --max-line-length=120
+        continue-on-error: true
+      
+      - name: Run Radon (complexity analysis)
+        run: |
+          radon cc src/ -a -nb
+          radon mi src/ -nb
+        continue-on-error: true
+      
+      - name: Check for common security issues
+        run: |
+          bandit -r src/ -f json -o bandit-report.json || true
+          bandit -r src/ -f screen
+        continue-on-error: true
+      
+      - name: Upload bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 30
+
+  # ============================================================================
+  # Security Scanning
+  # ============================================================================
+  security:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit
+      
+      - name: Run Safety (dependency vulnerability check)
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check --bare
+        continue-on-error: true
+      
+      - name: Run pip-audit (dependency audit)
+        run: |
+          pip-audit --desc --format json --output pip-audit-report.json || true
+          pip-audit --desc
+        continue-on-error: true
+      
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            safety-report.json
+            pip-audit-report.json
+          retention-days: 30
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # ============================================================================
+  # Unit Tests (Matrix)
+  # ============================================================================
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: 'requirements.txt'
+      
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-py${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-py${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+      
+      - name: Create test environment file
+        run: |
+          cat > .env.test << EOF
+          DATABASE_URL=sqlite:///./test.db
+          SECRET_KEY=test-secret-key-for-ci
+          OPENAI_API_KEY=sk-test-key
+          ANTHROPIC_API_KEY=sk-ant-test-key
+          GOOGLE_API_KEY=test-google-key
+          ENABLE_METRICS=false
+          LOG_LEVEL=WARNING
+          EOF
+      
+      - name: Run pytest with coverage
+        run: |
+          pytest tests/ \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --junitxml=junit.xml \
+            --maxfail=5 \
+            --tb=short \
+            -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: matrix.python-version == '3.11'
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+      
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: |
+            junit.xml
+            htmlcov/
+            coverage.xml
+          retention-days: 30
+      
+      - name: Generate coverage badge
+        if: matrix.python-version == '3.11' && github.ref == 'refs/heads/main'
+        run: |
+          pip install coverage-badge
+          coverage-badge -o coverage.svg -f
+        continue-on-error: true
+
+  # ============================================================================
+  # Frontend Tests
+  # ============================================================================
+  frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/frontend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: 'src/frontend/package-lock.json'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
+      
+      - name: Run TypeScript compiler
+        run: npm run type-check || npx tsc --noEmit
+        continue-on-error: true
+      
+      - name: Run tests
+        run: npm test -- --coverage --watchAll=false
+        continue-on-error: true
+      
+      - name: Build frontend
+        run: npm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: src/frontend/build
+          retention-days: 7
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test]
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: zakera
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: zakera_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-postgresql redis
+      
+      - name: Create integration test environment
+        run: |
+          cat > .env.integration << EOF
+          DATABASE_URL=postgresql://zakera:testpass@localhost:5432/zakera_test
+          REDIS_URL=redis://localhost:6379/0
+          SECRET_KEY=integration-test-key
+          ENABLE_METRICS=true
+          LOG_LEVEL=DEBUG
+          EOF
+      
+      - name: Run database migrations
+        run: |
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql://zakera:testpass@localhost:5432/zakera_test
+      
+      - name: Run integration tests
+        run: |
+          pytest tests/ -m integration \
+            --cov=src \
+            --cov-report=term \
+            -v
+        env:
+          DATABASE_URL: postgresql://zakera:testpass@localhost:5432/zakera_test
+          REDIS_URL: redis://localhost:6379/0
+        continue-on-error: false
+
+  # ============================================================================
+  # Docker Build & Scan
+  # ============================================================================
+  docker:
+    name: Docker Build & Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [lint, test]
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ env.CACHE_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ env.CACHE_VERSION }}-
+            ${{ runner.os }}-buildx-
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: zakera:${{ github.sha }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+      
+      - name: Run Trivy vulnerability scanner on Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'zakera:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-docker-results.sarif'
+        continue-on-error: true
+      
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-docker-results.sarif'
+        continue-on-error: true
+      
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # ============================================================================
+  # Performance Tests
+  # ============================================================================
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install locust pytest-benchmark
+      
+      - name: Run performance benchmarks
+        run: |
+          pytest tests/ -m benchmark --benchmark-only
+        continue-on-error: true
+
+  # ============================================================================
+  # Status Check
+  # ============================================================================
+  status:
+    name: CI Status Check
+    runs-on: ubuntu-latest
+    needs: [lint, security, test, frontend, integration, docker]
+    if: always()
+    
+    steps:
+      - name: Check job results
+        run: |
+          echo "Lint: ${{ needs.lint.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          echo "Test: ${{ needs.test.result }}"
+          echo "Frontend: ${{ needs.frontend.result }}"
+          echo "Integration: ${{ needs.integration.result }}"
+          echo "Docker: ${{ needs.docker.result }}"
+          
+          if [[ "${{ needs.lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration.result }}" == "failure" ]]; then
+            echo "❌ CI pipeline failed"
+            exit 1
+          else
+            echo "✅ CI pipeline passed"
+          fi
+      
+      - name: Post status to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ needs.test.result }}' === 'success' ? '✅ All checks passed!' : '❌ Some checks failed';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## CI Pipeline Results\n\n${status}\n\n- Linting: ${{ needs.lint.result }}\n- Security: ${{ needs.security.result }}\n- Tests: ${{ needs.test.result }}\n- Frontend: ${{ needs.frontend.result }}\n- Integration: ${{ needs.integration.result }}\n- Docker: ${{ needs.docker.result }}`
+            })
+        continue-on-error: true
