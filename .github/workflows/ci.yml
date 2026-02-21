@@ -40,7 +40,7 @@ jobs:
           cache-dependency-path: 'requirements.txt'
       
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-${{ hashFiles('requirements.txt') }}
@@ -185,7 +185,7 @@ jobs:
           cache-dependency-path: 'requirements.txt'
       
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ env.CACHE_VERSION }}-py${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
@@ -396,7 +396,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
       
       - name: Cache Docker layers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ env.CACHE_VERSION }}-${{ github.sha }}
