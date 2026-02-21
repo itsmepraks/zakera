@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for Zakera AI Chat Agent
 # Stage 1: Backend Builder
-FROM python:3.11-slim as backend-builder
+FROM python:3.14-slim as backend-builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Production Backend
-FROM python:3.11-slim as backend
+FROM python:3.14-slim as backend
 
 WORKDIR /app
 
