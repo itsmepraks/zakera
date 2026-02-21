@@ -31,7 +31,7 @@ requests==2.31.0
 # Security - Authentication & Authorization
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+python-multipart==0.0.20
 pyotp==2.9.0  # TOTP for MFA
 authlib==1.3.0  # OAuth2 client
 itsdangerous==2.1.2  # Secure token signing
