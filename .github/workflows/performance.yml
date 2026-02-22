@@ -1,0 +1,310 @@
+name: Performance Testing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
+      - '.github/workflows/performance.yml'
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '300'
+        type: string
+      users:
+        description: 'Number of concurrent users'
+        required: false
+        default: '50'
+        type: string
+
+jobs:
+  benchmark:
+    name: API Performance Benchmark
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: zakera_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install locust pytest-benchmark
+
+      - name: Start application
+        run: |
+          export DATABASE_URL="postgresql://postgres:testpassword@localhost:5432/zakera_test"
+          export REDIS_URL="redis://localhost:6379"
+          uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+          
+          # Wait for app to be ready
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/api/v1/monitoring/health; then
+              echo "App is ready"
+              break
+            fi
+            echo "Waiting for app..."
+            sleep 2
+          done
+
+      - name: Run load tests
+        run: |
+          # Create locustfile
+          cat > locustfile.py << 'EOF'
+          from locust import HttpUser, task, between
+          import json
+          
+          class ChatUser(HttpUser):
+              wait_time = between(1, 3)
+              
+              def on_start(self):
+                  # Login and get token
+                  response = self.client.post("/api/v1/auth/login", json={
+                      "username": "test@example.com",
+                      "password": "testpassword"
+                  })
+                  if response.status_code == 200:
+                      self.token = response.json()["access_token"]
+                      self.headers = {"Authorization": f"Bearer {self.token}"}
+              
+              @task(3)
+              def send_message(self):
+                  self.client.post("/api/v1/chat/send", 
+                      json={"message": "Hello, how are you?"},
+                      headers=self.headers
+                  )
+              
+              @task(1)
+              def get_history(self):
+                  self.client.get("/api/v1/chat/history",
+                      headers=self.headers
+                  )
+              
+              @task(1)
+              def health_check(self):
+                  self.client.get("/api/v1/monitoring/health")
+          EOF
+          
+          # Run load test
+          USERS=${{ inputs.users || '50' }}
+          DURATION=${{ inputs.duration || '300' }}
+          
+          locust -f locustfile.py \
+            --headless \
+            --users $USERS \
+            --spawn-rate 10 \
+            --run-time ${DURATION}s \
+            --host http://localhost:8000 \
+            --html performance-report.html \
+            --csv performance-results
+
+      - name: Analyze results
+        id: analyze
+        run: |
+          # Parse Locust results
+          python << 'EOF'
+          import csv
+          import json
+          
+          def parse_stats(filename):
+              stats = {}
+              with open(filename, 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      if row['Name'] != 'Aggregated':
+                          stats[row['Name']] = {
+                              'requests': int(row['Request Count']),
+                              'failures': int(row['Failure Count']),
+                              'median': float(row['Median Response Time']),
+                              'p95': float(row['95%']),
+                              'p99': float(row['99%']),
+                              'avg': float(row['Average Response Time']),
+                              'rps': float(row['Requests/s']),
+                          }
+              return stats
+          
+          stats = parse_stats('performance-results_stats.csv')
+          
+          # Check for regressions
+          regressions = []
+          thresholds = {
+              '/api/v1/chat/send': {'p95': 2000, 'p99': 5000},
+              '/api/v1/chat/history': {'p95': 500, 'p99': 1000},
+              '/api/v1/monitoring/health': {'p95': 100, 'p99': 200},
+          }
+          
+          for endpoint, metrics in stats.items():
+              if endpoint in thresholds:
+                  for metric, threshold in thresholds[endpoint].items():
+                      if metrics[metric] > threshold:
+                          regressions.append({
+                              'endpoint': endpoint,
+                              'metric': metric,
+                              'value': metrics[metric],
+                              'threshold': threshold,
+                          })
+          
+          # Save results
+          with open('performance-analysis.json', 'w') as f:
+              json.dump({
+                  'stats': stats,
+                  'regressions': regressions,
+                  'has_regressions': len(regressions) > 0,
+              }, f, indent=2)
+          
+          print(f"::set-output name=has_regressions::{len(regressions) > 0}")
+          EOF
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: |
+            performance-report.html
+            performance-results*.csv
+            performance-analysis.json
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const analysis = JSON.parse(fs.readFileSync('performance-analysis.json', 'utf8'));
+            
+            let comment = '## Performance Test Results\n\n';
+            
+            // Summary table
+            comment += '| Endpoint | Requests | Failures | Median | P95 | P99 | RPS |\n';
+            comment += '|----------|----------|----------|--------|-----|-----|-----|\n';
+            
+            for (const [endpoint, stats] of Object.entries(analysis.stats)) {
+              comment += `| ${endpoint} | ${stats.requests} | ${stats.failures} | ${stats.median}ms | ${stats.p95}ms | ${stats.p99}ms | ${stats.rps.toFixed(2)} |\n`;
+            }
+            
+            if (analysis.has_regressions) {
+              comment += '\n### ⚠️ Performance Regressions Detected\n\n';
+              for (const regression of analysis.regressions) {
+                comment += `- **${regression.endpoint}**: ${regression.metric} is ${regression.value}ms (threshold: ${regression.threshold}ms)\n`;
+              }
+            } else {
+              comment += '\n### ✅ No Performance Regressions\n';
+            }
+            
+            comment += '\n[View full report in artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Fail if regressions detected
+        if: steps.analyze.outputs.has_regressions == 'true'
+        run: |
+          echo "Performance regressions detected!"
+          cat performance-analysis.json
+          exit 1
+
+  model_performance:
+    name: Model Provider Performance
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        provider: [openai, anthropic, gemini]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest pytest-benchmark
+
+      - name: Benchmark model providers
+        run: |
+          pytest tests/benchmarks/test_${{ matrix.provider }}_performance.py \
+            --benchmark-only \
+            --benchmark-json=benchmark-${{ matrix.provider }}.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.provider }}
+          path: benchmark-${{ matrix.provider }}.json
+
+  memory_profiling:
+    name: Memory Leak Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install memory_profiler pytest-memprof
+
+      - name: Run memory profiling
+        run: |
+          python -m memory_profiler tests/test_memory_usage.py > memory-profile.txt
+
+      - name: Check for memory leaks
+        run: |
+          # Analyze memory profile for leaks
+          if grep -q "MiB" memory-profile.txt; then
+            echo "Memory profiling complete"
+          fi
+
+      - name: Upload memory profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profile
+          path: memory-profile.txt

@@ -1,53 +1,266 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., v1.2.3)'
+        description: 'Version to release (e.g., 1.2.3)'
         required: true
         type: string
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - prerelease
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  create-release:
-    name: Create Release
+  validate:
+    name: Validate Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - name: Get version
-        id: version
+
+      - name: Validate version format
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          VERSION="${{ inputs.version || github.ref_name }}"
+          if [[ ! "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Invalid version format: $VERSION"
+            exit 1
           fi
-      
-      - name: Generate changelog
-        id: changelog
+
+      - name: Check if tag exists
         run: |
-          echo "## What's Changed" > RELEASE_NOTES.md
-          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"- %s (%h)" >> RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0 HEAD^)...${{ steps.version.outputs.version }}" >> RELEASE_NOTES.md
+          VERSION="${{ inputs.version || github.ref_name }}"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists"
+            exit 1
+          fi
+
+      - name: Validate changelog
+        run: |
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md not found"
+            exit 1
+          fi
+          
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "Version ${VERSION} not found in CHANGELOG.md"
+            echo "Please update CHANGELOG.md before releasing"
+            exit 1
+          fi
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
       
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body_path: RELEASE_NOTES.md
-          draft: false
-          prerelease: false
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+      
+      - name: Run tests
+        run: pytest tests/ --cov=src --cov-report=xml
+      
+      - name: Check coverage
+        run: |
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; print(ET.parse('coverage.xml').getroot().attrib['line-rate'])")
+          THRESHOLD=0.80
+          if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+            echo "Coverage ${COVERAGE} is below threshold ${THRESHOLD}"
+            exit 1
+          fi
+
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [validate, test]
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.production
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ inputs.version || github.ref_name }}
+            BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            VCS_REF=${{ github.sha }}
+
+  create_release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate, test, build]
+    permissions:
+      contents: write
+    outputs:
+      release_url: ${{ steps.create_release.outputs.html_url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          VERSION="${VERSION#v}"
+          
+          # Extract changelog section for this version
+          CHANGELOG=$(sed -n "/## \[${VERSION}\]/,/## \[/p" CHANGELOG.md | sed '$d')
+          
+          # Create release notes
+          cat > release_notes.md << EOF
+          # Release ${VERSION}
+          
+          ${CHANGELOG}
+          
+          ## Docker Images
+          
+          - \`${{ needs.build.outputs.image_tag }}\`
+          - Digest: \`${{ needs.build.outputs.image_digest }}\`
+          
+          ## Installation
+          
+          \`\`\`bash
+          # Docker
+          docker pull ${{ needs.build.outputs.image_tag }}
+          
+          # From source
+          git clone https://github.com/${{ github.repository }}.git
+          cd zakera
+          git checkout ${VERSION}
+          make install
+          \`\`\`
+          
+          ## Upgrade Guide
+          
+          See [UPGRADE.md](https://github.com/${{ github.repository }}/blob/${VERSION}/UPGRADE.md) for detailed upgrade instructions.
+          
+          ---
+          
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/v$(git describe --tags --abbrev=0 HEAD^)...${VERSION}
+          EOF
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ inputs.version || github.ref_name }}
+          release_name: Release ${{ inputs.version || github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ inputs.prerelease || false }}
+
+  deploy_staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [create_release]
+    if: ${{ !inputs.prerelease }}
+    environment:
+      name: staging
+      url: https://staging.zakera.app
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "Deploying ${{ inputs.version || github.ref_name }} to staging"
+          # Add actual deployment commands here
+          # kubectl set image deployment/zakera zakera=${{ needs.build.outputs.image_tag }}
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests on staging"
+          # Add smoke test commands
+          # curl -f https://staging.zakera.app/api/v1/monitoring/health
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [create_release, deploy_staging]
+    if: always()
+    steps:
+      - name: Notify Slack
+        if: success()
+        run: |
+          # Add Slack notification
+          echo "Release ${{ inputs.version || github.ref_name }} successful!"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Release ${{ inputs.version || github.ref_name }} failed!"
