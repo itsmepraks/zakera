@@ -1,126 +1,110 @@
 version: '3.8'
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: zakera-postgres
-    environment:
-      POSTGRES_DB: zakera
-      POSTGRES_USER: zakera
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zakera_dev_password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zakera"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - zakera-network
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: zakera-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-zakera_redis_password}
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - zakera-network
-
-  # Backend API
-  backend:
+  # Main application
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-      target: backend
-    container_name: zakera-backend
-    environment:
-      # API Configuration
-      API_HOST: 0.0.0.0
-      API_PORT: 8000
-      DEBUG: ${DEBUG:-false}
-      
-      # Database
-      DATABASE_URL: postgresql://zakera:${POSTGRES_PASSWORD:-zakera_dev_password}@postgres:5432/zakera
-      
-      # Redis
-      REDIS_URL: redis://:${REDIS_PASSWORD:-zakera_redis_password}@redis:6379/0
-      
-      # AI Model Configuration
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
-      MODEL_NAME: ${MODEL_NAME:-gpt-4-turbo-preview}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      
-      # Security
-      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:80}
-      
-      # Monitoring
-      ENABLE_METRICS: ${ENABLE_METRICS:-true}
-    volumes:
-      - ./src:/app/src
-      - ./config:/app/config
-      - app_data:/app/data
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./zakera.db
+      - REDIS_URL=redis://redis:6379
+      - OTLP_ENDPOINT=http://jaeger:4318
+      - TRACING_ENABLED=true
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    networks:
-      - zakera-network
+      - redis
+      - jaeger
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
     restart: unless-stopped
 
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: zakera-nginx
-    volumes:
-      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./src/frontend/.next:/usr/share/nginx/html:ro
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
     depends_on:
-      - backend
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - zakera-network
+      - prometheus
+    restart: unless-stopped
+
+  # AlertManager for alerting
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    restart: unless-stopped
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      # Jaeger UI
+      - "16686:16686"
+      # OTLP HTTP receiver
+      - "4318:4318"
+      # OTLP gRPC receiver  
+      - "4317:4317"
+      # Jaeger collector HTTP
+      - "14268:14268"
+      # Jaeger agent
+      - "6831:6831/udp"
+      # Zipkin compatible endpoint
+      - "9411:9411"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+    volumes:
+      - jaeger_data:/badger
     restart: unless-stopped
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  app_data:
-    driver: local
-
-networks:
-  zakera-network:
-    driver: bridge
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  jaeger_data:
