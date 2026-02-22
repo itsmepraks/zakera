@@ -57,6 +57,22 @@ prometheus-fastapi-instrumentator==6.1.0
 psutil==5.9.7
 py-cpuinfo==9.0.0
 
+# Distributed Tracing - OpenTelemetry
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-instrumentation==0.43b0
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-instrumentation-sqlalchemy==0.43b0
+opentelemetry-instrumentation-httpx==0.43b0
+opentelemetry-instrumentation-aiohttp-client==0.43b0
+opentelemetry-instrumentation-requests==0.43b0
+opentelemetry-exporter-jaeger==1.22.0
+opentelemetry-exporter-otlp==1.22.0
+opentelemetry-exporter-otlp-proto-grpc==1.22.0
+opentelemetry-exporter-otlp-proto-http==1.22.0
+opentelemetry-exporter-prometheus==0.43b0
+opentelemetry-semantic-conventions==0.43b0
+
 # Logging
 python-json-logger==2.0.7
 loguru==0.7.2

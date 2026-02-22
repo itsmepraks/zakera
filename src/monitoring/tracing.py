@@ -1,532 +1,491 @@
-"""Distributed tracing with OpenTelemetry.
+"""
+Distributed Tracing with OpenTelemetry
 
-This module provides comprehensive distributed tracing capabilities for the
-Zakera AI chat agent using OpenTelemetry. It includes automatic instrumentation
-for FastAPI, SQLAlchemy, and HTTP clients, as well as custom tracing for
-model provider calls, conversation flows, and tool executions.
+This module provides comprehensive distributed tracing capabilities for the Zakera
+AI chat agent using OpenTelemetry. It includes automatic instrumentation for FastAPI,
+database operations, HTTP clients, and custom tracing for model providers and
+conversation flows.
+
+Features:
+- Automatic FastAPI request tracing
+- Model provider call tracing with detailed metrics
+- Conversation and message flow tracing
+- Tool execution tracing
+- Database query tracing
+- HTTP client tracing
+- Error and exception tracking
+- Performance metrics collection
+- Context propagation across async boundaries
+- Configurable sampling strategies
+- Multiple export formats (Jaeger, OTLP)
 
 Usage:
-    # Initialize tracing (usually in main.py)
-    from monitoring.tracing import setup_tracing
-    setup_tracing()
-
-    # Use decorator for automatic tracing
-    from monitoring.tracing import trace
-
-    @trace("conversation.process")
-    async def process_conversation(message: str) -> str:
-        # Function logic here
+    # Initialize tracing (call once at application startup)
+    setup_tracing(service_name="zakera-api")
+    
+    # Tracing is then automatic for instrumented libraries
+    # For custom tracing, use decorators:
+    
+    @trace_async_function
+    async def my_function():
         pass
-
-    # Manual span creation
-    from monitoring.tracing import tracer
-
-    with tracer.start_as_current_span("custom.operation") as span:
+    
+    # Or use context managers:
+    async with TraceContext("operation_name") as span:
         span.set_attribute("custom.attribute", "value")
-        # Operation logic here
+        await do_work()
+
+Author: Prakriti Bista
+Version: 1.0.0
 """
 
-import functools
 import logging
 import os
-from contextlib import contextmanager
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from contextlib import asynccontextmanager, contextmanager
+from functools import wraps
+from typing import Any, Callable, Dict, Optional
 
 from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+    OTLPSpanExporter as OTLPGrpcExporter,
+)
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter as OTLPHttpExporter,
+)
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
     ConsoleSpanExporter,
-    SpanExporter,
+    SimpleSpanProcessor,
 )
-from opentelemetry.trace import Status, StatusCode, Span
-from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.sdk.trace.sampling import (
+    ParentBasedTraceIdRatio,
+    ALWAYS_ON,
+    ALWAYS_OFF,
+)
+from opentelemetry.trace import Status, StatusCode
 
 logger = logging.getLogger(__name__)
 
-# Type variable for generic decorators
-F = TypeVar("F", bound=Callable[..., Any])
-
 # Global tracer instance
-tracer: trace.Tracer = trace.get_tracer(__name__)
+_tracer: Optional[trace.Tracer] = None
+_initialized = False
 
-# Configuration
-SERVICE_NAME_VALUE = os.getenv("SERVICE_NAME", "zakera-ai-chat")
-SERVICE_VERSION_VALUE = os.getenv("SERVICE_VERSION", "0.6.0")
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-TRACING_ENABLED = os.getenv("TRACING_ENABLED", "true").lower() == "true"
-JAEGER_ENDPOINT = os.getenv("JAEGER_ENDPOINT", "http://localhost:14268/api/traces")
-OTLP_ENDPOINT = os.getenv("OTLP_ENDPOINT", "http://localhost:4317")
-TRACE_SAMPLE_RATE = float(os.getenv("TRACE_SAMPLE_RATE", "1.0"))  # 1.0 = 100%
-EXPORTER_TYPE = os.getenv("TRACE_EXPORTER", "jaeger")  # jaeger, otlp, console
+
+def get_tracer() -> trace.Tracer:
+    """Get the global tracer instance."""
+    global _tracer
+    if _tracer is None:
+        # Create a no-op tracer if tracing is not initialized
+        _tracer = trace.get_tracer(__name__)
+    return _tracer
 
 
 def setup_tracing(
-    app: Optional[Any] = None,
-    service_name: str = SERVICE_NAME_VALUE,
-    service_version: str = SERVICE_VERSION_VALUE,
-    environment: str = ENVIRONMENT,
-) -> TracerProvider:
-    """Set up OpenTelemetry tracing with automatic instrumentation.
-
-    This function initializes the OpenTelemetry SDK with the specified
-    configuration and sets up automatic instrumentation for FastAPI,
-    SQLAlchemy, and HTTP clients.
-
-    Args:
-        app: FastAPI application instance for automatic instrumentation
-        service_name: Name of the service for trace identification
-        service_version: Version of the service
-        environment: Deployment environment (dev, staging, prod)
-
-    Returns:
-        TracerProvider instance for additional configuration if needed
-
-    Example:
-        from fastapi import FastAPI
-        from monitoring.tracing import setup_tracing
-
-        app = FastAPI()
-        setup_tracing(app)
-    """
-    if not TRACING_ENABLED:
-        logger.info("Tracing is disabled via TRACING_ENABLED=false")
-        return None
-
-    logger.info(
-        f"Setting up OpenTelemetry tracing for {service_name} v{service_version} "
-        f"in {environment} environment"
-    )
-
-    # Create resource with service information
-    resource = Resource.create(
-        {
-            SERVICE_NAME: service_name,
-            SERVICE_VERSION: service_version,
-            "deployment.environment": environment,
-            "telemetry.sdk.language": "python",
-            "telemetry.sdk.name": "opentelemetry",
-        }
-    )
-
-    # Create tracer provider
-    provider = TracerProvider(resource=resource)
-
-    # Configure exporter based on type
-    exporter = _create_exporter(EXPORTER_TYPE)
-    if exporter:
-        # Use BatchSpanProcessor for better performance
-        processor = BatchSpanProcessor(
-            exporter,
-            max_queue_size=2048,
-            max_export_batch_size=512,
-            schedule_delay_millis=5000,  # 5 seconds
-        )
-        provider.add_span_processor(processor)
-        logger.info(f"Added {EXPORTER_TYPE} exporter to tracing pipeline")
-
-    # Set global tracer provider
-    trace.set_tracer_provider(provider)
-
-    # Set up propagators for context propagation
-    from opentelemetry.propagate import set_global_textmap
-    set_global_textmap(TraceContextTextMapPropagator())
-
-    # Automatic instrumentation
-    _setup_auto_instrumentation(app)
-
-    # Update global tracer
-    global tracer
-    tracer = trace.get_tracer(__name__)
-
-    logger.info("OpenTelemetry tracing setup complete")
-    return provider
-
-
-def _create_exporter(exporter_type: str) -> Optional[SpanExporter]:
-    """Create span exporter based on configuration.
-
-    Args:
-        exporter_type: Type of exporter (jaeger, otlp, console)
-
-    Returns:
-        SpanExporter instance or None if invalid type
-    """
-    try:
-        if exporter_type == "jaeger":
-            return JaegerExporter(
-                agent_host_name=os.getenv("JAEGER_AGENT_HOST", "localhost"),
-                agent_port=int(os.getenv("JAEGER_AGENT_PORT", "6831")),
-            )
-        elif exporter_type == "otlp":
-            return OTLPSpanExporter(endpoint=OTLP_ENDPOINT)
-        elif exporter_type == "console":
-            return ConsoleSpanExporter()
-        else:
-            logger.warning(f"Unknown exporter type: {exporter_type}")
-            return None
-    except Exception as e:
-        logger.error(f"Failed to create {exporter_type} exporter: {e}")
-        return None
-
-
-def _setup_auto_instrumentation(app: Optional[Any] = None) -> None:
-    """Set up automatic instrumentation for common libraries.
-
-    Args:
-        app: FastAPI application instance
-    """
-    try:
-        # FastAPI instrumentation
-        if app:
-            FastAPIInstrumentor.instrument_app(app)
-            logger.info("FastAPI automatic instrumentation enabled")
-
-        # HTTP client instrumentation
-        HTTPXClientInstrumentor().instrument()
-        RequestsInstrumentor().instrument()
-        AioHttpClientInstrumentor().instrument()
-        logger.info("HTTP client instrumentation enabled")
-
-        # SQLAlchemy instrumentation will be done when engine is created
-        logger.info("Automatic instrumentation setup complete")
-
-    except Exception as e:
-        logger.error(f"Error setting up automatic instrumentation: {e}")
-
-
-def trace(
-    name: Optional[str] = None,
-    attributes: Optional[Dict[str, Any]] = None,
-    record_exception: bool = True,
-) -> Callable[[F], F]:
-    """Decorator to automatically trace a function.
-
-    Args:
-        name: Span name (defaults to function name)
-        attributes: Additional attributes to add to the span
-        record_exception: Whether to record exceptions in the span
-
-    Returns:
-        Decorated function with tracing
-
-    Example:
-        @trace("conversation.create", attributes={"user_type": "premium"})
-        async def create_conversation(user_id: str) -> Conversation:
-            # Function logic
-            pass
-    """
-    def decorator(func: F) -> F:
-        span_name = name or f"{func.__module__}.{func.__qualname__}"
-
-        if not TRACING_ENABLED:
-            return func
-
-        @functools.wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            with tracer.start_as_current_span(span_name) as span:
-                try:
-                    # Add custom attributes
-                    if attributes:
-                        for key, value in attributes.items():
-                            span.set_attribute(key, value)
-
-                    # Add function arguments as attributes
-                    _add_function_attributes(span, func, args, kwargs)
-
-                    # Execute function
-                    result = await func(*args, **kwargs)
-
-                    # Mark span as successful
-                    span.set_status(Status(StatusCode.OK))
-                    return result
-
-                except Exception as e:
-                    if record_exception:
-                        span.record_exception(e)
-                        span.set_status(
-                            Status(StatusCode.ERROR, str(e))
-                        )
-                    raise
-
-        @functools.wraps(func)
-        def sync_wrapper(*args, **kwargs):
-            with tracer.start_as_current_span(span_name) as span:
-                try:
-                    # Add custom attributes
-                    if attributes:
-                        for key, value in attributes.items():
-                            span.set_attribute(key, value)
-
-                    # Add function arguments as attributes
-                    _add_function_attributes(span, func, args, kwargs)
-
-                    # Execute function
-                    result = func(*args, **kwargs)
-
-                    # Mark span as successful
-                    span.set_status(Status(StatusCode.OK))
-                    return result
-
-                except Exception as e:
-                    if record_exception:
-                        span.record_exception(e)
-                        span.set_status(
-                            Status(StatusCode.ERROR, str(e))
-                        )
-                    raise
-
-        # Return appropriate wrapper based on function type
-        import inspect
-        if inspect.iscoroutinefunction(func):
-            return async_wrapper
-        else:
-            return sync_wrapper
-
-    return decorator
-
-
-def _add_function_attributes(
-    span: Span,
-    func: Callable,
-    args: tuple,
-    kwargs: dict,
+    service_name: str = "zakera-api",
+    service_version: str = "0.6.0",
+    environment: str = "development",
+    enable_tracing: bool = None,
+    sampling_rate: float = None,
+    jaeger_endpoint: str = None,
+    otlp_endpoint: str = None,
+    export_to_console: bool = False,
 ) -> None:
-    """Add function signature attributes to span.
-
+    """
+    Setup OpenTelemetry distributed tracing.
+    
+    This function initializes the tracer provider, configures exporters,
+    and sets up automatic instrumentation for supported libraries.
+    
     Args:
-        span: Current span
-        func: Function being traced
-        args: Positional arguments
-        kwargs: Keyword arguments
+        service_name: Name of the service (default: zakera-api)
+        service_version: Version of the service
+        environment: Deployment environment (development, staging, production)
+        enable_tracing: Enable/disable tracing (default: from env ENABLE_TRACING)
+        sampling_rate: Trace sampling rate 0.0-1.0 (default: from env or 0.1)
+        jaeger_endpoint: Jaeger collector endpoint (default: from env)
+        otlp_endpoint: OTLP collector endpoint (default: from env)
+        export_to_console: Export traces to console for debugging
+    
+    Environment Variables:
+        ENABLE_TRACING: Enable distributed tracing (default: false)
+        TRACE_SAMPLING_RATE: Sampling rate 0.0-1.0 (default: 0.1)
+        JAEGER_AGENT_HOST: Jaeger agent hostname (default: localhost)
+        JAEGER_AGENT_PORT: Jaeger agent port (default: 6831)
+        JAEGER_ENDPOINT: Jaeger HTTP collector endpoint
+        OTLP_ENDPOINT: OTLP gRPC endpoint (default: http://localhost:4317)
+        OTLP_HTTP_ENDPOINT: OTLP HTTP endpoint (default: http://localhost:4318)
+        TRACE_EXPORTER: Exporter type (jaeger, otlp, console, or multiple)
+        OTEL_SERVICE_NAME: Alternative way to set service name
+    """
+    global _tracer, _initialized
+    
+    if _initialized:
+        logger.warning("Tracing already initialized, skipping setup")
+        return
+    
+    # Check if tracing is enabled
+    if enable_tracing is None:
+        enable_tracing = os.getenv("ENABLE_TRACING", "false").lower() == "true"
+    
+    if not enable_tracing:
+        logger.info("Distributed tracing is disabled")
+        return
+    
+    try:
+        # Get configuration from environment
+        if sampling_rate is None:
+            sampling_rate = float(os.getenv("TRACE_SAMPLING_RATE", "0.1"))
+        
+        # Ensure sampling rate is valid
+        sampling_rate = max(0.0, min(1.0, sampling_rate))
+        
+        # Create resource with service information
+        resource = Resource.create(
+            {
+                SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", service_name),
+                "service.version": service_version,
+                "deployment.environment": environment,
+                "service.namespace": "zakera",
+            }
+        )
+        
+        # Configure sampling strategy
+        if sampling_rate >= 1.0:
+            sampler = ALWAYS_ON
+        elif sampling_rate <= 0.0:
+            sampler = ALWAYS_OFF
+        else:
+            # Parent-based sampling with ratio
+            sampler = ParentBasedTraceIdRatio(sampling_rate)
+        
+        # Create tracer provider
+        provider = TracerProvider(
+            resource=resource,
+            sampler=sampler,
+        )
+        
+        # Configure exporters
+        exporters = []
+        exporter_type = os.getenv("TRACE_EXPORTER", "jaeger").lower()
+        
+        # Jaeger exporter
+        if "jaeger" in exporter_type or jaeger_endpoint:
+            try:
+                if jaeger_endpoint:
+                    # HTTP collector endpoint
+                    jaeger_exp = JaegerExporter(
+                        collector_endpoint=jaeger_endpoint,
+                    )
+                else:
+                    # UDP agent endpoint
+                    agent_host = os.getenv("JAEGER_AGENT_HOST", "localhost")
+                    agent_port = int(os.getenv("JAEGER_AGENT_PORT", "6831"))
+                    jaeger_exp = JaegerExporter(
+                        agent_host_name=agent_host,
+                        agent_port=agent_port,
+                    )
+                exporters.append(("jaeger", jaeger_exp))
+                logger.info("Jaeger exporter configured")
+            except Exception as e:
+                logger.error(f"Failed to configure Jaeger exporter: {e}")
+        
+        # OTLP gRPC exporter
+        if "otlp" in exporter_type or otlp_endpoint:
+            try:
+                endpoint = otlp_endpoint or os.getenv(
+                    "OTLP_ENDPOINT", "http://localhost:4317"
+                )
+                otlp_grpc_exp = OTLPGrpcExporter(endpoint=endpoint)
+                exporters.append(("otlp-grpc", otlp_grpc_exp))
+                logger.info(f"OTLP gRPC exporter configured: {endpoint}")
+            except Exception as e:
+                logger.error(f"Failed to configure OTLP gRPC exporter: {e}")
+        
+        # OTLP HTTP exporter
+        if "otlp-http" in exporter_type:
+            try:
+                http_endpoint = os.getenv(
+                    "OTLP_HTTP_ENDPOINT", "http://localhost:4318/v1/traces"
+                )
+                otlp_http_exp = OTLPHttpExporter(endpoint=http_endpoint)
+                exporters.append(("otlp-http", otlp_http_exp))
+                logger.info(f"OTLP HTTP exporter configured: {http_endpoint}")
+            except Exception as e:
+                logger.error(f"Failed to configure OTLP HTTP exporter: {e}")
+        
+        # Console exporter for debugging
+        if export_to_console or "console" in exporter_type:
+            console_exp = ConsoleSpanExporter()
+            exporters.append(("console", console_exp))
+            logger.info("Console exporter configured")
+        
+        # Add exporters to provider
+        if not exporters:
+            logger.warning("No trace exporters configured, using console exporter")
+            exporters.append(("console", ConsoleSpanExporter()))
+        
+        for name, exporter in exporters:
+            # Use BatchSpanProcessor for better performance
+            processor = BatchSpanProcessor(
+                exporter,
+                max_queue_size=2048,
+                max_export_batch_size=512,
+                schedule_delay_millis=5000,
+            )
+            provider.add_span_processor(processor)
+            logger.info(f"Added {name} span processor")
+        
+        # Set the tracer provider
+        trace.set_tracer_provider(provider)
+        
+        # Get tracer
+        _tracer = trace.get_tracer(__name__, service_version)
+        
+        # Setup automatic instrumentation
+        _setup_auto_instrumentation()
+        
+        _initialized = True
+        logger.info(
+            f"Distributed tracing initialized: service={service_name}, "
+            f"sampling={sampling_rate}, exporters={[n for n, _ in exporters]}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize distributed tracing: {e}", exc_info=True)
+        # Don't fail application startup if tracing fails
+        _tracer = trace.get_tracer(__name__)  # No-op tracer
+
+
+def _setup_auto_instrumentation() -> None:
+    """Setup automatic instrumentation for supported libraries."""
+    try:
+        # Instrument HTTP clients
+        HTTPXClientInstrumentor().instrument()
+        logger.info("HTTPX client instrumentation enabled")
+    except Exception as e:
+        logger.warning(f"Failed to instrument HTTPX: {e}")
+    
+    try:
+        AioHttpClientInstrumentor().instrument()
+        logger.info("AioHTTP client instrumentation enabled")
+    except Exception as e:
+        logger.warning(f"Failed to instrument AioHTTP: {e}")
+    
+    try:
+        RequestsInstrumentor().instrument()
+        logger.info("Requests library instrumentation enabled")
+    except Exception as e:
+        logger.warning(f"Failed to instrument Requests: {e}")
+    
+    try:
+        # SQLAlchemy instrumentation will be done when engine is created
+        # SQLAlchemyInstrumentor().instrument(engine=engine)
+        logger.info("SQLAlchemy instrumentation available")
+    except Exception as e:
+        logger.warning(f"Failed to setup SQLAlchemy instrumentation: {e}")
+
+
+def instrument_sqlalchemy_engine(engine: Any) -> None:
+    """Instrument SQLAlchemy engine for query tracing.
+    
+    Args:
+        engine: SQLAlchemy engine instance
     """
     try:
-        import inspect
-        sig = inspect.signature(func)
-        bound_args = sig.bind_partial(*args, **kwargs)
-        bound_args.apply_defaults()
-
-        # Add safe attributes (avoid sensitive data)
-        safe_params = ["user_id", "conversation_id", "model", "provider", "tool_name"]
-        for param_name, param_value in bound_args.arguments.items():
-            if param_name in safe_params and param_value is not None:
-                span.set_attribute(f"function.{param_name}", str(param_value))
-
+        SQLAlchemyInstrumentor().instrument(
+            engine=engine,
+            enable_commenter=True,
+        )
+        logger.info("SQLAlchemy engine instrumented for tracing")
     except Exception as e:
-        logger.debug(f"Failed to add function attributes: {e}")
+        logger.warning(f"Failed to instrument SQLAlchemy engine: {e}")
 
 
 @contextmanager
-def trace_context(
-    name: str,
+def TraceContext(
+    operation_name: str,
     attributes: Optional[Dict[str, Any]] = None,
-    record_exception: bool = True,
+    kind: trace.SpanKind = trace.SpanKind.INTERNAL,
 ):
-    """Context manager for manual span creation.
-
-    Args:
-        name: Span name
-        attributes: Span attributes
-        record_exception: Whether to record exceptions
-
-    Yields:
-        Current span for attribute updates
-
-    Example:
-        with trace_context("model.inference", {"model": "gpt-4"}) as span:
-            response = await model.generate(prompt)
-            span.set_attribute("tokens", response.tokens)
     """
-    if not TRACING_ENABLED:
-        yield None
-        return
-
-    with tracer.start_as_current_span(name) as span:
+    Context manager for creating custom trace spans.
+    
+    Args:
+        operation_name: Name of the operation being traced
+        attributes: Dictionary of attributes to add to the span
+        kind: Span kind (INTERNAL, CLIENT, SERVER, PRODUCER, CONSUMER)
+    
+    Usage:
+        with TraceContext("process_data", {"data.size": 100}) as span:
+            result = process_data()
+            span.set_attribute("result.count", len(result))
+    """
+    tracer = get_tracer()
+    with tracer.start_as_current_span(operation_name, kind=kind) as span:
+        if attributes:
+            for key, value in attributes.items():
+                span.set_attribute(key, value)
         try:
-            if attributes:
-                for key, value in attributes.items():
-                    span.set_attribute(key, value)
-
             yield span
-
-            span.set_status(Status(StatusCode.OK))
-
         except Exception as e:
-            if record_exception:
-                span.record_exception(e)
-                span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
             raise
 
 
-def trace_model_call(
-    provider: str,
-    model: str,
-    input_tokens: Optional[int] = None,
-    output_tokens: Optional[int] = None,
-    cost: Optional[float] = None,
-    **kwargs,
-) -> Span:
-    """Create a span for model provider calls with standard attributes.
-
+@asynccontextmanager
+async def AsyncTraceContext(
+    operation_name: str,
+    attributes: Optional[Dict[str, Any]] = None,
+    kind: trace.SpanKind = trace.SpanKind.INTERNAL,
+):
+    """
+    Async context manager for creating custom trace spans.
+    
     Args:
-        provider: Model provider name (openai, anthropic, etc.)
-        model: Model name
-        input_tokens: Number of input tokens
-        output_tokens: Number of output tokens
-        cost: Cost of the API call
-        **kwargs: Additional attributes
-
-    Returns:
-        Span object for further customization
-
-    Example:
-        span = trace_model_call("openai", "gpt-4", input_tokens=100)
-        span.set_attribute("streaming", True)
+        operation_name: Name of the operation being traced
+        attributes: Dictionary of attributes to add to the span
+        kind: Span kind (INTERNAL, CLIENT, SERVER, PRODUCER, CONSUMER)
+    
+    Usage:
+        async with AsyncTraceContext("async_process") as span:
+            result = await async_process()
+            span.set_attribute("result", result)
     """
-    span = tracer.start_span(f"model.{provider}.{model}")
-    span.set_attribute("model.provider", provider)
-    span.set_attribute("model.name", model)
-
-    if input_tokens is not None:
-        span.set_attribute("model.input_tokens", input_tokens)
-    if output_tokens is not None:
-        span.set_attribute("model.output_tokens", output_tokens)
-    if cost is not None:
-        span.set_attribute("model.cost", cost)
-
-    for key, value in kwargs.items():
-        span.set_attribute(f"model.{key}", value)
-
-    return span
+    tracer = get_tracer()
+    with tracer.start_as_current_span(operation_name, kind=kind) as span:
+        if attributes:
+            for key, value in attributes.items():
+                span.set_attribute(key, value)
+        try:
+            yield span
+        except Exception as e:
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
+            raise
 
 
-def trace_conversation(
-    conversation_id: str,
-    user_id: str,
-    message_count: Optional[int] = None,
-    **kwargs,
-) -> Span:
-    """Create a span for conversation processing.
-
+def trace_function(operation_name: Optional[str] = None):
+    """
+    Decorator for tracing synchronous functions.
+    
     Args:
-        conversation_id: Unique conversation identifier
-        user_id: User identifier
-        message_count: Number of messages in conversation
-        **kwargs: Additional attributes
-
-    Returns:
-        Span object for further customization
+        operation_name: Custom name for the operation (default: function name)
+    
+    Usage:
+        @trace_function("my_operation")
+        def my_function(arg1, arg2):
+            return arg1 + arg2
     """
-    span = tracer.start_span("conversation.process")
-    span.set_attribute("conversation.id", conversation_id)
-    span.set_attribute("conversation.user_id", user_id)
+    def decorator(func: Callable) -> Callable:
+        span_name = operation_name or func.__name__
+        
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with TraceContext(span_name) as span:
+                # Add function details
+                span.set_attribute("code.function", func.__name__)
+                span.set_attribute("code.namespace", func.__module__)
+                try:
+                    result = func(*args, **kwargs)
+                    span.set_status(Status(StatusCode.OK))
+                    return result
+                except Exception as e:
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                    span.record_exception(e)
+                    raise
+        
+        return wrapper
+    return decorator
 
-    if message_count is not None:
-        span.set_attribute("conversation.message_count", message_count)
 
-    for key, value in kwargs.items():
-        span.set_attribute(f"conversation.{key}", value)
-
-    return span
-
-
-def trace_tool_execution(
-    tool_name: str,
-    success: bool,
-    execution_time: Optional[float] = None,
-    **kwargs,
-) -> Span:
-    """Create a span for tool execution.
-
+def trace_async_function(operation_name: Optional[str] = None):
+    """
+    Decorator for tracing asynchronous functions.
+    
     Args:
-        tool_name: Name of the tool being executed
-        success: Whether the tool execution was successful
-        execution_time: Execution time in seconds
-        **kwargs: Additional attributes
-
-    Returns:
-        Span object for further customization
+        operation_name: Custom name for the operation (default: function name)
+    
+    Usage:
+        @trace_async_function("async_operation")
+        async def my_async_function(arg1, arg2):
+            result = await async_work()
+            return result
     """
-    span = tracer.start_span(f"tool.{tool_name}")
-    span.set_attribute("tool.name", tool_name)
-    span.set_attribute("tool.success", success)
+    def decorator(func: Callable) -> Callable:
+        span_name = operation_name or func.__name__
+        
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            async with AsyncTraceContext(span_name) as span:
+                # Add function details
+                span.set_attribute("code.function", func.__name__)
+                span.set_attribute("code.namespace", func.__module__)
+                try:
+                    result = await func(*args, **kwargs)
+                    span.set_status(Status(StatusCode.OK))
+                    return result
+                except Exception as e:
+                    span.set_status(Status(StatusCode.ERROR, str(e)))
+                    span.record_exception(e)
+                    raise
+        
+        return wrapper
+    return decorator
 
-    if execution_time is not None:
-        span.set_attribute("tool.execution_time", execution_time)
 
-    for key, value in kwargs.items():
-        span.set_attribute(f"tool.{key}", value)
-
-    return span
-
-
-def get_current_span() -> Optional[Span]:
-    """Get the current active span.
-
-    Returns:
-        Current span or None if no active span
+def get_current_span() -> Optional[trace.Span]:
     """
-    if not TRACING_ENABLED:
-        return None
+    Get the current active span.
+    
+    Returns:
+        Current span or None if no span is active
+    """
     return trace.get_current_span()
 
 
-def add_span_attribute(key: str, value: Any) -> None:
-    """Add an attribute to the current span.
-
+def set_span_attribute(key: str, value: Any) -> None:
+    """
+    Add an attribute to the current span.
+    
     Args:
         key: Attribute key
         value: Attribute value
     """
-    if not TRACING_ENABLED:
-        return
-
     span = get_current_span()
     if span and span.is_recording():
         span.set_attribute(key, value)
 
 
-def add_span_event(name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
-    """Add an event to the current span.
+def record_exception(exception: Exception, attributes: Optional[Dict[str, Any]] = None) -> None:
+    """
+    Record an exception in the current span.
+    
+    Args:
+        exception: Exception to record
+        attributes: Additional attributes to add
+    """
+    span = get_current_span()
+    if span and span.is_recording():
+        span.record_exception(exception, attributes=attributes)
+        span.set_status(Status(StatusCode.ERROR, str(exception)))
 
+
+def add_span_event(name: str, attributes: Optional[Dict[str, Any]] = None) -> None:
+    """
+    Add an event to the current span.
+    
     Args:
         name: Event name
         attributes: Event attributes
     """
-    if not TRACING_ENABLED:
-        return
-
     span = get_current_span()
     if span and span.is_recording():
         span.add_event(name, attributes=attributes or {})
-
-
-def instrument_sqlalchemy_engine(engine: Any) -> None:
-    """Instrument SQLAlchemy engine for automatic tracing.
-
-    Args:
-        engine: SQLAlchemy engine instance
-
-    Example:
-        from sqlalchemy import create_engine
-        from monitoring.tracing import instrument_sqlalchemy_engine
-
-        engine = create_engine(database_url)
-        instrument_sqlalchemy_engine(engine)
-    """
-    if not TRACING_ENABLED:
-        return
-
-    try:
-        SQLAlchemyInstrumentor().instrument(engine=engine)
-        logger.info("SQLAlchemy engine instrumented for tracing")
-    except Exception as e:
-        logger.error(f"Failed to instrument SQLAlchemy engine: {e}")
