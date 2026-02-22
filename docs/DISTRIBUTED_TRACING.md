@@ -1,232 +1,169 @@
 # Distributed Tracing with OpenTelemetry
 
+Comprehensive guide to distributed tracing in Zakera AI chat agent using OpenTelemetry and Jaeger.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Trace Visualization](#trace-visualization)
+- [Custom Tracing](#custom-tracing)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
+- [Performance Tuning](#performance-tuning)
+- [Production Deployment](#production-deployment)
+
 ## Overview
 
-Zakera uses OpenTelemetry for comprehensive distributed tracing, providing deep visibility into system performance, request flows, and debugging capabilities across all components.
+### What is Distributed Tracing?
 
-## Features
+Distributed tracing provides end-to-end visibility into requests as they flow through your application. Each request creates a "trace" consisting of multiple "spans" representing individual operations.
 
-### Automatic Instrumentation
-- **FastAPI**: All HTTP requests, routes, and exceptions
-- **SQLAlchemy**: Database queries with SQL comments
-- **HTTPX/AioHTTP/Requests**: All HTTP client calls
-- **Async Operations**: Full support for async/await patterns
+### Benefits
 
-### Custom Tracing
-- Model provider calls with token usage and costs
-- Conversation processing across multiple turns
-- Tool executions with input/output capture
-- Custom business logic spans
-- Performance metrics embedded in traces
+- 🔍 **End-to-end visibility**: See entire request flow from API call to model response
+- 🐛 **Faster debugging**: Identify bottlenecks and errors quickly
+- 📊 **Performance optimization**: Find slow operations and optimize them
+- 💰 **Cost analysis**: Track model usage and costs by user/conversation
+- 🎯 **SLA monitoring**: Ensure response times meet requirements
+- 🔗 **Dependency mapping**: Understand service interactions
 
-### Trace Visualization
-- Jaeger UI for exploring traces
-- Service dependency graphs
-- Latency analysis and percentiles
-- Error tracking and debugging
-- Request flow visualization
+### What Gets Traced?
+
+Zakera automatically traces:
+
+✅ **API Requests** - All HTTP endpoints with request/response details  
+✅ **Model Provider Calls** - OpenAI, Anthropic, Gemini, Ollama, etc.  
+✅ **Conversations** - Message creation, retrieval, updates  
+✅ **Tool Executions** - Built-in and custom tool calls  
+✅ **Database Operations** - Queries, transactions, connections  
+✅ **Cache Operations** - Redis and in-memory cache access  
+✅ **Authentication** - Login, token validation, MFA  
+✅ **WebSocket** - Real-time messaging connections  
 
 ## Quick Start
 
-### 1. Start Jaeger Backend
+### 1. Enable Tracing
 
 ```bash
-# Using Docker Compose (recommended)
-docker-compose up -d jaeger
-
-# Access Jaeger UI
-open http://localhost:16686
+# In your .env file
+ENABLE_TRACING=true
+TRACE_SAMPLING_RATE=1.0  # 100% for development
+OTLP_ENDPOINT=http://localhost:4317
 ```
 
-### 2. Configure Tracing
+### 2. Start Jaeger
 
 ```bash
-# .env file
-TRACING_ENABLED=true
-OTLP_ENDPOINT=http://localhost:4318
-TRACING_SAMPLING_RATE=1.0  # 100% sampling (use 0.1 for 10% in production)
+# Start all services including Jaeger
+docker-compose up -d
+
+# Or start Jaeger standalone
+docker run -d --name jaeger \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  -p 4318:4318 \
+  jaegertracing/all-in-one:1.52
 ```
 
-### 3. Initialize in Application
+### 3. Access Jaeger UI
 
-```python
-from fastapi import FastAPI
-from src.monitoring.tracing import setup_tracing, instrument_fastapi
+Open http://localhost:16686 in your browser.
 
-# Initialize tracing
-setup_tracing(
-    service_name="zakera-api",
-    service_version="0.6.0",
-    environment="production"
-)
+### 4. Generate Traces
 
-# Create FastAPI app
-app = FastAPI()
-
-# Instrument app with automatic tracing
-instrument_fastapi(app)
+```bash
+# Make API requests
+curl -X POST http://localhost:8000/api/v1/chat/send \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"message": "Hello, AI!", "model": "gpt-3.5-turbo"}'
 ```
 
-## Usage Examples
+### 5. View Traces
 
-### Decorator Pattern (Recommended)
-
-```python
-from src.monitoring.tracing import trace_function
-
-@trace_function("process_user_message")
-async def process_message(user_id: str, message: str):
-    # Automatically traced with:
-    # - Function name
-    # - Execution time
-    # - Exceptions (if any)
-    result = await model.generate(message)
-    return result
-```
-
-### Context Manager Pattern
-
-```python
-from src.monitoring.tracing import trace_span
-
-async def complex_operation():
-    with trace_span("database.query", {"table": "conversations"}) as span:
-        results = await db.query(...)
-        span.set_attribute("results.count", len(results))
-        span.add_event("query_complete")
-        return results
-```
-
-### Model Call Tracing
-
-```python
-from src.monitoring.tracing import trace_model_call
-
-async def call_openai(prompt: str):
-    with trace_model_call(
-        provider="openai",
-        model="gpt-4",
-        input_tokens=100,
-        output_tokens=50,
-        cost=0.003
-    ) as span:
-        response = await openai_client.chat.completions.create(...)
-        span.add_event("response_received")
-        return response
-```
-
-### Conversation Tracing
-
-```python
-from src.monitoring.tracing import trace_conversation
-
-async def handle_conversation(conv_id: str, user_id: str):
-    with trace_conversation(
-        conversation_id=conv_id,
-        user_id=user_id,
-        message_count=10
-    ) as span:
-        history = await get_history(conv_id)
-        span.set_attribute("history.tokens", calculate_tokens(history))
-        return history
-```
-
-### Tool Execution Tracing
-
-```python
-from src.monitoring.tracing import trace_tool_execution
-
-async def execute_web_search(query: str):
-    with trace_tool_execution(
-        tool_name="web_search",
-        tool_input={"query": query}
-    ) as span:
-        results = await search_api.search(query)
-        span.set_attribute("results.count", len(results))
-        span.set_attribute("results.relevance", results[0].score)
-        return results
-```
-
-### Adding Events to Current Span
-
-```python
-from src.monitoring.tracing import add_trace_event
-
-async def process_with_cache(key: str):
-    # Check cache
-    if cached := await cache.get(key):
-        add_trace_event("cache_hit", {"cache.key": key})
-        return cached
-    
-    add_trace_event("cache_miss", {"cache.key": key})
-    result = await expensive_operation()
-    await cache.set(key, result)
-    return result
-```
-
-### Trace ID for Log Correlation
-
-```python
-from src.monitoring.tracing import get_trace_id
-import logging
-
-logger = logging.getLogger(__name__)
-
-async def handle_request(request_id: str):
-    trace_id = get_trace_id()
-    logger.info(
-        f"Processing request",
-        extra={
-            "request_id": request_id,
-            "trace_id": trace_id
-        }
-    )
-```
+1. Go to Jaeger UI (http://localhost:16686)
+2. Select service: `zakera-api`
+3. Click "Find Traces"
+4. Click on a trace to see details
 
 ## Architecture
 
-### Components
+### OpenTelemetry Components
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│   Zakera    │─────▶│ OpenTelemetry│─────▶│   Jaeger    │
-│ Application │      │   Collector  │      │   Backend   │
-└─────────────┘      └──────────────┘      └─────────────┘
-       │                                           │
-       │                                           ▼
-       │                                    ┌─────────────┐
-       │                                    │  Jaeger UI  │
-       │                                    │(Port 16686) │
-       │                                    └─────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────┐
-│              Automatic Instrumentation               │
-├──────────────────────────────────────────────────────┤
-│ • FastAPI (HTTP requests, routes, errors)            │
-│ • SQLAlchemy (database queries)                      │
-│ • HTTPX/AioHTTP (HTTP client calls)                  │
-│ • Custom spans (models, conversations, tools)        │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    Zakera Application                   │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         OpenTelemetry SDK & API                  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          │                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │      Automatic Instrumentation                   │  │
+│  │  • FastAPI (HTTP requests)                       │  │
+│  │  • SQLAlchemy (DB queries)                       │  │
+│  │  • HTTPX/AioHTTP (HTTP clients)                  │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          │                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │      Custom Instrumentation                      │  │
+│  │  • Model provider calls                          │  │
+│  │  • Conversation flows                            │  │
+│  │  • Tool executions                               │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          │                              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │         Batch Span Processor                     │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          │                              │
+└──────────────────────────┼──────────────────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ OTLP Exporter   │
+                  └─────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Jaeger Collector│
+                  └─────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │  Jaeger Storage │
+                  │  (Elasticsearch)│
+                  └─────────────────┘
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │   Jaeger UI     │
+                  │ (Visualization) │
+                  └─────────────────┘
 ```
 
-### Trace Flow
+### Trace Structure
+
+A typical chat request trace:
 
 ```
-HTTP Request
-    │
-    ├─ FastAPI Span (automatic)
-    │   ├─ Authentication Span
-    │   ├─ Conversation Span (custom)
-    │   │   ├─ Database Query Span (automatic)
-    │   │   └─ Memory Retrieval Span (custom)
-    │   ├─ Model Provider Span (custom)
-    │   │   ├─ Token Counting Span
-    │   │   ├─ API Call Span (automatic via HTTPX)
-    │   │   └─ Response Processing Span
-    │   └─ Tool Execution Span (custom)
-    │       └─ HTTP Request Span (automatic)
-    └─ Response
+POST /api/v1/chat/send                    [150ms total]
+├── auth.validate_token                   [5ms]
+├── conversation.get_or_create            [20ms]
+│   └── db.query.select_conversation      [15ms]
+├── conversation.add_message              [10ms]
+│   └── db.query.insert_message           [8ms]
+├── model.openai.chat_completion          [100ms]
+│   ├── cache.check                       [2ms]
+│   ├── http.post.openai_api              [95ms]
+│   └── cache.set                         [3ms]
+├── conversation.update_metadata          [8ms]
+│   └── db.query.update_conversation      [6ms]
+└── response.serialize                    [7ms]
 ```
 
 ## Configuration
@@ -234,342 +171,635 @@ HTTP Request
 ### Environment Variables
 
 ```bash
-# Enable/disable tracing
-TRACING_ENABLED=true
+# Basic Configuration
+ENABLE_TRACING=true                    # Enable/disable tracing
+TRACE_SAMPLING_RATE=0.1                # Sample 10% of requests
+OTEL_SERVICE_NAME=zakera-api           # Service name in traces
+OTEL_SERVICE_VERSION=0.6.0             # Service version
+OTEL_DEPLOYMENT_ENVIRONMENT=production # Environment tag
 
-# OTLP endpoint (Jaeger collector)
-OTLP_ENDPOINT=http://localhost:4318
+# Exporter Configuration
+TRACE_EXPORTER=otlp                    # Exporter type
+OTLP_ENDPOINT=http://localhost:4317    # OTLP gRPC endpoint
+OTLP_HTTP_ENDPOINT=http://localhost:4318/v1/traces
 
-# Sampling rate (0.0 to 1.0)
-# 1.0 = 100% (dev/staging)
-# 0.1 = 10% (production with high traffic)
-TRACING_SAMPLING_RATE=1.0
+# Jaeger Configuration (alternative)
+JAEGER_AGENT_HOST=localhost
+JAEGER_AGENT_PORT=6831
+JAEGER_ENDPOINT=http://localhost:14268/api/traces
 
-# Export traces to console (debugging)
-TRACING_CONSOLE_EXPORT=false
+# Feature Flags
+TRACE_DB_QUERIES=true                  # Trace database queries
+TRACE_HTTP_REQUESTS=true               # Trace HTTP clients
+TRACE_MODEL_CALLS=true                 # Trace model providers
+TRACE_TOOL_EXECUTIONS=true             # Trace tool calls
+TRACE_CONVERSATIONS=true               # Trace conversations
+
+# Performance Tuning
+OTEL_BSP_MAX_QUEUE_SIZE=2048           # Batch processor queue
+OTEL_BSP_MAX_EXPORT_BATCH_SIZE=512     # Export batch size
+OTEL_BSP_SCHEDULE_DELAY=5000           # Export delay (ms)
 ```
 
-### Jaeger Ports
+### Sampling Strategies
 
-```yaml
-UI:              http://localhost:16686
-OTLP HTTP:       http://localhost:4318
-OTLP gRPC:       http://localhost:4317
-Jaeger Thrift:   http://localhost:14268
-Zipkin:          http://localhost:9411
+**Development**: 100% sampling
+```bash
+TRACE_SAMPLING_RATE=1.0
+```
+
+**Staging**: 50% sampling
+```bash
+TRACE_SAMPLING_RATE=0.5
+```
+
+**Production**: 10% sampling (recommended)
+```bash
+TRACE_SAMPLING_RATE=0.1
+```
+
+**Always trace errors**: Errors are always traced regardless of sampling rate.
+
+## Usage Examples
+
+### Automatic Tracing (Zero Code)
+
+FastAPI routes are automatically traced:
+
+```python
+from fastapi import FastAPI
+from monitoring.instrumentation import instrument_app
+
+app = FastAPI()
+
+@app.on_event("startup")
+async def startup():
+    # This enables automatic tracing for all routes
+    instrument_app(app)
+
+@app.post("/api/v1/chat/send")
+async def send_message(message: str):
+    # Automatically traced - no code changes needed!
+    response = await process_message(message)
+    return response
+```
+
+### Custom Function Tracing
+
+**Async Functions**:
+
+```python
+from monitoring.tracing import trace_async_function
+
+@trace_async_function("process_user_input")
+async def process_input(user_input: str):
+    # Function execution is traced
+    cleaned = await clean_input(user_input)
+    validated = await validate_input(cleaned)
+    return validated
+```
+
+**Sync Functions**:
+
+```python
+from monitoring.tracing import trace_function
+
+@trace_function("calculate_tokens")
+def count_tokens(text: str) -> int:
+    # Function execution is traced
+    return len(text.split())
+```
+
+### Model Provider Tracing
+
+```python
+from monitoring.trace_decorators import trace_model_call
+
+@trace_model_call(provider="openai", model="gpt-4")
+async def call_openai(prompt: str):
+    response = await openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+    return response
+
+# Trace will include:
+# - Provider: openai
+# - Model: gpt-4
+# - Temperature: 0.7
+# - Token usage: input, output, total
+# - Response time
+# - Cost information
+```
+
+### Conversation Flow Tracing
+
+```python
+from monitoring.trace_decorators import trace_conversation
+
+@trace_conversation()
+async def process_conversation(conversation_id: str, message: str, user_id: str):
+    # Automatically captures:
+    # - conversation_id
+    # - user_id
+    # - message length
+    # - processing time
+    
+    conversation = await get_conversation(conversation_id)
+    response = await generate_response(conversation, message)
+    await save_message(conversation_id, message, response)
+    
+    return response
+```
+
+### Tool Execution Tracing
+
+```python
+from monitoring.trace_decorators import trace_tool_execution
+
+@trace_tool_execution(tool_name="web_search")
+async def search_web(query: str, max_results: int = 10):
+    # Trace includes:
+    # - Tool name
+    # - Input parameters (excluding sensitive data)
+    # - Execution time
+    # - Success/failure status
+    # - Cache hits
+    
+    results = await search_engine.search(query, limit=max_results)
+    return results
+```
+
+### Context Manager Usage
+
+```python
+from monitoring.tracing import AsyncTraceContext
+
+async def complex_operation():
+    async with AsyncTraceContext("complex_operation") as span:
+        # Add custom attributes
+        span.set_attribute("user.id", user_id)
+        span.set_attribute("operation.type", "batch_processing")
+        
+        # Nested operations are automatically child spans
+        result = await process_data()
+        
+        # Add result metadata
+        span.set_attribute("result.count", len(result))
+        span.set_attribute("result.success", True)
+        
+        return result
+```
+
+### Manual Span Creation
+
+```python
+from monitoring.tracing import get_tracer
+from opentelemetry.trace import Status, StatusCode
+
+async def manual_tracing_example():
+    tracer = get_tracer()
+    
+    with tracer.start_as_current_span("manual_operation") as span:
+        span.set_attribute("custom.attribute", "value")
+        
+        try:
+            result = await do_work()
+            span.set_status(Status(StatusCode.OK))
+            return result
+        except Exception as e:
+            span.set_status(Status(StatusCode.ERROR, str(e)))
+            span.record_exception(e)
+            raise
+```
+
+### Adding Span Attributes
+
+```python
+from monitoring.tracing import set_span_attribute, add_span_event
+
+async def process_with_metadata(data: dict):
+    # Add attributes to current span
+    set_span_attribute("data.size", len(data))
+    set_span_attribute("data.type", data.get("type"))
+    
+    # Add events
+    add_span_event("processing_started", {
+        "timestamp": datetime.now().isoformat(),
+        "items": len(data)
+    })
+    
+    result = await process(data)
+    
+    add_span_event("processing_completed", {
+        "duration_ms": 150,
+        "success": True
+    })
+    
+    return result
+```
+
+## Trace Visualization
+
+### Jaeger UI Features
+
+#### 1. Search Traces
+
+- **Service**: Select `zakera-api`
+- **Operation**: Filter by endpoint (e.g., `POST /api/v1/chat/send`)
+- **Tags**: Filter by attributes (e.g., `user.id=123`, `model=gpt-4`)
+- **Duration**: Find slow requests (e.g., `>5s`)
+- **Time Range**: Select time period
+
+#### 2. Trace Details
+
+Click on a trace to see:
+
+- **Timeline view**: Visual representation of spans
+- **Span details**: Attributes, events, logs
+- **Service graph**: Dependencies between services
+- **Critical path**: Slowest operations highlighted
+
+#### 3. Useful Queries
+
+**Find slow API requests**:
+```
+service=zakera-api operation=POST /api/v1/chat/send minDuration=5s
+```
+
+**Find errors**:
+```
+service=zakera-api error=true
+```
+
+**Find specific user's traces**:
+```
+service=zakera-api user.id=user_123
+```
+
+**Find expensive model calls**:
+```
+service=zakera-api ai.model.provider=openai ai.cost.total>0.1
+```
+
+**Find conversations with many messages**:
+```
+service=zakera-api conversation.message_count>50
+```
+
+## Custom Tracing
+
+### Database Instrumentation
+
+```python
+from sqlalchemy import create_engine
+from monitoring.instrumentation import instrument_database
+
+engine = create_engine(DATABASE_URL)
+instrument_database(engine)  # Traces all SQL queries
+```
+
+### HTTP Client Tracing
+
+Automatic for httpx, aiohttp, and requests:
+
+```python
+import httpx
+
+# Automatically traced!
+async with httpx.AsyncClient() as client:
+    response = await client.get("https://api.example.com/data")
+```
+
+### Custom Metrics in Spans
+
+```python
+async def track_model_cost():
+    async with AsyncTraceContext("model_call") as span:
+        response = await model.generate(prompt)
+        
+        # Add cost tracking
+        input_tokens = response.usage.prompt_tokens
+        output_tokens = response.usage.completion_tokens
+        cost = (input_tokens * 0.01 / 1000) + (output_tokens * 0.03 / 1000)
+        
+        span.set_attribute("ai.usage.input_tokens", input_tokens)
+        span.set_attribute("ai.usage.output_tokens", output_tokens)
+        span.set_attribute("ai.cost.total", cost)
+        span.set_attribute("ai.cost.currency", "USD")
 ```
 
 ## Best Practices
 
-### 1. Use Appropriate Span Names
+### 1. Meaningful Span Names
 
+❌ **Bad**:
 ```python
-# ❌ Bad: Too generic
-with trace_span("process"):
+with AsyncTraceContext("process"):
     ...
+```
 
-# ✅ Good: Descriptive and hierarchical
-with trace_span("conversation.process.summarize"):
+✅ **Good**:
+```python
+with AsyncTraceContext("conversation.process_message"):
     ...
 ```
 
 ### 2. Add Relevant Attributes
 
 ```python
-# ❌ Bad: Missing context
-with trace_span("model.call"):
-    result = await model.generate(prompt)
-
-# ✅ Good: Rich attributes for filtering/analysis
-with trace_span("model.call", {
-    "model.provider": "openai",
-    "model.name": "gpt-4",
-    "prompt.length": len(prompt),
-    "user.id": user_id
-}) as span:
-    result = await model.generate(prompt)
-    span.set_attribute("tokens.input", result.input_tokens)
-    span.set_attribute("tokens.output", result.output_tokens)
+span.set_attribute("user.id", user_id)
+span.set_attribute("conversation.id", conv_id)
+span.set_attribute("model.provider", "openai")
+span.set_attribute("model.name", "gpt-4")
 ```
 
-### 3. Use Events for Milestones
-
-```python
-with trace_span("data.processing") as span:
-    span.add_event("validation_started")
-    validate_data(data)
-    
-    span.add_event("transformation_started")
-    transformed = transform_data(data)
-    
-    span.add_event("storage_started")
-    await store_data(transformed)
-    
-    span.add_event("processing_complete")
-```
-
-### 4. Handle Errors Properly
+### 3. Handle Errors Properly
 
 ```python
 try:
-    with trace_span("critical.operation") as span:
-        result = await risky_operation()
-        span.set_attribute("result.status", "success")
+    result = await risky_operation()
+    span.set_status(Status(StatusCode.OK))
 except Exception as e:
-    # Exception is automatically recorded in span
-    logger.error(f"Operation failed: {e}")
+    span.set_status(Status(StatusCode.ERROR, str(e)))
+    span.record_exception(e)
     raise
 ```
 
-### 5. Adjust Sampling in Production
+### 4. Don't Trace Everything
 
+- Exclude health checks: `/health`, `/metrics`
+- Use sampling in production
+- Don't trace static files
+- Skip tracing for high-frequency low-value operations
+
+### 5. Secure Sensitive Data
+
+❌ **Bad**:
 ```python
-# Development: Trace everything
-TRACING_SAMPLING_RATE=1.0
-
-# Production (high traffic): Sample 10%
-TRACING_SAMPLING_RATE=0.1
-
-# Production (critical paths): Always trace specific operations
-# Use custom sampling logic in code
+span.set_attribute("user.password", password)  # Never!
+span.set_attribute("api_key", api_key)        # Never!
 ```
 
-## Analyzing Traces
-
-### Finding Slow Requests
-
-1. Open Jaeger UI: http://localhost:16686
-2. Select service: `zakera-api`
-3. Set minimum duration: `1000ms` (1 second)
-4. Click "Find Traces"
-5. Examine spans to identify bottlenecks
-
-### Debugging Errors
-
-1. Select service and set tag: `error=true`
-2. Click on failed trace
-3. Examine exception details in span
-4. Follow trace through all services
-5. Check span attributes for context
-
-### Analyzing Dependencies
-
-1. Click "System Architecture" tab
-2. View service dependency graph
-3. Identify external service calls
-4. Check latency between services
-
-### Performance Optimization
-
-1. Group traces by operation
-2. Compare P50, P95, P99 latencies
-3. Identify outliers
-4. Drill into slow traces
-5. Optimize identified bottlenecks
-
-## Integration with Other Tools
-
-### Log Correlation
-
+✅ **Good**:
 ```python
-from src.monitoring.tracing import get_trace_id
-import structlog
-
-logger = structlog.get_logger()
-
-def log_with_trace():
-    logger.info(
-        "Processing request",
-        trace_id=get_trace_id(),
-        user_id="user_123"
-    )
+span.set_attribute("user.id", user_id)
+span.set_attribute("auth.method", "jwt")
 ```
 
-### Metrics Correlation
+### 6. Use Semantic Conventions
+
+Follow OpenTelemetry [semantic conventions](https://opentelemetry.io/docs/specs/semconv/):
 
 ```python
-from prometheus_client import Histogram
-from src.monitoring.tracing import get_trace_id
+# HTTP attributes
+span.set_attribute("http.method", "POST")
+span.set_attribute("http.url", url)
+span.set_attribute("http.status_code", 200)
 
-latency_histogram = Histogram(
-    'request_latency_seconds',
-    'Request latency',
-    ['endpoint', 'trace_id']
-)
-
-with latency_histogram.labels(
-    endpoint="/chat",
-    trace_id=get_trace_id() or "none"
-).time():
-    await process_request()
-```
-
-### Alert Integration
-
-```python
-# In alert handlers
-async def send_alert(error_message: str):
-    trace_id = get_trace_id()
-    await slack.send_message(
-        f"Error: {error_message}\n"
-        f"Trace: http://localhost:16686/trace/{trace_id}"
-    )
+# Database attributes
+span.set_attribute("db.system", "postgresql")
+span.set_attribute("db.operation", "SELECT")
+span.set_attribute("db.statement", query)
 ```
 
 ## Troubleshooting
 
 ### Traces Not Appearing
 
-1. Check Jaeger is running:
+1. **Check if tracing is enabled**:
    ```bash
+   echo $ENABLE_TRACING  # Should be 'true'
+   ```
+
+2. **Verify Jaeger is running**:
+   ```bash
+   docker ps | grep jaeger
    curl http://localhost:16686
    ```
 
-2. Verify OTLP endpoint:
+3. **Check connectivity**:
    ```bash
-   curl http://localhost:4318/v1/traces
+   curl http://localhost:4318/v1/traces  # Should return 405
    ```
 
-3. Check environment variables:
+4. **Review logs**:
    ```bash
-   echo $TRACING_ENABLED  # should be "true"
-   echo $OTLP_ENDPOINT    # should point to Jaeger
-   ```
-
-4. Enable console export for debugging:
-   ```bash
-   export TRACING_CONSOLE_EXPORT=true
+   docker logs zakera-backend | grep -i trace
+   docker logs zakera-jaeger
    ```
 
 ### High Memory Usage
 
-1. Reduce sampling rate:
+1. **Reduce sampling rate**:
    ```bash
-   export TRACING_SAMPLING_RATE=0.1  # 10%
+   TRACE_SAMPLING_RATE=0.1  # 10% instead of 100%
    ```
 
-2. Adjust batch processor settings in `tracing.py`:
+2. **Tune batch processor**:
+   ```bash
+   OTEL_BSP_MAX_QUEUE_SIZE=1024        # Reduce queue
+   OTEL_BSP_SCHEDULE_DELAY=10000       # Export more frequently
+   ```
+
+3. **Limit trace retention** in Jaeger
+
+### Slow Performance
+
+1. **Use batch processor** (default, but verify)
+2. **Increase export delay**:
+   ```bash
+   OTEL_BSP_SCHEDULE_DELAY=10000  # 10 seconds
+   ```
+3. **Reduce sampling** in production
+
+### Missing Spans
+
+1. **Check parent context propagation**:
    ```python
-   BatchSpanProcessor(
-       exporter,
-       max_queue_size=512,      # Reduce from 2048
-       max_export_batch_size=128,  # Reduce from 512
-   )
+   # Ensure context is propagated in async code
+   from opentelemetry import context
+   token = context.attach(current_context)
+   try:
+       await async_operation()
+   finally:
+       context.detach(token)
    ```
 
-### Performance Impact
+2. **Verify instrumentations are loaded**:
+   ```python
+   # Check logs for "instrumentation enabled" messages
+   ```
 
-- Typical overhead: 1-3% with batching
-- Network overhead: Minimal with async export
-- Storage: ~1KB per span average
+## Performance Tuning
 
-Optimization tips:
-- Use sampling for high-traffic endpoints
-- Limit attribute sizes (max 500 chars)
-- Avoid creating spans in tight loops
-- Use batch processing (enabled by default)
+### Sampling Configuration
+
+**Environment-based sampling**:
+```python
+sampling_rates = {
+    "development": 1.0,   # 100%
+    "staging": 0.5,       # 50%
+    "production": 0.1,    # 10%
+}
+
+TRACE_SAMPLING_RATE = sampling_rates[environment]
+```
+
+**Always sample errors**:
+```python
+from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio
+
+# Custom sampler that always samples errors
+class ErrorSampler:
+    def should_sample(self, context, trace_id, name, kind, attributes, links):
+        # Always sample if there's an error
+        if attributes and attributes.get("error") == True:
+            return Decision.RECORD_AND_SAMPLE
+        
+        # Otherwise use ratio sampling
+        return ratio_sampler.should_sample(...)
+```
+
+### Batch Processor Tuning
+
+```python
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+processor = BatchSpanProcessor(
+    exporter,
+    max_queue_size=2048,          # Default: 2048
+    max_export_batch_size=512,    # Default: 512
+    schedule_delay_millis=5000,   # Default: 5000 (5s)
+    export_timeout_millis=30000,  # Default: 30000 (30s)
+)
+```
+
+### Resource Detection
+
+Automatic resource detection:
+```python
+from opentelemetry.sdk.resources import Resource, ResourceDetector
+
+resource = Resource.create({
+    "service.name": "zakera-api",
+    "service.version": "0.6.0",
+    "deployment.environment": "production",
+    "cloud.provider": "aws",
+    "cloud.region": "us-east-1",
+})
+```
 
 ## Production Deployment
 
-### Scalable Jaeger Setup
+### High Availability Setup
 
 ```yaml
-# Use Jaeger with Elasticsearch backend
+# docker-compose.production.yml
 services:
-  jaeger-collector:
-    image: jaegertracing/jaeger-collector
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
     environment:
       - SPAN_STORAGE_TYPE=elasticsearch
       - ES_SERVER_URLS=http://elasticsearch:9200
-  
-  jaeger-query:
-    image: jaegertracing/jaeger-query
-    environment:
-      - SPAN_STORAGE_TYPE=elasticsearch
-      - ES_SERVER_URLS=http://elasticsearch:9200
-  
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+```
+
+### Elasticsearch Backend
+
+```yaml
+services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     environment:
       - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
 ```
 
-### Security Considerations
+### Kubernetes Deployment
 
-1. Use TLS for OTLP export:
-   ```python
-   OTLPSpanExporter(
-       endpoint="https://jaeger.company.com:4318",
-       insecure=False,  # Enable TLS
-       credentials=ssl_credentials
-   )
-   ```
-
-2. Sanitize sensitive data:
-   ```python
-   # Don't add passwords, tokens, PII to spans
-   span.set_attribute("user.id", user_id)  # ✅ OK
-   span.set_attribute("user.email", email)  # ❌ PII
-   span.set_attribute("api.key", api_key)  # ❌ Sensitive
-   ```
-
-3. Set data retention policies:
-   ```bash
-   # Jaeger with retention
-   docker run -e SPAN_STORAGE_TYPE=elasticsearch \
-              -e ES_INDEX_RETENTION=7d \
-              jaegertracing/jaeger-collector
-   ```
-
-## Advanced Features
-
-### Custom Samplers
-
-```python
-from opentelemetry.sdk.trace.sampling import TraceIdRatioBased, ParentBased
-
-# Sample 10% of traces, always sample if parent is sampled
-sampler = ParentBased(root=TraceIdRatioBased(0.1))
-
-provider = TracerProvider(
-    resource=resource,
-    sampler=sampler
-)
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:1.52
+        env:
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: SPAN_STORAGE_TYPE
+          value: elasticsearch
+        ports:
+        - containerPort: 16686
+        - containerPort: 4317
+        - containerPort: 4318
 ```
 
-### Span Links (Batch Processing)
+### Monitoring Jaeger
 
-```python
-from opentelemetry.trace import Link
-
-# Link multiple related operations
-with tracer.start_as_current_span(
-    "batch.process",
-    links=[Link(span_context) for span_context in parent_spans]
-) as span:
-    await process_batch(items)
+```yaml
+# Prometheus scrape config
+scrape_configs:
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
 ```
 
-### Baggage (Cross-Cutting Context)
+### Data Retention
 
-```python
-from opentelemetry.baggage import set_baggage
-
-# Propagate data across service boundaries
-set_baggage("tenant.id", "tenant_123")
-set_baggage("experiment.variant", "B")
+Configure trace retention:
+```bash
+# Keep traces for 7 days
+docker run -e SPAN_STORAGE_TYPE=elasticsearch \
+  -e ES_INDEX_CLEANER_ENABLED=true \
+  -e ES_INDEX_CLEANER_DAYS=7 \
+  jaegertracing/all-in-one:1.52
 ```
 
-## Resources
+### Security
 
-- OpenTelemetry Docs: https://opentelemetry.io/docs/
-- Jaeger Docs: https://www.jaegertracing.io/docs/
-- Best Practices: https://opentelemetry.io/docs/concepts/signals/traces/
-- Python SDK: https://opentelemetry-python.readthedocs.io/
+1. **Secure Jaeger UI** with authentication
+2. **Encrypt trace data** in transit and at rest
+3. **Redact sensitive data** from spans
+4. **Use RBAC** to control access to traces
 
-## Support
+---
 
-For issues or questions:
-- GitHub Issues: https://github.com/itsmepraks/zakera/issues
-- Documentation: https://docs.zakera.app/tracing
-- Community: https://discord.gg/zakera
+## Summary
+
+Distributed tracing with OpenTelemetry provides:
+
+✅ **Complete visibility** into request flows  
+✅ **Fast debugging** of issues  
+✅ **Performance optimization** opportunities  
+✅ **Cost tracking** per model/user  
+✅ **Production-ready** with minimal overhead  
+✅ **Standard-based** (OpenTelemetry)  
+✅ **Vendor-neutral** (works with any backend)  
+
+**Next Steps**:
+1. Enable tracing in development
+2. Explore traces in Jaeger UI
+3. Add custom tracing to your code
+4. Configure sampling for production
+5. Set up alerts on trace metrics
+
+For more information:
+- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+- [Jaeger Documentation](https://www.jaegertracing.io/docs/)
+- [Zakera Monitoring Guide](MONITORING.md)
