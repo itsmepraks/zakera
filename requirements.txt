@@ -24,7 +24,7 @@ alembic==1.13.1
 aiosqlite==0.19.0
 
 # HTTP Client
-httpx==0.26.0
+httpx==0.28.1
 aiohttp==3.9.1
 requests==2.31.0
 
