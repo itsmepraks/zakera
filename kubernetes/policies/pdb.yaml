@@ -1,0 +1,35 @@
+# Pod Disruption Budget for high availability
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zakera-api-pdb
+  namespace: zakera-production
+spec:
+  minAvailable: 2  # At least 2 pods must remain available
+  selector:
+    matchLabels:
+      app: zakera-api
+  maxUnavailable: 1  # Can't have more than 1 pod unavailable
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zakera-redis-pdb
+  namespace: zakera-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: zakera-redis
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zakera-postgres-pdb
+  namespace: zakera-production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: zakera-postgres

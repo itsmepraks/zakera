@@ -1,0 +1,103 @@
+# Network policies for security
+---
+# Allow API to communicate with database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zakera-api-netpol
+  namespace: zakera-production
+spec:
+  podSelector:
+    matchLabels:
+      app: zakera-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow to database
+    - to:
+        - podSelector:
+            matchLabels:
+              app: zakera-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow to Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: zakera-redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow HTTPS for external API calls
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Database network policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zakera-postgres-netpol
+  namespace: zakera-production
+spec:
+  podSelector:
+    matchLabels:
+      app: zakera-postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow from API pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: zakera-api
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# Redis network policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: zakera-redis-netpol
+  namespace: zakera-production
+spec:
+  podSelector:
+    matchLabels:
+      app: zakera-redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from API and worker pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: zakera-api
+        - podSelector:
+            matchLabels:
+              app: zakera-worker
+      ports:
+        - protocol: TCP
+          port: 6379

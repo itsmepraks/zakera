@@ -1,0 +1,53 @@
+# Vertical Pod Autoscaler for API deployment
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: zakera-api-vpa
+  namespace: zakera-production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: zakera-api
+  updatePolicy:
+    updateMode: "Auto"  # Auto, Recreate, or Initial
+  resourcePolicy:
+    containerPolicies:
+      - containerName: zakera-api
+        minAllowed:
+          cpu: 100m
+          memory: 128Mi
+        maxAllowed:
+          cpu: 2000m
+          memory: 4Gi
+        controlledResources:
+          - cpu
+          - memory
+        mode: Auto
+---
+# VPA for Redis
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: zakera-redis-vpa
+  namespace: zakera-production
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: zakera-redis
+  updatePolicy:
+    updateMode: "Recreate"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: redis
+        minAllowed:
+          cpu: 50m
+          memory: 256Mi
+        maxAllowed:
+          cpu: 1000m
+          memory: 2Gi
+        controlledResources:
+          - cpu
+          - memory
