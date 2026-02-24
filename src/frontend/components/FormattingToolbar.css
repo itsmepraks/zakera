@@ -1,0 +1,119 @@
+/* Formatting Toolbar Styles */
+
+.formatting-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  background: var(--toolbar-bg, #f5f5f5);
+  border-radius: 8px;
+  border: 1px solid var(--toolbar-border, #e0e0e0);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.format-button {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+}
+
+.format-button:hover:not(:disabled) {
+  background: var(--button-hover-bg, #e0e0e0);
+  transform: translateY(-1px);
+}
+
+.format-button:active:not(:disabled) {
+  transform: translateY(0);
+  background: var(--button-active-bg, #d0d0d0);
+}
+
+.format-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.format-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--divider-color, #d0d0d0);
+  margin: 0 4px;
+}
+
+.help-button {
+  margin-left: auto;
+}
+
+/* Dark theme */
+.theme-dark .formatting-toolbar {
+  --toolbar-bg: #2a2a2a;
+  --toolbar-border: #3a3a3a;
+  --button-hover-bg: #3a3a3a;
+  --button-active-bg: #4a4a4a;
+  --divider-color: #4a4a4a;
+}
+
+/* Tooltips */
+.format-button::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--tooltip-bg, #333);
+  color: var(--tooltip-color, white);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1000;
+}
+
+.format-button:hover::after {
+  opacity: 1;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .formatting-toolbar {
+    padding: 6px;
+    gap: 2px;
+  }
+  
+  .format-button {
+    padding: 6px 10px;
+    min-width: 36px;
+    height: 36px;
+  }
+  
+  .format-icon {
+    font-size: 16px;
+  }
+  
+  /* Hide tooltips on mobile */
+  .format-button::after {
+    display: none;
+  }
+}
+
+/* Accessibility */
+.format-button:focus-visible {
+  outline: 2px solid var(--focus-color, #2196f3);
+  outline-offset: 2px;
+}
