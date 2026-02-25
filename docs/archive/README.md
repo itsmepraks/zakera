@@ -1,74 +1,105 @@
 # Documentation Archive
 
-This folder contains historical documentation that is no longer actively maintained but preserved for reference.
+This directory contains historical documentation, temporary reports, and legacy content that is no longer actively maintained but preserved for reference.
 
 ## 📁 Contents
 
-### Emergency & Urgent Documentation
+### Emergency Documentation
 
-These documents were created during critical incidents and have been resolved:
-
-- `EMERGENCY_FIX_NOW.md` - Emergency fixes documentation
-- `URGENT_CI_CD_FIXES_APPLIED.md` - CI/CD urgent fixes
-- `URGENT_FAILURE_INVESTIGATION_REPORT.md` - System failure investigation
-- `README_EMERGENCY_RESPONSE.md` - Emergency response procedures
-- `ACTION_REQUIRED_package-lock.md` - Package lock action items
+Temporary documentation created during critical issues:
+- `EMERGENCY_FIX_NOW.md` - Emergency fix procedures (resolved)
+- `URGENT_CI_CD_FIXES_APPLIED.md` - CI/CD emergency fixes (completed)
+- `URGENT_FAILURE_INVESTIGATION_REPORT.md` - Incident investigation (resolved)
+- `README_EMERGENCY_RESPONSE.md` - Emergency response procedures (superseded)
 
 ### Implementation Summaries
 
-Comprehensive summaries of major implementation milestones:
-
-- `COMPLETE_ENHANCEMENT_SUMMARY.md` - System enhancements overview
-- `COMPLETE_IMPLEMENTATION_SUMMARY.md` - Full implementation details
-- `COMPLETE_SYSTEM_SUMMARY.md` - Complete system summary
-- `COMPREHENSIVE_CONTRIBUTION_SUMMARY.md` - Contribution history
+Session-specific implementation reports:
+- `COMPLETE_IMPLEMENTATION_SUMMARY.md` - Initial implementation overview
+- `COMPLETE_ENHANCEMENT_SUMMARY.md` - Feature enhancement summary
+- `COMPLETE_SYSTEM_SUMMARY.md` - System architecture summary
+- `COMPREHENSIVE_CONTRIBUTION_SUMMARY.md` - Development contributions
 - `COMPREHENSIVE_TEST_IMPLEMENTATION.md` - Testing implementation
-- `CI_CD_STATUS_REPORT.md` - CI/CD status report
-- `CI_CD_SUMMARY.md` - CI/CD summary
-- `CHANGELOG.md` - Historical changelog (see root CHANGELOG.md for current)
-- `COMMIT_ATTRIBUTION_TEST.md` - Commit attribution testing
-- `CONVERSATION_EXPORT_FEATURE.md` - Export feature documentation
-- `CONVERSATION_PERSISTENCE_SUMMARY.md` - Persistence summary
-- `INFRASTRUCTURE_DEPLOYMENT_SUMMARY.md` - Infrastructure summary
-- `LATEST_ENHANCEMENTS.md` - Recent enhancements
-- `MEMORY_ENHANCEMENT_SUMMARY.md` - Memory system enhancements
-- `MODEL_SYSTEM_SUMMARY.md` - Model system overview
-- `MONITORING_IMPLEMENTATION_SUMMARY.md` - Monitoring implementation
-- `MONITORING_SYSTEM_SUMMARY.md` - Monitoring system summary
-- `PROJECT_COMPLETION_SUMMARY.md` - Project completion summary
-- `SECURITY_ENHANCEMENT_SUMMARY.md` - Security enhancements
-- `SESSION_SUMMARY.md` - Development session summaries
-- `TEST_COVERAGE_SUMMARY.md` - Test coverage reports
-- `TOOL_SYSTEM_SUMMARY.md` - Tool system summary
+- `SESSION_SUMMARY.md` - Development session notes
 
-## 📝 Note
+### Feature-Specific Documentation
 
-For current, actively maintained documentation, please refer to the main [docs folder](../).
+Legacy feature documentation (superseded by main docs):
+- `CONVERSATION_EXPORT_FEATURE.md` - Export feature details (see CONVERSATION_EXPORT.md)
+- `CONVERSATION_PERSISTENCE_SUMMARY.md` - Persistence implementation (see DATABASE_PERSISTENCE.md)
+- `MEMORY_ENHANCEMENT_SUMMARY.md` - Memory system updates (see MEMORY_SYSTEM.md)
+- `MODEL_SYSTEM_SUMMARY.md` - Model system overview (see providers/)
+- `TOOL_SYSTEM_SUMMARY.md` - Tool system details (see tools.md)
 
-These archived files are:
-- ✅ Preserved for historical reference
-- ✅ Searchable for context
-- ❌ Not actively maintained
-- ❌ May contain outdated information
+### Infrastructure & Deployment
 
-If you need information from these documents, check the current documentation first as it will be more up-to-date.
+Deployment and infrastructure summaries:
+- `INFRASTRUCTURE_DEPLOYMENT_SUMMARY.md` - Infrastructure overview (see DEPLOYMENT.md)
+- `PROJECT_COMPLETION_SUMMARY.md` - Project milestones
+- `LATEST_ENHANCEMENTS.md` - Recent feature updates (see CHANGELOG.md)
+
+### Monitoring & Operations
+
+Monitoring implementation documentation:
+- `MONITORING_IMPLEMENTATION_SUMMARY.md` - Monitoring setup (see MONITORING.md)
+- `MONITORING_SYSTEM_SUMMARY.md` - Monitoring architecture (see MONITORING.md)
+
+### Security
+
+Historical security documentation:
+- `SECURITY_ENHANCEMENT_SUMMARY.md` - Security improvements (see SECURITY.md)
+
+### Testing & Quality
+
+Test implementation summaries:
+- `TEST_COVERAGE_SUMMARY.md` - Coverage reports (see TESTING.md)
+
+### CI/CD
+
+CI/CD implementation and status:
+- `CI_CD_STATUS_REPORT.md` - Pipeline status reports
+- `CI_CD_SUMMARY.md` - CI/CD overview (see ci-cd-setup.md)
+
+### Miscellaneous
+
+Other archived content:
+- `ACTION_REQUIRED_package-lock.md` - Dependency update notices
+- `COMMIT_ATTRIBUTION_TEST.md` - Git configuration tests
+
+## 📌 Why Archive?
+
+These documents are archived because they:
+- ✅ Document resolved emergency situations
+- ✅ Are superseded by current documentation
+- ✅ Provide historical context for the project
+- ✅ Are session-specific implementation notes
+- ✅ Have been consolidated into main documentation
 
 ## 🔍 Finding Current Documentation
 
-Instead of these archived files, refer to:
+For up-to-date documentation, please refer to:
+- **[Main Documentation Index](../README.md)**
+- **[Quickstart Guide](../QUICKSTART.md)**
+- **[API Integration Guide](../api-integration-guide.md)**
+- **[Production Deployment](../PRODUCTION_DEPLOYMENT.md)**
+- **[Security Guide](../SECURITY.md)**
+- **[Troubleshooting](../TROUBLESHOOTING.md)**
 
-| Archived Topic | Current Documentation |
-|----------------|----------------------|
-| Emergency fixes | [Troubleshooting](../TROUBLESHOOTING.md) |
-| CI/CD information | [CI/CD Setup](../ci-cd-setup.md) |
-| Implementation details | [Architecture](../ARCHITECTURE.md) |
-| Testing info | [Testing Guide](../TESTING.md) |
-| Monitoring | [Monitoring Guide](../MONITORING.md) |
-| Security | [Security Guide](../SECURITY.md) |
-| Tools | [Tools Documentation](../tools.md) |
-| Model system | [Provider docs](../providers/) |
+## 📝 Archive Policy
+
+Documents are archived when:
+1. They address issues that have been permanently resolved
+2. They are superseded by updated documentation
+3. They are temporary implementation notes
+4. They are session-specific reports
+5. They cause repository clutter without current value
+
+Archived documents are:
+- ✅ Preserved for historical reference
+- ✅ Not actively maintained or updated
+- ✅ May contain outdated information
+- ✅ Retained for compliance and audit purposes
 
 ---
 
-**Archive Created**: February 2026  
-**Purpose**: Historical reference and repository organization
+**Note**: If you need information from archived documents, please check the current documentation first. If the information is still relevant but missing from current docs, please open an issue to have it added to the main documentation.

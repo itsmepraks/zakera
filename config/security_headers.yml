@@ -1,0 +1,146 @@
+# Security Headers Configuration
+# Configure HTTP security headers for the application
+
+security_headers:
+  enabled: true
+  
+  # HSTS (HTTP Strict Transport Security)
+  hsts:
+    enabled: true
+    max_age: 31536000  # 1 year in seconds
+    include_subdomains: true
+    preload: true
+  
+  # Content Security Policy
+  csp:
+    enabled: true
+    directives:
+      default-src:
+        - "'self'"
+      script-src:
+        - "'self'"
+        - "'nonce-{NONCE}'"  # Dynamically replaced
+      style-src:
+        - "'self'"
+        - "'unsafe-inline'"  # TODO: Use nonces
+      img-src:
+        - "'self'"
+        - "data:"
+        - "https:"
+      font-src:
+        - "'self'"
+      connect-src:
+        - "'self'"
+        - "wss:"  # WebSocket
+      form-action:
+        - "'self'"
+      frame-ancestors:
+        - "'none'"
+      base-uri:
+        - "'self'"
+      upgrade-insecure-requests: true
+    
+    # CSP violation reporting
+    report_uri: "https://your-domain.com/csp-report"
+    report_only: false  # Set true to test CSP without enforcing
+  
+  # X-Frame-Options
+  x_frame_options:
+    enabled: true
+    value: "DENY"  # Options: DENY, SAMEORIGIN
+  
+  # X-Content-Type-Options
+  x_content_type_options:
+    enabled: true
+    value: "nosniff"
+  
+  # X-XSS-Protection (legacy, for older browsers)
+  x_xss_protection:
+    enabled: true
+    value: "1; mode=block"
+  
+  # Referrer Policy
+  referrer_policy:
+    enabled: true
+    value: "strict-origin-when-cross-origin"
+    # Options:
+    # - no-referrer
+    # - no-referrer-when-downgrade
+    # - origin
+    # - origin-when-cross-origin
+    # - same-origin
+    # - strict-origin
+    # - strict-origin-when-cross-origin
+    # - unsafe-url
+  
+  # Permissions Policy (formerly Feature-Policy)
+  permissions_policy:
+    enabled: true
+    directives:
+      geolocation: []
+      microphone: []
+      camera: []
+      payment: []
+      usb: []
+      magnetometer: []
+      gyroscope: []
+      accelerometer: []
+      ambient-light-sensor: []
+      autoplay: []
+      encrypted-media: []
+      fullscreen: ["'self'"]
+      picture-in-picture: []
+  
+  # Server header
+  server_header:
+    enabled: true
+    value: "Zakera"  # Don't reveal framework/version
+  
+  # CORS (Cross-Origin Resource Sharing)
+  cors:
+    enabled: true
+    allow_origins:
+      - "https://your-domain.com"
+      - "https://app.your-domain.com"
+    allow_methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+    allow_headers:
+      - "Content-Type"
+      - "Authorization"
+      - "X-Requested-With"
+    allow_credentials: true
+    max_age: 3600  # Preflight cache duration
+
+# Environment-specific overrides
+environments:
+  development:
+    security_headers:
+      csp:
+        report_only: true  # Don't enforce CSP in dev
+      cors:
+        allow_origins:
+          - "http://localhost:3000"
+          - "http://localhost:8000"
+  
+  staging:
+    security_headers:
+      csp:
+        report_only: false
+      cors:
+        allow_origins:
+          - "https://staging.your-domain.com"
+  
+  production:
+    security_headers:
+      hsts:
+        preload: true
+      csp:
+        report_only: false
+      cors:
+        allow_origins:
+          - "https://your-domain.com"
+          - "https://app.your-domain.com"
