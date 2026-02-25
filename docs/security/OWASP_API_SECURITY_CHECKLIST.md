@@ -1,668 +1,546 @@
-# OWASP API Security Top 10 Compliance Checklist
+# 🛡️ OWASP API Security Top 10 Compliance Checklist
 
-> **Status:** Active Security Framework  
-> **Last Updated:** February 2026  
-> **Version:** Based on OWASP API Security Top 10 2023
+> **OWASP API Security Top 10 (2023)** - Complete implementation checklist for Zakera
 
-## Overview
+[![OWASP](https://img.shields.io/badge/OWASP-API%20Security-blue.svg)](https://owasp.org/www-project-api-security/)
+[![Compliance](https://img.shields.io/badge/Compliance-95%25-green.svg)](#compliance-status)
+[![Last Updated](https://img.shields.io/badge/Updated-Feb%202026-brightgreen.svg)](#)
 
-This document tracks Zakera's compliance with the [OWASP API Security Top 10](https://owasp.org/www-project-api-security/), the industry-standard framework for API security.
+## 📋 Table of Contents
 
-## Compliance Dashboard
-
-| Risk | Status | Implementation | Priority |
-|------|--------|----------------|----------|
-| API1:2023 Broken Object Level Authorization | ✅ Implemented | JWT + Resource ownership checks | Critical |
-| API2:2023 Broken Authentication | ✅ Implemented | JWT, MFA, Session management | Critical |
-| API3:2023 Broken Object Property Level Authorization | ✅ Implemented | Field-level permissions | High |
-| API4:2023 Unrestricted Resource Consumption | ✅ Implemented | Rate limiting, quotas | High |
-| API5:2023 Broken Function Level Authorization | ✅ Implemented | Role-based access control | Critical |
-| API6:2023 Unrestricted Access to Sensitive Business Flows | ✅ Implemented | Business logic rate limiting | Medium |
-| API7:2023 Server Side Request Forgery | ✅ Implemented | URL validation, allowlists | High |
-| API8:2023 Security Misconfiguration | ✅ Implemented | Secure defaults, hardening | High |
-| API9:2023 Improper Inventory Management | ✅ Implemented | API versioning, documentation | Medium |
-| API10:2023 Unsafe Consumption of APIs | ✅ Implemented | Input validation, sanitization | High |
-
-**Overall Compliance:** ✅ **100%**
+- [Overview](#overview)
+- [Compliance Status](#compliance-status)
+- [API1: Broken Object Level Authorization](#api1-broken-object-level-authorization)
+- [API2: Broken Authentication](#api2-broken-authentication)
+- [API3: Broken Object Property Level Authorization](#api3-broken-object-property-level-authorization)
+- [API4: Unrestricted Resource Consumption](#api4-unrestricted-resource-consumption)
+- [API5: Broken Function Level Authorization](#api5-broken-function-level-authorization)
+- [API6: Unrestricted Access to Sensitive Business Flows](#api6-unrestricted-access-to-sensitive-business-flows)
+- [API7: Server Side Request Forgery](#api7-server-side-request-forgery)
+- [API8: Security Misconfiguration](#api8-security-misconfiguration)
+- [API9: Improper Inventory Management](#api9-improper-inventory-management)
+- [API10: Unsafe Consumption of APIs](#api10-unsafe-consumption-of-apis)
+- [Automated Compliance Checking](#automated-compliance-checking)
 
 ---
 
-## API1:2023 - Broken Object Level Authorization (BOLA)
+## 🎯 Overview
 
-### Risk Description
-Attackers can access or manipulate objects they shouldn't have access to by exploiting weak authorization checks.
-
-### Zakera Implementation
-
-#### ✅ Controls Implemented
-
-1. **Resource Ownership Verification**
-```python
-# src/api/middleware/authorization.py
-@require_conversation_ownership
-async def get_conversation(conversation_id: str, user: User):
-    """Verify user owns the conversation before access"""
-    conversation = await db.get_conversation(conversation_id)
-    if conversation.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    return conversation
-```
-
-2. **Automatic Authorization Checks**
-- All conversation endpoints verify ownership
-- Message access requires conversation ownership
-- Export functions check user permissions
-
-3. **Test Coverage**
-```python
-# tests/test_authorization.py
-async def test_cannot_access_other_users_conversation():
-    # Users cannot access conversations they don't own
-    assert response.status_code == 403
-```
-
-#### 📊 Monitoring
-- Authorization failures logged with `audit_logger`
-- Metrics: `authorization_failures_total`
-- Alerts on unusual access patterns
-
-#### ✅ Checklist
-- [x] Implement user-to-resource ownership mapping
-- [x] Verify ownership in all resource access endpoints
-- [x] Use unpredictable resource identifiers (UUIDs)
-- [x] Log authorization failures
-- [x] Test authorization bypass scenarios
+This checklist ensures Zakera API complies with **OWASP API Security Top 10 (2023)** guidelines. Each control includes:
+- ✅ Implementation status
+- 📍 Code location
+- 🧪 Testing approach
+- 📊 Monitoring metrics
 
 ---
 
-## API2:2023 - Broken Authentication
+## 📊 Compliance Status
 
-### Risk Description
-Weak authentication mechanisms allow attackers to compromise authentication tokens or exploit implementation flaws.
-
-### Zakera Implementation
-
-#### ✅ Controls Implemented
-
-1. **Secure JWT Implementation**
-```python
-# src/security/auth.py
-JWT_ALGORITHM = "RS256"  # Asymmetric encryption
-ACCESS_TOKEN_EXPIRE_MINUTES = 15  # Short-lived tokens
-REFRESH_TOKEN_EXPIRE_DAYS = 30
-```
-
-2. **Multi-Factor Authentication (MFA)**
-- TOTP-based 2FA with QR code setup
-- Backup codes for account recovery
-- MFA required for sensitive operations
-
-3. **Password Security**
-```python
-# Strong password hashing with bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-MIN_PASSWORD_LENGTH = 12
-REQUIRE_SPECIAL_CHARS = True
-```
-
-4. **Session Management**
-- Token refresh rotation
-- Automatic token revocation
-- Device fingerprinting
-- Concurrent session limits
-
-#### 📊 Monitoring
-- Failed login attempt tracking
-- Suspicious authentication patterns
-- MFA bypass attempts
-- Metrics: `auth_failures_total`, `mfa_failures_total`
-
-#### ✅ Checklist
-- [x] Use strong password hashing (bcrypt, argon2)
-- [x] Implement MFA for all users
-- [x] Use short-lived access tokens (<30 min)
-- [x] Implement token refresh rotation
-- [x] Rate limit authentication endpoints
-- [x] Log all authentication events
-- [x] Monitor for brute force attacks
-- [x] Implement account lockout after failed attempts
+| Risk | Category | Controls | Implemented | Coverage |
+|------|----------|----------|-------------|----------|
+| **API1** | Object Level Authorization | 8 | 8 | 100% |
+| **API2** | Broken Authentication | 12 | 12 | 100% |
+| **API3** | Object Property Authorization | 6 | 6 | 100% |
+| **API4** | Resource Consumption | 10 | 10 | 100% |
+| **API5** | Function Level Authorization | 7 | 7 | 100% |
+| **API6** | Business Flow Protection | 5 | 4 | 80% |
+| **API7** | SSRF Prevention | 8 | 8 | 100% |
+| **API8** | Security Configuration | 15 | 14 | 93% |
+| **API9** | API Inventory | 6 | 6 | 100% |
+| **API10** | Third-Party APIs | 8 | 7 | 88% |
+| | **TOTAL** | **85** | **82** | **96%** |
 
 ---
 
-## API3:2023 - Broken Object Property Level Authorization
+## API1: Broken Object Level Authorization
 
-### Risk Description
-API exposes sensitive object properties without proper authorization checks.
+**Risk Level:** ⚠️ Critical
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **1.1** Implement object-level authorization checks
+  - 📍 Location: `src/api/dependencies.py::check_resource_ownership()`
+  - 🧪 Test: `tests/security/test_authorization.py`
+  - 📊 Metric: `authorization_failures_total`
 
-1. **Field-Level Permissions**
-```python
-# src/api/schemas/user.py
-class UserPublic(BaseModel):
-    id: UUID
-    username: str
-    # Email NOT exposed in public schema
+- [x] **1.2** Validate user owns requested resource
+  - 📍 Location: `src/api/routes/conversations.py::get_conversation()`
+  - 🧪 Test: `tests/api/test_conversation_ownership.py`
 
-class UserPrivate(UserPublic):
-    email: str  # Only in authenticated context
-    # API keys NEVER in responses
-```
+- [x] **1.3** Use random, unpredictable IDs (UUIDs)
+  - 📍 Location: `src/models/conversation.py::id` (UUID4)
+  - 🧪 Test: Verify UUID format
 
-2. **Response Filtering**
-```python
-@app.get("/users/{user_id}", response_model=UserPublic)
-async def get_user(user_id: UUID, current_user: User):
-    user = await db.get_user(user_id)
-    # Pydantic automatically filters sensitive fields
-    return user
-```
+- [x] **1.4** Deny by default, explicit allow
+  - 📍 Location: `src/security/permissions.py::PermissionChecker`
+  - 🧪 Test: `tests/security/test_default_deny.py`
 
-3. **Input Validation**
-```python
-# Prevent mass assignment vulnerabilities
-class UserUpdate(BaseModel):
-    username: Optional[str]
-    # is_admin NOT allowed in update schema
-```
+- [x] **1.5** Log authorization failures
+  - 📍 Location: `src/security/audit_logger.py::log_authorization_failure()`
+  - 📊 Metric: `auth_failures_by_resource`
 
-#### ✅ Checklist
-- [x] Define separate schemas for read/write/admin
-- [x] Never expose sensitive fields (passwords, API keys, tokens)
-- [x] Validate all input fields explicitly
-- [x] Prevent mass assignment attacks
-- [x] Use allowlists, not denylists
+- [x] **1.6** Prevent mass assignment vulnerabilities
+  - 📍 Location: `src/api/schemas.py` (Pydantic models with explicit fields)
+  - 🧪 Test: `tests/api/test_mass_assignment.py`
+
+- [x] **1.7** Implement role-based access control (RBAC)
+  - 📍 Location: `src/security/rbac.py::has_permission()`
+  - 🧪 Test: `tests/security/test_rbac.py`
+
+- [x] **1.8** Validate nested resource ownership
+  - 📍 Location: `src/api/dependencies.py::check_nested_ownership()`
+  - 🧪 Test: `tests/api/test_nested_resources.py`
 
 ---
 
-## API4:2023 - Unrestricted Resource Consumption
+## API2: Broken Authentication
 
-### Risk Description
-Lack of resource limits allows attackers to cause denial of service or excessive costs.
+**Risk Level:** ⚠️ Critical
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **2.1** Implement secure JWT authentication
+  - 📍 Location: `src/security/auth.py::create_access_token()`
+  - 🧪 Test: `tests/security/test_jwt_auth.py`
+  - 📊 Metric: `auth_tokens_issued_total`
 
-1. **Rate Limiting**
-```python
-# src/middleware/rate_limiter.py
-default_limits = {
-    "requests_per_minute": 60,
-    "requests_per_hour": 1000,
-    "requests_per_day": 10000,
-}
-```
+- [x] **2.2** Use strong password policy (12+ chars, complexity)
+  - 📍 Location: `src/security/password_policy.py::validate_password()`
+  - 🧪 Test: `tests/security/test_password_policy.py`
 
-2. **Request Size Limits**
-```python
-# Maximum request body size
-MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
+- [x] **2.3** Implement account lockout (5 failed attempts)
+  - 📍 Location: `src/security/auth.py::check_account_lockout()`
+  - 📊 Metric: `account_lockouts_total`
 
-# Pagination limits
-MAX_PAGE_SIZE = 100
-DEFAULT_PAGE_SIZE = 20
-```
+- [x] **2.4** Enable Multi-Factor Authentication (TOTP)
+  - 📍 Location: `src/security/mfa.py::verify_totp()`
+  - 🧪 Test: `tests/security/test_mfa.py`
 
-3. **Token Usage Quotas**
-```python
-# Model provider token limits
-user_quotas = {
-    "free_tier": 100_000,  # tokens per month
-    "pro_tier": 1_000_000,
-    "enterprise_tier": 10_000_000,
-}
-```
+- [x] **2.5** Secure token storage (httpOnly, secure, SameSite)
+  - 📍 Location: `src/api/auth_routes.py::set_auth_cookie()`
+  - 🧪 Test: Verify cookie attributes
 
-4. **Timeout Configuration**
-```python
-REQUEST_TIMEOUT = 30  # seconds
-MODEL_TIMEOUT = 60    # seconds
-EXPORT_TIMEOUT = 300  # seconds for large exports
-```
+- [x] **2.6** Implement token expiration (15 min access, 7 day refresh)
+  - 📍 Location: `config/security_config.py::TOKEN_EXPIRE_MINUTES`
+  - 🧪 Test: `tests/security/test_token_expiration.py`
 
-#### 📊 Monitoring
-- Rate limit violations: `rate_limit_exceeded_total`
-- Token usage: `tokens_used_total`
-- Request sizes: `request_size_bytes`
-- Active requests: `active_requests_gauge`
+- [x] **2.7** Rotate refresh tokens on use
+  - 📍 Location: `src/security/auth.py::rotate_refresh_token()`
+  - 🧪 Test: `tests/security/test_token_rotation.py`
 
-#### ✅ Checklist
-- [x] Implement rate limiting per user/IP
-- [x] Set maximum request size
-- [x] Enforce pagination limits
-- [x] Set operation timeouts
-- [x] Implement token/cost quotas
-- [x] Monitor resource consumption
-- [x] Alert on anomalous usage
+- [x] **2.8** Hash passwords with bcrypt (cost factor 12)
+  - 📍 Location: `src/security/password.py::hash_password()`
+  - 🧪 Test: Verify bcrypt usage
+
+- [x] **2.9** Implement CAPTCHA for login (after 3 failures)
+  - 📍 Location: `src/security/captcha.py::verify_recaptcha()`
+  - 🧪 Test: `tests/security/test_captcha.py`
+
+- [x] **2.10** Log all authentication events
+  - 📍 Location: `src/security/audit_logger.py::log_auth_event()`
+  - 📊 Metric: `auth_events_total{event_type}`
+
+- [x] **2.11** Implement session timeout (30 min inactivity)
+  - 📍 Location: `src/security/session.py::check_session_timeout()`
+  - 🧪 Test: `tests/security/test_session_timeout.py`
+
+- [x] **2.12** Prevent credential stuffing (rate limit per IP)
+  - 📍 Location: `src/middleware/rate_limiter.py::auth_rate_limit`
+  - 📊 Metric: `rate_limit_exceeded_total{endpoint="/auth/login"}`
 
 ---
 
-## API5:2023 - Broken Function Level Authorization
+## API3: Broken Object Property Level Authorization
 
-### Risk Description
-Regular users can access administrative functions due to missing authorization checks.
+**Risk Level:** ⚠️ High
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **3.1** Implement field-level authorization
+  - 📍 Location: `src/api/schemas.py::PrivateUserResponse` (separate schemas)
+  - 🧪 Test: `tests/api/test_field_filtering.py`
 
-1. **Role-Based Access Control (RBAC)**
-```python
-# src/security/rbac.py
-class Role(Enum):
-    USER = "user"
-    ADMIN = "admin"
-    SUPER_ADMIN = "super_admin"
+- [x] **3.2** Use explicit field inclusion (not exclusion)
+  - 📍 Location: All Pydantic schemas use `include` sets
+  - 🧪 Test: Schema validation tests
 
-@require_role(Role.ADMIN)
-async def delete_user(user_id: UUID):
-    # Only admins can delete users
-    pass
-```
+- [x] **3.3** Sanitize output based on user role
+  - 📍 Location: `src/api/dependencies.py::filter_response_fields()`
+  - 🧪 Test: `tests/api/test_role_based_filtering.py`
 
-2. **Permission Decorators**
-```python
-from functools import wraps
+- [x] **3.4** Prevent excessive data exposure
+  - 📍 Location: Pagination limits (max 100 per page)
+  - 🧪 Test: `tests/api/test_pagination_limits.py`
 
-def require_permission(permission: str):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, current_user: User, **kwargs):
-            if not current_user.has_permission(permission):
-                raise HTTPException(status_code=403)
-            return await func(*args, current_user=current_user, **kwargs)
-        return wrapper
-    return decorator
-```
+- [x] **3.5** Validate input properties (no extra fields)
+  - 📍 Location: Pydantic `Extra.forbid` configuration
+  - 🧪 Test: `tests/api/test_extra_fields_rejected.py`
 
-3. **Endpoint Protection**
-```python
-# Admin endpoints under /admin prefix
-@app.get("/admin/users", dependencies=[Depends(require_admin)])
-@app.delete("/admin/users/{user_id}", dependencies=[Depends(require_admin)])
-```
-
-#### ✅ Checklist
-- [x] Implement RBAC system
-- [x] Protect all administrative functions
-- [x] Deny by default (explicit allow)
-- [x] Test horizontal privilege escalation
-- [x] Test vertical privilege escalation
-- [x] Separate admin routes
+- [x] **3.6** Document API response schemas
+  - 📍 Location: OpenAPI spec at `/api/docs`
+  - 🧪 Verify: Schema completeness
 
 ---
 
-## API6:2023 - Unrestricted Access to Sensitive Business Flows
+## API4: Unrestricted Resource Consumption
 
-### Risk Description
-Automated abuse of legitimate business flows (e.g., bulk operations, automated signups).
+**Risk Level:** ⚠️ High
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **4.1** Implement rate limiting (1000 req/hour per user)
+  - 📍 Location: `src/middleware/rate_limiter.py::RateLimiter`
+  - 📊 Metric: `rate_limit_exceeded_total`
 
-1. **Business Flow Rate Limiting**
-```python
-# Stricter limits for sensitive operations
-sensitive_flow_limits = {
-    "conversation_creation": "10/hour",
-    "model_inference": "100/hour",  
-    "export_operations": "5/hour",
-    "account_changes": "3/hour",
-}
-```
+- [x] **4.2** Set maximum request size (10 MB)
+  - 📍 Location: `src/api/main.py::app.add_middleware(RequestSizeLimiter)`
+  - 🧪 Test: `tests/api/test_request_size_limit.py`
 
-2. **Anomaly Detection**
-```python
-# Detect unusual patterns
-if user.conversations_today > 100:
-    logger.warning(f"Unusual activity: {user.id}")
-    # Trigger review/captcha
-```
+- [x] **4.3** Limit response pagination (max 100 items)
+  - 📍 Location: `src/api/dependencies.py::PaginationParams`
+  - 🧪 Test: `tests/api/test_pagination.py`
 
-3. **CAPTCHA Integration**
-```python
-# For suspicious behavior
-if is_suspicious_activity(user):
-    require_captcha_verification()
-```
+- [x] **4.4** Implement request timeout (30 seconds)
+  - 📍 Location: `src/api/main.py::app.add_middleware(TimeoutMiddleware)`
+  - 📊 Metric: `request_timeout_total`
 
-#### ✅ Checklist
-- [x] Identify sensitive business flows
-- [x] Apply stricter rate limits
-- [x] Implement anomaly detection
-- [x] Add CAPTCHA for suspicious activity
-- [x] Monitor for automated abuse
+- [x] **4.5** Limit concurrent requests per user (10)
+  - 📍 Location: `src/middleware/concurrency_limiter.py`
+  - 📊 Metric: `concurrent_requests_gauge`
 
----
+- [x] **4.6** Implement cost-based throttling for AI calls
+  - 📍 Location: `src/model/cost_limiter.py::check_user_quota()`
+  - 📊 Metric: `ai_cost_per_user`
 
-## API7:2023 - Server Side Request Forgery (SSRF)
+- [x] **4.7** Set maximum conversation length (100 messages)
+  - 📍 Location: `src/model/conversation_manager.py::MAX_MESSAGES`
+  - 🧪 Test: `tests/api/test_conversation_limits.py`
 
-### Risk Description
-API fetches remote resources without validating user-supplied URLs.
+- [x] **4.8** Limit file upload size (5 MB per file)
+  - 📍 Location: `src/api/upload.py::MAX_FILE_SIZE`
+  - 🧪 Test: `tests/api/test_file_upload_limits.py`
 
-### Zakera Implementation
+- [x] **4.9** Implement query complexity limits (GraphQL-style)
+  - 📍 Location: `src/api/query_complexity.py`
+  - 🧪 Test: `tests/api/test_query_complexity.py`
 
-#### ✅ Controls Implemented
-
-1. **URL Validation**
-```python
-# src/security/url_validator.py
-ALLOWED_SCHEMES = ["https"]
-BLOCKED_IPS = [
-    "127.0.0.1",
-    "0.0.0.0",
-    "localhost",
-    "169.254.169.254",  # AWS metadata
-]
-
-def validate_url(url: str) -> bool:
-    parsed = urlparse(url)
-    if parsed.scheme not in ALLOWED_SCHEMES:
-        raise ValueError("Invalid scheme")
-    
-    # Prevent internal network access
-    ip = socket.gethostbyname(parsed.hostname)
-    if ipaddress.ip_address(ip).is_private:
-        raise ValueError("Private IP not allowed")
-    
-    return True
-```
-
-2. **Allowlist Model Provider URLs**
-```python
-ALLOWED_PROVIDER_DOMAINS = [
-    "api.openai.com",
-    "api.anthropic.com",
-    "generativelanguage.googleapis.com",
-]
-```
-
-#### ✅ Checklist
-- [x] Validate all user-supplied URLs
-- [x] Use allowlists for external services
-- [x] Block private IP ranges
-- [x] Block cloud metadata endpoints
-- [x] Use network segmentation
+- [x] **4.10** Monitor resource usage per user
+  - 📊 Metrics: `cpu_usage_by_user`, `memory_usage_by_user`
+  - 🚨 Alert: High resource usage
 
 ---
 
-## API8:2023 - Security Misconfiguration
+## API5: Broken Function Level Authorization
 
-### Risk Description
-Insecure default configurations, incomplete setups, or exposed error messages.
+**Risk Level:** ⚠️ High
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **5.1** Implement function-level authorization
+  - 📍 Location: `src/api/dependencies.py::require_role()`
+  - 🧪 Test: `tests/security/test_function_auth.py`
 
-1. **Secure Defaults**
-```python
-# config/security.py
-SECURE_DEFAULTS = {
-    "DEBUG": False,
-    "ALLOW_ORIGINS": [],  # Explicit CORS
-    "EXPOSE_ERROR_DETAILS": False,
-    "ENABLE_HTTPS_ONLY": True,
-}
-```
+- [x] **5.2** Deny access to admin functions by default
+  - 📍 Location: `src/security/permissions.py::admin_only` decorator
+  - 🧪 Test: `tests/security/test_admin_access.py`
 
-2. **Security Headers**
-```python
-# Automatically applied to all responses
-security_headers = {
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-    "X-Frame-Options": "DENY",
-    "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'self'",
-}
-```
+- [x] **5.3** Use explicit role checks (not implicit)
+  - 📍 Location: All admin routes use `@admin_only` decorator
+  - 🧪 Test: Verify decorator usage
 
-3. **Error Handling**
-```python
-# Production error responses (no stack traces)
-@app.exception_handler(Exception)
-async def production_exception_handler(request, exc):
-    logger.error(f"Error: {exc}", extra={"request": request})
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
-```
+- [x] **5.4** Log admin function access
+  - 📍 Location: `src/security/audit_logger.py::log_admin_action()`
+  - 📊 Metric: `admin_actions_total{action}`
 
-4. **Dependency Security**
-```yaml
-# .github/dependabot.yml
-version: 2
-updates:
-  - package-ecosystem: "pip"
-    schedule:
-      interval: "daily"
-    open-pull-requests-limit: 10
-```
+- [x] **5.5** Implement least privilege principle
+  - 📍 Location: `src/security/rbac.py::ROLE_PERMISSIONS`
+  - 🧪 Test: Verify minimal permissions
 
-#### ✅ Checklist
-- [x] Disable debug mode in production
-- [x] Apply security headers
-- [x] Use secure defaults
-- [x] Don't expose stack traces
-- [x] Keep dependencies updated
-- [x] Regular security scans
-- [x] Remove unused features
+- [x] **5.6** Separate admin and user API routes
+  - 📍 Location: `/api/v1/admin/*` vs `/api/v1/*`
+  - 🧪 Test: Route isolation tests
+
+- [x] **5.7** Require MFA for sensitive operations
+  - 📍 Location: `src/api/dependencies.py::require_mfa_verification()`
+  - 🧪 Test: `tests/security/test_mfa_required.py`
 
 ---
 
-## API9:2023 - Improper Inventory Management
+## API6: Unrestricted Access to Sensitive Business Flows
 
-### Risk Description
-Lack of documentation and visibility into API versions and endpoints.
+**Risk Level:** ⚠️ Medium
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **6.1** Implement CAPTCHA for sensitive flows
+  - 📍 Location: Password reset, account creation
+  - 🧪 Test: `tests/security/test_captcha_flows.py`
 
-1. **API Versioning**
-```python
-# All endpoints under versioned prefix
-app.include_router(api_router, prefix="/api/v1")
-```
+- [x] **6.2** Rate limit sensitive operations (stricter)
+  - 📍 Location: `src/middleware/rate_limiter.py::sensitive_rate_limit`
+  - 📊 Metric: `sensitive_operations_rate_limited`
 
-2. **Comprehensive Documentation**
-- OpenAPI/Swagger: `http://localhost:8000/api/docs`
-- ReDoc: `http://localhost:8000/api/redoc`
-- Integration guide: `docs/api-integration-guide.md`
+- [x] **6.3** Implement workflow state validation
+  - 📍 Location: `src/api/workflows.py::validate_state_transition()`
+  - 🧪 Test: `tests/api/test_workflow_states.py`
 
-3. **API Inventory**
-```yaml
-# Maintained in openapi.json
-endpoints:
-  - path: /api/v1/chat/send
-    method: POST
-    authentication: required
-    rate_limit: 60/min
-```
+- [x] **6.4** Monitor for unusual patterns
+  - 📊 Metrics: Anomaly detection on business flows
+  - 🚨 Alert: Suspicious activity patterns
 
-4. **Deprecation Process**
-```python
-@app.get("/api/v1/old-endpoint")
-@deprecated(version="0.8.0", alternative="/api/v2/new-endpoint")
-async def old_endpoint():
-    # Include deprecation warning in response
-    pass
-```
-
-#### ✅ Checklist
-- [x] Version all APIs
-- [x] Maintain API documentation
-- [x] Document authentication requirements
-- [x] Track deprecated endpoints
-- [x] Inventory all exposed endpoints
-- [x] Document rate limits
+- [ ] **6.5** Implement device fingerprinting (PLANNED)
+  - 📍 Location: To be implemented
+  - 🧪 Test: To be added
+  - Status: 🚧 Planned for v0.8.0
 
 ---
 
-## API10:2023 - Unsafe Consumption of APIs
+## API7: Server Side Request Forgery
 
-### Risk Description
-Trusting data from third-party APIs without validation.
+**Risk Level:** ⚠️ High
 
-### Zakera Implementation
+### Controls
 
-#### ✅ Controls Implemented
+- [x] **7.1** Validate and sanitize all URLs
+  - 📍 Location: `src/security/validators.py::validate_url()`
+  - 🧪 Test: `tests/security/test_url_validation.py`
 
-1. **Input Validation from External APIs**
-```python
-# src/model/providers.py
-async def call_openai(prompt: str):
-    response = await openai.ChatCompletion.create(...)
-    
-    # Validate response structure
-    validated = OpenAIResponseSchema(**response)
-    
-    # Sanitize output
-    clean_text = sanitize_llm_output(validated.content)
-    
-    return clean_text
-```
+- [x] **7.2** Use URL whitelist for external requests
+  - 📍 Location: `config/security_config.py::ALLOWED_EXTERNAL_HOSTS`
+  - 🧪 Test: `tests/security/test_url_whitelist.py`
 
-2. **Timeout and Circuit Breaker**
-```python
-# Prevent hanging on external API failures
-async with httpx.AsyncClient(timeout=30.0) as client:
-    try:
-        response = await client.post(...)
-    except httpx.TimeoutException:
-        # Fallback to alternative provider
-        pass
-```
+- [x] **7.3** Disable URL redirects
+  - 📍 Location: `httpx.Client(follow_redirects=False)`
+  - 🧪 Test: Verify redirect handling
 
-3. **Response Validation**
-```python
-class ExternalAPIResponse(BaseModel):
-    """Validate all external API responses"""
-    data: dict
-    status: str = Field(..., regex="^(success|error)$")
-    
-    @validator('data')
-    def validate_data(cls, v):
-        # Additional validation logic
-        return v
-```
+- [x] **7.4** Block private IP ranges (RFC 1918)
+  - 📍 Location: `src/security/validators.py::is_private_ip()`
+  - 🧪 Test: `tests/security/test_ip_filtering.py`
 
-#### ✅ Checklist
-- [x] Validate all external API responses
-- [x] Set timeouts for external calls
-- [x] Implement circuit breakers
-- [x] Sanitize external data
-- [x] Use TLS for external communication
-- [x] Monitor external API health
+- [x] **7.5** Use DNS resolution validation
+  - 📍 Location: `src/security/dns_validator.py::validate_dns()`
+  - 🧪 Test: DNS rebinding attack tests
+
+- [x] **7.6** Implement timeout for external requests (10s)
+  - 📍 Location: All HTTP clients use `timeout=10`
+  - 🧪 Test: Timeout behavior tests
+
+- [x] **7.7** Log all external requests
+  - 📍 Location: `src/security/audit_logger.py::log_external_request()`
+  - 📊 Metric: `external_requests_total{host}`
+
+- [x] **7.8** Use separate network for external requests
+  - 📍 Location: Kubernetes NetworkPolicy configuration
+  - 🧪 Test: Network isolation tests
 
 ---
 
-## Security Testing
+## API8: Security Misconfiguration
 
-### Automated Testing
+**Risk Level:** ⚠️ Medium
+
+### Controls
+
+- [x] **8.1** Disable debug mode in production
+  - 📍 Location: `config/settings.py::DEBUG=False`
+  - 🧪 Test: Environment validation
+
+- [x] **8.2** Implement security headers
+  - 📍 Location: `src/middleware/security_headers.py`
+  - 🧪 Test: `scripts/security/test_security_headers.sh`
+
+- [x] **8.3** Use HTTPS only (HSTS)
+  - 📍 Location: `Strict-Transport-Security: max-age=31536000`
+  - 🧪 Test: HSTS header validation
+
+- [x] **8.4** Implement Content Security Policy
+  - 📍 Location: `CSP: default-src 'self'`
+  - 🧪 Test: CSP header validation
+
+- [x] **8.5** Remove server version headers
+  - 📍 Location: `server_tokens=False` in uvicorn
+  - 🧪 Test: Verify headers don't leak version
+
+- [x] **8.6** Disable unnecessary HTTP methods
+  - 📍 Location: FastAPI route definitions (explicit methods)
+  - 🧪 Test: `tests/api/test_http_methods.py`
+
+- [x] **8.7** Implement proper error handling
+  - 📍 Location: `src/api/error_handlers.py`
+  - 🧪 Test: No stack traces in production
+
+- [x] **8.8** Use secure default configurations
+  - 📍 Location: All security defaults in `config/`
+  - 🧪 Test: Configuration validation
+
+- [x] **8.9** Enable CORS with strict origin validation
+  - 📍 Location: `src/middleware/cors.py::ALLOWED_ORIGINS`
+  - 🧪 Test: `tests/middleware/test_cors.py`
+
+- [x] **8.10** Implement API versioning
+  - 📍 Location: `/api/v1/*` routing
+  - 🧪 Test: Version isolation
+
+- [x] **8.11** Secure database connections (TLS)
+  - 📍 Location: `DATABASE_URL` with `sslmode=require`
+  - 🧪 Test: Connection encryption
+
+- [x] **8.12** Use environment-specific configurations
+  - 📍 Location: `.env.development`, `.env.production`
+  - 🧪 Test: Config isolation
+
+- [x] **8.13** Implement secrets management (Vault/AWS Secrets)
+  - 📍 Location: `src/config/secrets.py::get_secret()`
+  - 🧪 Test: No hardcoded secrets
+
+- [ ] **8.14** Regular security updates (automated) (IN PROGRESS)
+  - 📍 Location: Dependabot configuration
+  - 🧪 Test: Update pipeline
+  - Status: 🚧 90% automated
+
+- [x] **8.15** Security configuration audit
+  - 📍 Location: `scripts/security/audit_config.py`
+  - 🧪 Test: Weekly automated audits
+
+---
+
+## API9: Improper Inventory Management
+
+**Risk Level:** ⚠️ Low
+
+### Controls
+
+- [x] **9.1** Maintain API documentation (OpenAPI/Swagger)
+  - 📍 Location: `/api/docs` (auto-generated)
+  - 🧪 Test: Documentation completeness
+
+- [x] **9.2** Version all API endpoints
+  - 📍 Location: `/api/v1/*` prefix
+  - 🧪 Test: Version consistency
+
+- [x] **9.3** Document deprecated endpoints
+  - 📍 Location: OpenAPI spec with `deprecated: true`
+  - 🧪 Test: Deprecation warnings
+
+- [x] **9.4** Maintain API changelog
+  - 📍 Location: `CHANGELOG.md`
+  - 🧪 Test: Changelog validation
+
+- [x] **9.5** Implement API discovery prevention
+  - 📍 Location: No directory listing, hidden endpoints documented
+  - 🧪 Test: Enumeration tests
+
+- [x] **9.6** Monitor for shadow APIs
+  - 📊 Metrics: Undocumented endpoint access
+  - 🚨 Alert: Unexpected API usage
+
+---
+
+## API10: Unsafe Consumption of APIs
+
+**Risk Level:** ⚠️ Medium
+
+### Controls
+
+- [x] **10.1** Validate all third-party API responses
+  - 📍 Location: `src/integrations/validators.py::validate_response()`
+  - 🧪 Test: `tests/integrations/test_response_validation.py`
+
+- [x] **10.2** Implement timeout for third-party calls
+  - 📍 Location: All HTTP clients use timeouts
+  - 🧪 Test: Timeout handling
+
+- [x] **10.3** Use allow-list for third-party APIs
+  - 📍 Location: `config/integrations.py::ALLOWED_APIS`
+  - 🧪 Test: Whitelist enforcement
+
+- [x] **10.4** Validate SSL certificates
+  - 📍 Location: `httpx.Client(verify=True)`
+  - 🧪 Test: Certificate validation
+
+- [x] **10.5** Implement circuit breaker for external APIs
+  - 📍 Location: `src/integrations/circuit_breaker.py`
+  - 📊 Metric: `circuit_breaker_state{api}`
+
+- [x] **10.6** Log all third-party API calls
+  - 📍 Location: `src/security/audit_logger.py::log_third_party_call()`
+  - 📊 Metric: `third_party_api_calls_total{provider}`
+
+- [x] **10.7** Sanitize data from third-party APIs
+  - 📍 Location: `src/security/input_sanitizer.py::sanitize_external_data()`
+  - 🧪 Test: `tests/security/test_external_sanitization.py`
+
+- [ ] **10.8** Implement API response caching (IN PROGRESS)
+  - 📍 Location: To be enhanced
+  - Status: 🚧 Basic caching implemented
+
+---
+
+## 🤖 Automated Compliance Checking
+
+### Daily Automated Checks
 
 ```bash
-# Run security test suite
-make test-security
+# Run OWASP compliance checker
+python scripts/security/check_owasp_compliance.py
 
-# Individual test categories
-pytest tests/security/test_authorization.py
-pytest tests/security/test_authentication.py
-pytest tests/security/test_input_validation.py
+# Test security headers
+bash scripts/security/test_security_headers.sh
+
+# Validate audit logging
+python scripts/security/validate_audit_logs.py
+
+# Check for security misconfigurations
+python scripts/security/audit_config.py
 ```
 
-### Manual Testing
-
-1. **Authorization Testing**
-   - Attempt to access other users' resources
-   - Test privilege escalation scenarios
-   - Verify role-based access controls
-
-2. **Authentication Testing**
-   - Test password strength requirements
-   - Verify MFA enforcement
-   - Test session management
-
-3. **Input Validation**
-   - SQL injection attempts
-   - XSS payloads
-   - Path traversal attempts
-
-### Penetration Testing
-
-```bash
-# OWASP ZAP scan
-docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-stable \
-  zap-baseline.py -t http://localhost:8000 -r zap-report.html
-```
-
----
-
-## Continuous Compliance
-
-### Automated Checks
+### CI/CD Integration
 
 ```yaml
 # .github/workflows/security.yml
-- name: Security Scan
-  run: |
-    bandit -r src/
-    safety check
-    trivy fs .
+- name: OWASP Compliance Check
+  run: python scripts/security/check_owasp_compliance.py --strict
 ```
 
-### Regular Reviews
+### Monitoring Dashboard
 
-- **Weekly:** Dependency updates review
-- **Monthly:** Security log analysis
-- **Quarterly:** Full OWASP compliance review
-- **Annually:** External penetration test
-
-### Metrics to Monitor
-
-```promql
-# Security event rates
-rate(authentication_failures_total[5m]) > 10
-rate(authorization_failures_total[5m]) > 5
-rate(input_validation_failures_total[5m]) > 20
-```
+Grafana dashboard: `monitoring/grafana/dashboards/owasp-compliance.json`
+- Real-time compliance metrics
+- Security event trends
+- Vulnerability tracking
 
 ---
 
-## Compliance Certification
+## 📚 References
 
-### Current Status
-
-**Zakera API Security Compliance**
-- OWASP API Security Top 10 2023: ✅ **100% Compliant**
-- Last Audit: February 2026
-- Next Review: May 2026
-
-### Recommended for:
-- SOC 2 Type II compliance
-- GDPR data protection requirements
-- HIPAA security controls
-- PCI DSS (with additional controls)
+- [OWASP API Security Top 10 (2023)](https://owasp.org/www-project-api-security/)
+- [OWASP API Security Project](https://owasp.org/www-project-api-security/)
+- [CWE - Common Weakness Enumeration](https://cwe.mitre.org/)
+- [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
 
 ---
 
-## Next Steps
+## ✅ Next Steps
 
-1. **Review this checklist quarterly**
-2. **Run automated security tests weekly**
-3. **Update as OWASP guidance evolves**
-4. **Conduct penetration testing annually**
-5. **Train team on secure coding practices**
+1. **Immediate Actions:**
+   - [ ] Implement device fingerprinting (API6.5)
+   - [ ] Enhance automated dependency updates (API8.14)
+   - [ ] Improve API response caching (API10.8)
+
+2. **Monthly Reviews:**
+   - Review and update checklist
+   - Audit compliance metrics
+   - Update security controls
+
+3. **Continuous Improvement:**
+   - Monitor OWASP updates
+   - Track new vulnerabilities
+   - Update security training
 
 ---
 
-**Document Owner:** Security Team  
-**Last Reviewed:** February 2026  
-**Next Review:** May 2026
+**Last Updated:** February 2026  
+**Compliance Score:** 96% (82/85 controls)  
+**Next Review:** March 2026
 
-**Questions?** See [Security Documentation](../SECURITY.md) or contact security@zakera.dev
+[Back to Security Documentation](../SECURITY.md) | [Audit Logging](AUDIT_LOGGING.md) | [Incident Response](SECURITY_INCIDENT_RESPONSE.md)
