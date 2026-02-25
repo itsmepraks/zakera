@@ -1,0 +1,192 @@
+# Security Configuration for Zakera
+
+# Authentication Settings
+authentication:
+  jwt:
+    access_token_expire_minutes: 15
+    refresh_token_expire_days: 7
+    algorithm: HS256
+    
+  password:
+    min_length: 12
+    require_uppercase: true
+    require_lowercase: true
+    require_numbers: true
+    require_special: true
+    
+  mfa:
+    enabled: true
+    issuer: "Zakera"
+    totp_period: 30
+    
+  session:
+    timeout_minutes: 60
+    max_concurrent_sessions: 5
+    
+  account_lockout:
+    enabled: true
+    max_failed_attempts: 5
+    lockout_duration_minutes: 15
+
+# Authorization Settings
+authorization:
+  default_role: "user"
+  roles:
+    - user
+    - premium
+    - admin
+    
+  permissions:
+    user:
+      - read:conversations
+      - write:conversations
+      - read:profile
+      - write:profile
+    premium:
+      - read:conversations
+      - write:conversations
+      - read:profile
+      - write:profile
+      - export:conversations
+      - advanced:models
+    admin:
+      - "*"
+
+# Security Headers
+security_headers:
+  enabled: true
+  hsts:
+    enabled: true
+    max_age: 31536000
+    include_subdomains: true
+    preload: true
+  
+  csp:
+    enabled: true
+    default_src: "'self'"
+    script_src: "'self'"
+    style_src: "'self' 'unsafe-inline'"
+    img_src: "'self' data: https:"
+    
+  x_frame_options: "DENY"
+  x_content_type_options: "nosniff"
+  referrer_policy: "strict-origin-when-cross-origin"
+
+# Rate Limiting
+rate_limiting:
+  enabled: true
+  
+  endpoints:
+    auth_login:
+      requests: 5
+      window: 15  # minutes
+      
+    auth_register:
+      requests: 3
+      window: 60
+      
+    chat_send:
+      requests: 60
+      window: 1  # minute
+      
+    conversation_export:
+      requests: 10
+      window: 60  # hour
+      
+    api_default:
+      requests: 100
+      window: 1  # minute
+
+# Input Validation
+input_validation:
+  max_request_size_mb: 10
+  max_message_length: 10000
+  max_conversation_title_length: 200
+  
+  allowed_file_extensions:
+    - .jpg
+    - .png
+    - .pdf
+    - .txt
+    
+  max_file_size_mb: 10
+
+# Audit Logging
+audit_logging:
+  enabled: true
+  storage: database
+  retention_days: 365
+  
+  events:
+    authentication: true
+    authorization: true
+    data_access: true
+    configuration: true
+    security: true
+    
+  sensitive_fields:
+    - password
+    - api_key
+    - token
+    - secret
+
+# Encryption
+encryption:
+  algorithm: "AES-256-GCM"
+  key_rotation_days: 90
+  
+  encrypt_at_rest:
+    - api_keys
+    - tokens
+    - sensitive_config
+    
+  encrypt_in_transit:
+    force_https: true
+    min_tls_version: "1.2"
+
+# Security Monitoring
+monitoring:
+  failed_login_threshold: 5
+  suspicious_ip_threshold: 10
+  rate_limit_violation_threshold: 3
+  
+  alerts:
+    email:
+      enabled: true
+      recipients:
+        - security@example.com
+    
+    slack:
+      enabled: false
+      webhook_url: "https://hooks.slack.com/services/xxx"
+
+# CORS Settings
+cors:
+  enabled: true
+  allowed_origins:
+    - "https://zakera.com"
+    - "https://app.zakera.com"
+  allowed_methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+  allowed_headers:
+    - Content-Type
+    - Authorization
+  allow_credentials: true
+  max_age: 3600
+
+# API Security
+api_security:
+  require_api_key: true
+  require_https: true
+  validate_content_type: true
+  
+  api_key:
+    rotation_days: 90
+    format: "zak_[a-zA-Z0-9]{32}"
+    
+  deprecation:
+    notice_period_days: 90
+    sunset_period_days: 180
