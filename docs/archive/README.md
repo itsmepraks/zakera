@@ -1,68 +1,74 @@
 # Documentation Archive
 
-> **Note:** This directory contains historical, temporary, and outdated documentation files that have been archived for reference purposes.
+This folder contains historical documentation that is no longer actively maintained but preserved for reference.
 
-## What's Here
+## 📁 Contents
 
-This archive contains:
+### Emergency & Urgent Documentation
 
-- **Emergency/Urgent Fix Documentation** - Resolved issues and emergency fixes
-- **Build/Deployment Summaries** - Historical build and deployment notes
-- **Implementation Summaries** - Completed feature implementation notes
-- **Temporary Documentation** - Documentation created for specific issues/PRs
+These documents were created during critical incidents and have been resolved:
 
-## Current Documentation
+- `EMERGENCY_FIX_NOW.md` - Emergency fixes documentation
+- `URGENT_CI_CD_FIXES_APPLIED.md` - CI/CD urgent fixes
+- `URGENT_FAILURE_INVESTIGATION_REPORT.md` - System failure investigation
+- `README_EMERGENCY_RESPONSE.md` - Emergency response procedures
+- `ACTION_REQUIRED_package-lock.md` - Package lock action items
 
-For up-to-date documentation, please see:
+### Implementation Summaries
 
-- **[Main Documentation Index](../README.md)** - Complete documentation map
-- **[Quickstart Guide](../QUICKSTART.md)** - Get started quickly
-- **[Troubleshooting](../TROUBLESHOOTING.md)** - Current issues and solutions
-- **[Changelog](../../CHANGELOG.md)** - Version history
+Comprehensive summaries of major implementation milestones:
 
-## Archive Organization
+- `COMPLETE_ENHANCEMENT_SUMMARY.md` - System enhancements overview
+- `COMPLETE_IMPLEMENTATION_SUMMARY.md` - Full implementation details
+- `COMPLETE_SYSTEM_SUMMARY.md` - Complete system summary
+- `COMPREHENSIVE_CONTRIBUTION_SUMMARY.md` - Contribution history
+- `COMPREHENSIVE_TEST_IMPLEMENTATION.md` - Testing implementation
+- `CI_CD_STATUS_REPORT.md` - CI/CD status report
+- `CI_CD_SUMMARY.md` - CI/CD summary
+- `CHANGELOG.md` - Historical changelog (see root CHANGELOG.md for current)
+- `COMMIT_ATTRIBUTION_TEST.md` - Commit attribution testing
+- `CONVERSATION_EXPORT_FEATURE.md` - Export feature documentation
+- `CONVERSATION_PERSISTENCE_SUMMARY.md` - Persistence summary
+- `INFRASTRUCTURE_DEPLOYMENT_SUMMARY.md` - Infrastructure summary
+- `LATEST_ENHANCEMENTS.md` - Recent enhancements
+- `MEMORY_ENHANCEMENT_SUMMARY.md` - Memory system enhancements
+- `MODEL_SYSTEM_SUMMARY.md` - Model system overview
+- `MONITORING_IMPLEMENTATION_SUMMARY.md` - Monitoring implementation
+- `MONITORING_SYSTEM_SUMMARY.md` - Monitoring system summary
+- `PROJECT_COMPLETION_SUMMARY.md` - Project completion summary
+- `SECURITY_ENHANCEMENT_SUMMARY.md` - Security enhancements
+- `SESSION_SUMMARY.md` - Development session summaries
+- `TEST_COVERAGE_SUMMARY.md` - Test coverage reports
+- `TOOL_SYSTEM_SUMMARY.md` - Tool system summary
 
-### Emergency/Urgent Files
-- `EMERGENCY_FIX_NOW.md` - Historical emergency fixes
-- `URGENT_*.md` - Resolved urgent issues
-- `README_EMERGENCY_RESPONSE.md` - Emergency response procedures (superseded)
+## 📝 Note
 
-### Summary Files
-- `*_SUMMARY.md` - Build, deployment, and implementation summaries
-- `*_IMPLEMENTATION.md` - Feature implementation notes
-- `*_ENHANCEMENT.md` - Enhancement documentation
+For current, actively maintained documentation, please refer to the main [docs folder](../).
 
-### Temporary Files
-- `ACTION_REQUIRED_*.md` - Completed action items
-- `COMMIT_ATTRIBUTION_TEST.md` - Testing documentation
+These archived files are:
+- ✅ Preserved for historical reference
+- ✅ Searchable for context
+- ❌ Not actively maintained
+- ❌ May contain outdated information
 
-## Why Archive?
+If you need information from these documents, check the current documentation first as it will be more up-to-date.
 
-These files were archived to:
+## 🔍 Finding Current Documentation
 
-1. **Improve repository organization** - Keep main docs clean and navigable
-2. **Maintain history** - Preserve context for resolved issues
-3. **Reduce confusion** - Prevent users from reading outdated information
-4. **Better discoverability** - Make current docs easier to find
+Instead of these archived files, refer to:
 
-## When to Archive
-
-Documentation should be archived when:
-
-- Emergency/urgent issues have been resolved
-- Features described are fully implemented
-- Information is superseded by newer documentation
-- Content is specific to a past version/issue
-- File was created for temporary tracking
-
-## Retention Policy
-
-Archived files are:
-
-- **Kept indefinitely** for historical reference
-- **Not maintained** or updated
-- **May be deleted** after 1 year if no longer relevant
+| Archived Topic | Current Documentation |
+|----------------|----------------------|
+| Emergency fixes | [Troubleshooting](../TROUBLESHOOTING.md) |
+| CI/CD information | [CI/CD Setup](../ci-cd-setup.md) |
+| Implementation details | [Architecture](../ARCHITECTURE.md) |
+| Testing info | [Testing Guide](../TESTING.md) |
+| Monitoring | [Monitoring Guide](../MONITORING.md) |
+| Security | [Security Guide](../SECURITY.md) |
+| Tools | [Tools Documentation](../tools.md) |
+| Model system | [Provider docs](../providers/) |
 
 ---
 
-**Last Updated:** February 2026
+**Archive Created**: February 2026  
+**Purpose**: Historical reference and repository organization
