@@ -1,256 +1,200 @@
-# Zakera Documentation
+# 📚 Zakera Documentation
 
 > **Production-Ready AI Chat Agent** - Complete documentation for developers, operators, and contributors.
 
-## 📚 Documentation Index
+[![Documentation](https://img.shields.io/badge/docs-latest-blue.svg)](https://github.com/itsmepraks/zakera/tree/main/docs)
+[![API Docs](https://img.shields.io/badge/API-Swagger-green.svg)](http://localhost:8000/api/docs)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+
+## 📖 Table of Contents
 
 ### 🚀 Getting Started
-
-Start here if you're new to Zakera:
-
 - **[Quick Start Guide](QUICKSTART.md)** - Get up and running in 5 minutes
-- **[Getting Started](getting-started.md)** - Comprehensive setup guide
-- **[Architecture Overview](ARCHITECTURE.md)** - System design and components
+- **[Getting Started](getting-started.md)** - Detailed setup and installation
 - **[Environment Variables](ENVIRONMENT_VARIABLES.md)** - Configuration reference
+- **[API Integration Guide](api-integration-guide.md)** - Complete API usage examples
 
-### 🎯 Core Features
+### 🏗️ Architecture & Design
+- **[Architecture Overview](ARCHITECTURE.md)** - System design and components
+- **[Architecture Details](architecture.md)** - Technical architecture deep dive
+- **[Memory System](MEMORY_SYSTEM.md)** - Conversation memory architecture
+- **[Database Persistence](DATABASE_PERSISTENCE.md)** - Data storage strategy
 
-#### Model Providers
+### 🤖 Model Providers
+- **[Local Models](LOCAL_MODELS.md)** - Ollama, LLaMA, Mistral setup
 - **[Gemini Provider](gemini-provider.md)** - Google Gemini integration
-- **[Local Models](LOCAL_MODELS.md)** - Ollama, HuggingFace, local LLMs
-- **[Provider Documentation](providers/)** - All provider guides
+- **[Provider Examples](providers/)** - Provider-specific guides
 
-#### Conversation & Memory
-- **[Memory System](MEMORY_SYSTEM.md)** - Context-aware conversations
-- **[Database Persistence](DATABASE_PERSISTENCE.md)** - Data storage & retrieval
-- **[Conversation Export](CONVERSATION_EXPORT.md)** - Export in multiple formats
+### 🔒 Security
+- **[Security Overview](SECURITY.md)** - Security best practices
+- **[Authentication Guide](AUTHENTICATION_GUIDE.md)** - JWT, MFA, OAuth setup
+- **[Rate Limiting](RATE_LIMITING.md)** - API rate limiting configuration
+- **[OWASP API Security Checklist](security/OWASP_API_SECURITY_CHECKLIST.md)** - Security validation ✨ NEW!
+- **[Audit Logging](security/AUDIT_LOGGING.md)** - Security audit trail ✨ NEW!
+- **[Input Sanitization](security/INPUT_SANITIZATION.md)** - Input validation guide ✨ NEW!
+- **[Security Incident Response](security/SECURITY_INCIDENT_RESPONSE.md)** - Incident handling ✨ NEW!
 
-#### Tools & Integration
-- **[Tools Guide](tools.md)** - Built-in and custom tools
-- **[Tool Examples](tools-examples.md)** - Real-world examples
-- **[API Integration Guide](api-integration-guide.md)** - Complete API reference
-- **[API Reference](api-reference.md)** - Endpoint documentation
+### 🛠️ Development
+- **[API Reference](api-reference.md)** - REST API documentation
+- **[Tools Documentation](tools.md)** - Tool system development
+- **[Tools Examples](tools-examples.md)** - Tool implementation examples
+- **[Testing Guide](TESTING.md)** - Test strategy and execution
+- **[Testing Examples](testing/)** - Test case examples
+- **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues and solutions
 
-### 👨‍💻 Development
+### 📊 Monitoring & Observability
+- **[Monitoring Guide](MONITORING.md)** - Complete monitoring setup
+- **[Monitoring Setup](MONITORING_SETUP.md)** - Step-by-step configuration
+- **[Distributed Tracing](DISTRIBUTED_TRACING.md)** - OpenTelemetry + Jaeger
+- **[Tracing Overview](TRACING.md)** - Tracing concepts and usage
+- **[Monitoring Details](monitoring.md)** - Advanced monitoring topics
 
-#### Testing
-- **[Testing Guide](TESTING.md)** - Unit, integration, and E2E tests
-- **[Test Examples](testing/)** - Test cases and patterns
+### 🚢 Deployment
+- **[Deployment Guide](DEPLOYMENT.md)** - Deployment options overview
+- **[Production Deployment](PRODUCTION_DEPLOYMENT.md)** - Production setup (primary)
+- **[Production Guide](DEPLOYMENT_PRODUCTION.md)** - Production best practices
+- **[Deployment Options](deployment.md)** - Docker, Kubernetes, cloud
+- **[CI/CD Setup](ci-cd-setup.md)** - Continuous integration/deployment
+- **[CI/CD Quick Reference](ci-cd-quick-reference.md)** - Common CI/CD tasks
 
-#### CI/CD
-- **[CI/CD Setup](ci-cd-setup.md)** - GitHub Actions workflows
-- **[CI/CD Quick Reference](ci-cd-quick-reference.md)** - Common tasks
+### 🎨 Frontend & UI
+- **[UI Enhancements](UI_ENHANCEMENTS.md)** - Frontend features
+- **[Conversation Export](CONVERSATION_EXPORT.md)** - Export functionality
 
-#### Contributing
-- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute
-- **[Code Style & Standards](../CONTRIBUTING.md#code-style)** - Coding conventions
+### 📦 Examples & Templates
+- **[Examples Directory](examples/)** - Code examples and templates
 
-### 🚀 Deployment
-
-#### Development & Staging
-- **[Docker Deployment](DEPLOYMENT.md)** - Docker & Docker Compose
-- **[Local Development](deployment.md)** - Development environment setup
-
-#### Production
-- **[Production Deployment](PRODUCTION_DEPLOYMENT.md)** - Production best practices
-- **[Production Guide](DEPLOYMENT_PRODUCTION.md)** - Kubernetes & cloud deployment
-- **[Kubernetes Setup](../kubernetes/)** - K8s manifests and Helm charts
-
-### 🔍 Operations
-
-#### Monitoring & Observability
-- **[Distributed Tracing](DISTRIBUTED_TRACING.md)** ⭐ - OpenTelemetry & Jaeger
-- **[Monitoring Guide](MONITORING.md)** - Prometheus & Grafana
-- **[Monitoring Setup](MONITORING_SETUP.md)** - Installation & configuration
-- **[Tracing Guide](TRACING.md)** - Advanced tracing patterns
-
-#### Security
-- **[Security Guide](SECURITY.md)** - Security best practices
-- **[Authentication](AUTHENTICATION_GUIDE.md)** - JWT, MFA, OAuth2
-- **[Rate Limiting](RATE_LIMITING.md)** - API protection
-
-#### Maintenance
-- **[Troubleshooting](TROUBLESHOOTING.md)** - Common issues & solutions
-
-### 🎨 Frontend
-
-- **[UI Enhancements](UI_ENHANCEMENTS.md)** - React frontend features
-- **[Frontend Examples](examples/)** - UI component examples
-
-### 📖 Additional Resources
-
-#### Architecture & Design
-- **[Architecture Deep Dive](architecture.md)** - Detailed system design
-- **[Design Patterns](ARCHITECTURE.md#design-patterns)** - Applied patterns
-
-#### Historical Documentation
-- **[Archive](archive/)** - Historical summaries and emergency docs
+### 📋 Archive
+- **[Archived Documentation](archive/)** - Historical docs and summaries
 
 ---
 
-## 🔍 Quick Navigation
+## 🎯 Quick Reference
 
-### By Role
+### Common Tasks
 
-**New Developer?**  
-→ [Quick Start](QUICKSTART.md) → [Architecture](ARCHITECTURE.md) → [API Integration](api-integration-guide.md)
+| Task | Documentation | Quick Command |
+|------|---------------|---------------|
+| **Start Development** | [Quick Start](QUICKSTART.md) | `make dev` |
+| **Run Tests** | [Testing](TESTING.md) | `make test` |
+| **View API Docs** | [API Reference](api-reference.md) | Navigate to `/api/docs` |
+| **Check Monitoring** | [Monitoring](MONITORING.md) | Navigate to `:3001` (Grafana) |
+| **View Traces** | [Tracing](DISTRIBUTED_TRACING.md) | Navigate to `:16686` (Jaeger) |
+| **Deploy Production** | [Production](PRODUCTION_DEPLOYMENT.md) | `make deploy-prod` |
+| **Troubleshoot Issues** | [Troubleshooting](TROUBLESHOOTING.md) | Check logs |
+| **Configure Security** | [Security](SECURITY.md) | Edit `.env` |
 
-**Setting Up Production?**  
-→ [Production Deployment](PRODUCTION_DEPLOYMENT.md) → [Monitoring](MONITORING.md) → [Security](SECURITY.md)
+### For Different Roles
 
-**Building Features?**  
-→ [Tools Guide](tools.md) → [Testing](TESTING.md) → [Contributing](../CONTRIBUTING.md)
+#### 👨‍💻 **Developers**
+Start here:
+1. [Quick Start Guide](QUICKSTART.md)
+2. [API Integration Guide](api-integration-guide.md)
+3. [Tools Documentation](tools.md)
+4. [Testing Guide](TESTING.md)
 
-**Operating the System?**  
-→ [Monitoring](MONITORING.md) → [Distributed Tracing](DISTRIBUTED_TRACING.md) → [Troubleshooting](TROUBLESHOOTING.md)
+#### 🔧 **DevOps Engineers**
+Start here:
+1. [Production Deployment](PRODUCTION_DEPLOYMENT.md)
+2. [CI/CD Setup](ci-cd-setup.md)
+3. [Monitoring Guide](MONITORING.md)
+4. [Security Overview](SECURITY.md)
 
-### By Task
+#### 🏢 **Enterprise Users**
+Start here:
+1. [Architecture Overview](ARCHITECTURE.md)
+2. [Security Guide](SECURITY.md)
+3. [Production Deployment](PRODUCTION_DEPLOYMENT.md)
+4. [Authentication Guide](AUTHENTICATION_GUIDE.md)
 
-| Task | Documentation |
-|------|---------------|
-| Set up locally | [Quick Start](QUICKSTART.md) |
-| Add a new LLM provider | [Provider Documentation](providers/) |
-| Create custom tools | [Tools Guide](tools.md) |
-| Deploy to Kubernetes | [Production Guide](DEPLOYMENT_PRODUCTION.md) |
-| Set up monitoring | [Monitoring Setup](MONITORING_SETUP.md) |
-| Enable distributed tracing | [Distributed Tracing](DISTRIBUTED_TRACING.md) |
-| Configure authentication | [Authentication Guide](AUTHENTICATION_GUIDE.md) |
-| Debug production issues | [Troubleshooting](TROUBLESHOOTING.md) |
-| Write tests | [Testing Guide](TESTING.md) |
-| Integrate via API | [API Integration Guide](api-integration-guide.md) |
+#### 🧪 **Data Scientists**
+Start here:
+1. [Local Models](LOCAL_MODELS.md)
+2. [Gemini Provider](gemini-provider.md)
+3. [Memory System](MEMORY_SYSTEM.md)
+4. [API Integration](api-integration-guide.md)
 
 ---
 
 ## 📝 Documentation Standards
 
-### File Naming
+### Document Status
 
-- Use `UPPERCASE.md` for major guides (e.g., `QUICKSTART.md`, `TESTING.md`)
-- Use `lowercase-with-dashes.md` for specific topics (e.g., `gemini-provider.md`)
-- Use directories for related docs (e.g., `providers/`, `examples/`, `testing/`)
+- ✅ **Complete** - Fully documented and reviewed
+- 🚧 **In Progress** - Being actively updated
+- 📝 **Draft** - Initial version, needs review
+- ✨ **New** - Recently added
+- 🔄 **Updated** - Recently revised
+- 📦 **Archived** - Moved to archive, historical reference only
 
-### Content Structure
+### Contributing to Documentation
 
-Every guide should include:
+We welcome documentation improvements! Please see:
+- [Contributing Guidelines](../CONTRIBUTING.md) - How to contribute
+- [Documentation Style Guide](archive/DOCUMENTATION_STYLE_GUIDE.md) - Writing standards
 
-1. **Clear Title** - What the document covers
-2. **Overview** - Brief description and purpose
-3. **Prerequisites** - What you need before starting
-4. **Step-by-Step Instructions** - Clear, actionable steps
-5. **Examples** - Real-world code examples
-6. **Troubleshooting** - Common issues and solutions
-7. **Next Steps** - Where to go next
+### Getting Help
 
-### Code Examples
-
-- Include working, tested code
-- Add comments explaining key concepts
-- Show both basic and advanced usage
-- Include expected output when relevant
+- 🐛 **Found a bug?** - [Open an issue](https://github.com/itsmepraks/zakera/issues)
+- 💡 **Have a question?** - Check [Troubleshooting](TROUBLESHOOTING.md)
+- 🤝 **Want to contribute?** - See [Contributing](../CONTRIBUTING.md)
+- 📧 **Need support?** - Contact the team
 
 ---
 
-## 🤝 Contributing to Documentation
+## 🔍 Search Documentation
 
-We welcome documentation improvements!
-
-### How to Contribute
-
-1. **Found a typo or error?**  
-   Submit a PR with the fix - no issue needed!
-
-2. **Documentation unclear?**  
-   Open an issue describing what's confusing and how it could be improved.
-
-3. **Want to add new documentation?**  
-   Follow the [Contributing Guide](../CONTRIBUTING.md) and documentation standards above.
-
-4. **Improving existing docs?**  
-   Ensure changes are accurate, clear, and include examples.
-
-### Documentation Checklist
-
-- [ ] Clear title and overview
-- [ ] Prerequisites listed
-- [ ] Step-by-step instructions
-- [ ] Working code examples
-- [ ] Tested commands/code
-- [ ] Links to related documentation
-- [ ] Troubleshooting section
-- [ ] Proper Markdown formatting
-- [ ] No broken links
+Use GitHub's search functionality:
+- Press `/` and type your search query
+- Use `repo:itsmepraks/zakera path:docs <your query>`
+- Check the [Archive](archive/) for historical documentation
 
 ---
 
-## 🔗 External Resources
+## 📊 Documentation Coverage
 
-### Project Links
-
-- **Repository**: [github.com/itsmepraks/zakera](https://github.com/itsmepraks/zakera)
-- **Issues**: [Report bugs or request features](https://github.com/itsmepraks/zakera/issues)
-- **Discussions**: [Ask questions or share ideas](https://github.com/itsmepraks/zakera/discussions)
-
-### API Documentation
-
-- **Swagger UI**: http://localhost:8000/api/docs (when running locally)
-- **ReDoc**: http://localhost:8000/api/redoc (when running locally)
-
-### Technology Documentation
-
-- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
-- [React](https://react.dev/) - Frontend framework
-- [OpenTelemetry](https://opentelemetry.io/) - Distributed tracing
-- [Prometheus](https://prometheus.io/) - Metrics
-- [Kubernetes](https://kubernetes.io/) - Container orchestration
+| Area | Coverage | Status |
+|------|----------|--------|
+| Getting Started | 100% | ✅ Complete |
+| API Documentation | 100% | ✅ Complete |
+| Security | 100% | ✅ Complete |
+| Deployment | 100% | ✅ Complete |
+| Monitoring | 100% | ✅ Complete |
+| Development | 95% | 🚧 In Progress |
+| Examples | 85% | 🚧 In Progress |
 
 ---
 
-## 📞 Getting Help
+## 🎓 Learning Path
 
-### Quick Help
+### Beginner (Day 1)
+1. Read [Quick Start](QUICKSTART.md)
+2. Set up local environment
+3. Make your first API call
+4. Explore [API Integration Guide](api-integration-guide.md)
 
-1. **Check [Troubleshooting Guide](TROUBLESHOOTING.md)** - Most common issues
-2. **Search Documentation** - Use GitHub's search or Ctrl+F
-3. **Review [Examples](examples/)** - Working code samples
+### Intermediate (Week 1)
+1. Understand [Architecture](ARCHITECTURE.md)
+2. Configure [Authentication](AUTHENTICATION_GUIDE.md)
+3. Set up [Monitoring](MONITORING.md)
+4. Write custom [Tools](tools.md)
 
-### Community Support
-
-- **GitHub Issues** - For bugs and feature requests
-- **GitHub Discussions** - For questions and ideas
-- **Documentation Issues** - For doc improvements
-
-### Reporting Documentation Issues
-
-When reporting a documentation issue, include:
-
-- Which document(s) are affected
-- What's unclear or incorrect
-- What you expected to see
-- Suggestions for improvement (optional)
+### Advanced (Month 1)
+1. Deploy to [Production](PRODUCTION_DEPLOYMENT.md)
+2. Implement [Distributed Tracing](DISTRIBUTED_TRACING.md)
+3. Configure [Security](SECURITY.md) hardening
+4. Optimize performance
 
 ---
 
-## 📊 Documentation Status
+## 📅 Last Updated
 
-| Category | Status | Coverage |
-|----------|--------|----------|
-| Getting Started | ✅ Complete | 100% |
-| Core Features | ✅ Complete | 100% |
-| Development | ✅ Complete | 95% |
-| Deployment | ✅ Complete | 100% |
-| Operations | ✅ Complete | 100% |
-| API Reference | ✅ Complete | 100% |
-
-**Last Updated**: February 2026  
-**Version**: 0.7.0
+**Version:** 0.7.0  
+**Date:** February 2026  
+**Status:** Production Ready 🚀
 
 ---
 
-## 🎯 Next Steps
+**⭐ If this documentation helped you, please star the repository!**
 
-1. **New to Zakera?** → Start with the [Quick Start Guide](QUICKSTART.md)
-2. **Ready to deploy?** → Check the [Production Deployment Guide](PRODUCTION_DEPLOYMENT.md)
-3. **Want to contribute?** → Read the [Contributing Guide](../CONTRIBUTING.md)
-4. **Need help?** → Visit [Troubleshooting](TROUBLESHOOTING.md)
-
-**Happy coding! 🚀**
+[Back to Main README](../README.md) | [View on GitHub](https://github.com/itsmepraks/zakera)
