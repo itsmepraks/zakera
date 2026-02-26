@@ -211,8 +211,34 @@ class ModelConfig:
         ),
     }
     
-    # Anthropic Models
+    # Anthropic Models (Including Claude-3.5 Sonnet)
     ANTHROPIC_MODELS: Dict[str, ModelInfo] = {
+        "claude-3-5-sonnet-20241022": ModelInfo(
+            name="claude-3-5-sonnet-20241022",
+            provider=ModelProviderType.ANTHROPIC,
+            tier=ModelTier.ADVANCED,
+            context_window=200000,
+            max_output_tokens=8192,
+            supports_streaming=True,
+            supports_functions=True,
+            cost_per_1k_input=0.003,
+            cost_per_1k_output=0.015,
+            description="Latest Claude-3.5 Sonnet with improved capabilities",
+            tags=["advanced", "efficient", "long-context", "tool-use", "latest"]
+        ),
+        "claude-3-5-sonnet-20240620": ModelInfo(
+            name="claude-3-5-sonnet-20240620",
+            provider=ModelProviderType.ANTHROPIC,
+            tier=ModelTier.ADVANCED,
+            context_window=200000,
+            max_output_tokens=8192,
+            supports_streaming=True,
+            supports_functions=True,
+            cost_per_1k_input=0.003,
+            cost_per_1k_output=0.015,
+            description="Original Claude-3.5 Sonnet release",
+            tags=["advanced", "efficient", "long-context", "tool-use"]
+        ),
         "claude-3-opus": ModelInfo(
             name="claude-3-opus-20240229",
             provider=ModelProviderType.ANTHROPIC,
@@ -372,7 +398,7 @@ class ModelConfig:
             provider_type=ModelProviderType.ANTHROPIC,
             api_key=os.getenv("ANTHROPIC_API_KEY"),
             base_url="https://api.anthropic.com/v1",
-            timeout=60,
+            timeout=120,  # Claude-3.5 may need more time
             max_retries=3,
             rate_limit_per_minute=50,
             priority=9
