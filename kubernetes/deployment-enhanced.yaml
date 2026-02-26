@@ -1,0 +1,381 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zakera-api
+  namespace: zakera-prod
+  labels:
+    app: zakera-api
+    tier: backend
+    version: v1
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    description: "Enhanced deployment with advanced health checks and resource management"
+spec:
+  replicas: 3
+  
+  # Advanced update strategy
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime deployments
+  
+  # Revision history
+  revisionHistoryLimit: 10
+  
+  # Progress deadline
+  progressDeadlineSeconds: 600
+  
+  selector:
+    matchLabels:
+      app: zakera-api
+  
+  template:
+    metadata:
+      labels:
+        app: zakera-api
+        tier: backend
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/api/v1/monitoring/metrics"
+        # Force pod restart on config changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+    
+    spec:
+      serviceAccountName: zakera-sa
+      
+      # Security context for pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 30
+      
+      # Init containers for dependency checks and setup
+      initContainers:
+      # Database migration
+      - name: migrate-db
+        image: zakera:latest
+        command: ["python", "-m", "alembic", "upgrade", "head"]
+        envFrom:
+        - configMapRef:
+            name: zakera-config
+        - secretRef:
+            name: zakera-secrets
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      
+      # Wait for dependencies
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z postgres 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+      
+      - name: wait-for-redis
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z redis 6379; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          echo "Redis is ready!"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+      
+      containers:
+      - name: zakera-api
+        image: zakera:latest
+        imagePullPolicy: Always
+        
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        
+        # Environment variables
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: zakera-config
+              key: environment
+        
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        
+        envFrom:
+        - configMapRef:
+            name: zakera-config
+        - secretRef:
+            name: zakera-secrets
+        
+        # Optimized resource limits
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+            ephemeral-storage: 2Gi
+        
+        # Startup probe - gives application time to start
+        startupProbe:
+          httpGet:
+            path: /api/v1/monitoring/health/startup
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 30  # 150 seconds total
+        
+        # Liveness probe - checks if container needs restart
+        livenessProbe:
+          httpGet:
+            path: /api/v1/monitoring/health/live
+            port: http
+            httpHeaders:
+            - name: X-Probe-Type
+              value: liveness
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Readiness probe - checks if container can accept traffic
+        readinessProbe:
+          httpGet:
+            path: /api/v1/monitoring/health/ready
+            port: http
+            httpHeaders:
+            - name: X-Probe-Type
+              value: readiness
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - |
+                echo "Initiating graceful shutdown..."
+                # Give load balancer time to remove pod
+                sleep 5
+                # Send SIGTERM to application
+                kill -TERM 1
+                # Wait for graceful shutdown
+                sleep 20
+        
+        # Volume mounts
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        - name: logs
+          mountPath: /app/logs
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: cache
+          mountPath: /app/cache
+        - name: tmp
+          mountPath: /tmp
+        
+        # Security context for container
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Set to true after fixing writable paths
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE  # If needed for port binding
+      
+      # Volumes
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: zakera-data-pvc
+      
+      - name: logs
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      - name: config
+        configMap:
+          name: zakera-config
+          defaultMode: 0444
+      
+      - name: cache
+        emptyDir:
+          sizeLimit: 512Mi
+      
+      - name: tmp
+        emptyDir:
+          sizeLimit: 512Mi
+      
+      # Advanced scheduling
+      affinity:
+        # Pod anti-affinity - spread across nodes
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - zakera-api
+              topologyKey: kubernetes.io/hostname
+          
+          # Spread across zones
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - zakera-api
+              topologyKey: topology.kubernetes.io/zone
+        
+        # Node affinity - prefer compute-optimized nodes
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - c5.large
+                - c5.xlarge
+                - c6i.large
+      
+      # Tolerations
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "api"
+        effect: "NoSchedule"
+      
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      - key: "node.kubernetes.io/unreachable"
+        operator: "Exists"
+        effect: "NoExecute"
+        tolerationSeconds: 300
+      
+      # Topology spread constraints
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: zakera-api
+      
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: zakera-api
+
+---
+# Quality of Service class marker
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zakera-qos-config
+  namespace: zakera-prod
+data:
+  qos-class: "Burstable"  # Can be: Guaranteed, Burstable, BestEffort
+  resource-notes: |
+    Resource Configuration:
+    - CPU: Burstable from 500m to 2000m
+    - Memory: Burstable from 1Gi to 2Gi
+    - Storage: 1Gi ephemeral + PVC for persistence
+    
+    QoS Class: Burstable
+    - Requests are less than limits
+    - Allows for traffic spikes
+    - More flexible than Guaranteed
+    - Better than BestEffort for production

@@ -1,0 +1,158 @@
+# Custom health check endpoints configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zakera-health-config
+  namespace: zakera-prod
+  labels:
+    app: zakera-api
+data:
+  health-check-config.yaml: |
+    # Health check configuration
+    health_checks:
+      startup:
+        enabled: true
+        path: /api/v1/monitoring/health/startup
+        timeout_seconds: 3
+        checks:
+          - name: database_connection
+            required: true
+          - name: redis_connection
+            required: true
+          - name: configuration_loaded
+            required: true
+      
+      liveness:
+        enabled: true
+        path: /api/v1/monitoring/health/live
+        timeout_seconds: 5
+        checks:
+          - name: application_running
+            required: true
+          - name: no_deadlock
+            required: true
+          - name: memory_available
+            required: true
+            threshold: 90  # percent
+      
+      readiness:
+        enabled: true
+        path: /api/v1/monitoring/health/ready
+        timeout_seconds: 3
+        checks:
+          - name: database_responsive
+            required: true
+            timeout_ms: 1000
+          - name: redis_responsive
+            required: true
+            timeout_ms: 500
+          - name: can_handle_requests
+            required: true
+          - name: model_providers_available
+            required: false  # Warning only
+      
+      deep:
+        enabled: true
+        path: /api/v1/monitoring/health/deep
+        timeout_seconds: 10
+        checks:
+          - name: database_query_performance
+            required: true
+            max_latency_ms: 100
+          - name: api_endpoints_responsive
+            required: true
+          - name: external_dependencies
+            required: false
+          - name: disk_space
+            required: true
+            min_free_percent: 10
+
+---
+# ServiceMonitor for Prometheus health check monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zakera-health-monitor
+  namespace: zakera-prod
+  labels:
+    app: zakera-api
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: zakera-api
+  endpoints:
+  - port: http
+    path: /api/v1/monitoring/metrics
+    interval: 30s
+    scrapeTimeout: 10s
+  
+  # Health check specific metrics
+  - port: http
+    path: /api/v1/monitoring/health/metrics
+    interval: 15s
+    scrapeTimeout: 5s
+    relabelings:
+    - sourceLabels: [__address__]
+      targetLabel: instance
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+
+---
+# PrometheusRule for health check alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: zakera-health-alerts
+  namespace: zakera-prod
+  labels:
+    app: zakera-api
+    prometheus: kube-prometheus
+spec:
+  groups:
+  - name: zakera-health
+    interval: 30s
+    rules:
+    # Liveness probe failures
+    - alert: ZakeraLivenessProbeFailure
+      expr: sum(rate(prober_probe_failed_total{job="zakera-api",probe="liveness"}[5m])) > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: health-check
+      annotations:
+        summary: "Zakera liveness probe failing"
+        description: "Liveness probe for {{ $labels.pod }} has been failing for 5 minutes"
+    
+    # Readiness probe failures
+    - alert: ZakeraReadinessProbeFailure
+      expr: sum(rate(prober_probe_failed_total{job="zakera-api",probe="readiness"}[5m])) > 0
+      for: 3m
+      labels:
+        severity: warning
+        component: health-check
+      annotations:
+        summary: "Zakera readiness probe failing"
+        description: "Readiness probe for {{ $labels.pod }} has been failing"
+    
+    # High probe latency
+    - alert: ZakeraHealthCheckLatencyHigh
+      expr: histogram_quantile(0.95, rate(prober_probe_duration_seconds_bucket{job="zakera-api"}[5m])) > 3
+      for: 5m
+      labels:
+        severity: warning
+        component: health-check
+      annotations:
+        summary: "Zakera health check latency is high"
+        description: "95th percentile health check latency is {{ $value }}s"
+    
+    # Frequent restarts due to liveness failures
+    - alert: ZakeraFrequentRestarts
+      expr: rate(kube_pod_container_status_restarts_total{namespace="zakera-prod",container="zakera-api"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: pod
+      annotations:
+        summary: "Zakera pod restarting frequently"
+        description: "Pod {{ $labels.pod }} is restarting frequently due to health check failures"

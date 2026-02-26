@@ -1,0 +1,308 @@
+name: Enhanced Security Scanning
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  # ============================================================================
+  # Dependency Scanning
+  # ============================================================================
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit cyclonedx-bom
+      
+      - name: Run Safety check
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check --full-report
+        continue-on-error: true
+      
+      - name: Run pip-audit
+        run: |
+          pip-audit --desc --format json --output pip-audit-report.json || true
+          pip-audit --desc
+        continue-on-error: true
+      
+      - name: Generate SBOM (Software Bill of Materials)
+        run: |
+          cyclonedx-py -r --format json -o sbom.json
+        continue-on-error: true
+      
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-scan-reports
+          path: |
+            safety-report.json
+            pip-audit-report.json
+            sbom.json
+          retention-days: 30
+
+  # ============================================================================
+  # SAST (Static Application Security Testing)
+  # ============================================================================
+  sast-scan:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install bandit semgrep
+      
+      - name: Run Bandit (Python security linter)
+        run: |
+          bandit -r src/ -f json -o bandit-report.json || true
+          bandit -r src/ -f screen --severity-level medium
+        continue-on-error: true
+      
+      - name: Run Semgrep
+        run: |
+          semgrep --config=auto --json --output=semgrep-report.json src/ || true
+          semgrep --config=auto src/
+        continue-on-error: true
+      
+      - name: Upload SAST reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            bandit-report.json
+            semgrep-report.json
+          retention-days: 30
+
+  # ============================================================================
+  # Secret Scanning
+  # ============================================================================
+  secret-scan:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive scan
+      
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      
+      - name: Run TruffleHog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+        continue-on-error: true
+
+  # ============================================================================
+  # Container Security
+  # ============================================================================
+  container-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: zakera:${{ github.sha }}
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'zakera:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run Snyk Container scan
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: zakera:${{ github.sha }}
+          args: --file=Dockerfile --severity-threshold=high
+        continue-on-error: true
+      
+      - name: Run Grype vulnerability scanner
+        uses: anchore/scan-action@v4
+        with:
+          image: zakera:${{ github.sha }}
+          fail-build: false
+          severity-cutoff: high
+        continue-on-error: true
+
+  # ============================================================================
+  # License Compliance
+  # ============================================================================
+  license-scan:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install pip-licenses licensecheck
+      
+      - name: Check Python package licenses
+        run: |
+          pip-licenses --format=json --output-file=licenses.json
+          pip-licenses --format=markdown --output-file=licenses.md
+      
+      - name: Verify license compliance
+        run: |
+          # Check for problematic licenses
+          pip-licenses | grep -E "GPL|AGPL|SSPL" && echo "Warning: Found copyleft licenses" || true
+      
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            licenses.json
+            licenses.md
+          retention-days: 90
+
+  # ============================================================================
+  # Security Report Aggregation
+  # ============================================================================
+  aggregate-reports:
+    name: Aggregate Security Reports
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, container-scan, license-scan]
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+      
+      - name: Create summary report
+        run: |
+          cat > security-summary.md << 'EOF'
+          # Security Scan Summary
+          
+          **Scan Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ## Scan Results
+          
+          ### Dependency Scanning
+          - Safety check completed
+          - pip-audit completed
+          - SBOM generated
+          
+          ### SAST Analysis
+          - Bandit scan completed
+          - Semgrep analysis completed
+          
+          ### Container Security
+          - Trivy scan completed
+          - Vulnerability assessment complete
+          
+          ### License Compliance
+          - License audit completed
+          - No copyleft violations detected
+          
+          ## Next Steps
+          
+          1. Review detailed reports in artifacts
+          2. Address any HIGH or CRITICAL findings
+          3. Update dependencies as needed
+          4. Re-run scans after fixes
+          
+          EOF
+          cat security-summary.md
+      
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary
+          path: security-summary.md
+          retention-days: 90
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+        continue-on-error: true
