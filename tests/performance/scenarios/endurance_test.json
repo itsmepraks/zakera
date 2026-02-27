@@ -1,0 +1,68 @@
+{
+  "name": "Endurance Test",
+  "description": "Long-running test to detect memory leaks and stability issues",
+  "duration": "1h",
+  "users": {
+    "count": 100,
+    "spawn_rate": 10,
+    "distribution": "uniform"
+  },
+  "wait_time": {
+    "min": 2.0,
+    "max": 5.0,
+    "type": "between"
+  },
+  "task_weights": {
+    "send_message": 60,
+    "list_conversations": 15,
+    "get_conversation": 10,
+    "export_conversation": 5,
+    "list_providers": 5,
+    "health_check": 5
+  },
+  "thresholds": {
+    "p50_latency_ms": 80,
+    "p95_latency_ms": 150,
+    "p99_latency_ms": 300,
+    "error_rate_percent": 0.5,
+    "throughput_rps": 50,
+    "memory_growth_mb_per_hour": 100,
+    "cpu_usage_percent": 70
+  },
+  "models": [
+    {"provider": "openai", "model": "gpt-3.5-turbo", "weight": 40},
+    {"provider": "google", "model": "gemini-1.5-flash", "weight": 35},
+    {"provider": "anthropic", "model": "claude-3-sonnet-20240229", "weight": 25}
+  ],
+  "monitoring": {
+    "enable_prometheus": true,
+    "prometheus_port": 8088,
+    "custom_metrics": true,
+    "export_reports": true,
+    "report_interval_minutes": 10,
+    "track_memory": true,
+    "track_connections": true
+  },
+  "stability_checks": {
+    "interval_minutes": 5,
+    "metrics": [
+      "memory_usage",
+      "cpu_usage",
+      "disk_usage",
+      "connection_pool_size",
+      "thread_count",
+      "response_time_trend"
+    ]
+  },
+  "data_cleanup": {
+    "enabled": true,
+    "cleanup_interval_minutes": 15,
+    "delete_old_conversations": true
+  },
+  "tags": ["endurance", "stability", "memory-leak", "long-running"],
+  "alerts": {
+    "memory_increase_threshold_percent": 50,
+    "response_time_degradation_percent": 30,
+    "error_rate_spike_percent": 2.0
+  }
+}

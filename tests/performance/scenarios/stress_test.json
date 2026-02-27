@@ -1,0 +1,55 @@
+{
+  "name": "Stress Test",
+  "description": "Tests system under heavy load to find breaking point",
+  "duration": "10m",
+  "users": {
+    "count": 200,
+    "spawn_rate": 20,
+    "distribution": "uniform"
+  },
+  "wait_time": {
+    "min": 0.5,
+    "max": 2.0,
+    "type": "between"
+  },
+  "task_weights": {
+    "send_message": 80,
+    "list_conversations": 10,
+    "get_conversation": 5,
+    "export_conversation": 2,
+    "list_providers": 1,
+    "health_check": 2
+  },
+  "thresholds": {
+    "p50_latency_ms": 100,
+    "p95_latency_ms": 500,
+    "p99_latency_ms": 1000,
+    "error_rate_percent": 5.0,
+    "throughput_rps": 200
+  },
+  "models": [
+    {"provider": "openai", "model": "gpt-3.5-turbo", "weight": 60},
+    {"provider": "google", "model": "gemini-1.5-flash", "weight": 40}
+  ],
+  "monitoring": {
+    "enable_prometheus": true,
+    "prometheus_port": 8088,
+    "custom_metrics": true,
+    "export_reports": true,
+    "alert_on_threshold_breach": true
+  },
+  "ramp_up": {
+    "enabled": true,
+    "stages": [
+      {"duration": "2m", "users": 50},
+      {"duration": "3m", "users": 100},
+      {"duration": "5m", "users": 200}
+    ]
+  },
+  "tags": ["stress", "breaking-point", "capacity"],
+  "failure_conditions": {
+    "max_error_rate_percent": 10,
+    "max_p99_latency_ms": 2000,
+    "min_throughput_rps": 50
+  }
+}

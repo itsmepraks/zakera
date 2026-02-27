@@ -1,0 +1,56 @@
+{
+  "name": "Normal Load Test",
+  "description": "Simulates typical production load with standard user behavior",
+  "duration": "5m",
+  "users": {
+    "count": 50,
+    "spawn_rate": 5,
+    "distribution": "uniform"
+  },
+  "wait_time": {
+    "min": 1.0,
+    "max": 3.0,
+    "type": "between"
+  },
+  "task_weights": {
+    "send_message": 70,
+    "list_conversations": 10,
+    "get_conversation": 5,
+    "export_conversation": 3,
+    "list_providers": 2,
+    "health_check": 10
+  },
+  "thresholds": {
+    "p50_latency_ms": 50,
+    "p95_latency_ms": 100,
+    "p99_latency_ms": 200,
+    "error_rate_percent": 0.5,
+    "throughput_rps": 100
+  },
+  "models": [
+    {"provider": "openai", "model": "gpt-3.5-turbo", "weight": 50},
+    {"provider": "google", "model": "gemini-1.5-flash", "weight": 30},
+    {"provider": "anthropic", "model": "claude-3-sonnet-20240229", "weight": 20}
+  ],
+  "monitoring": {
+    "enable_prometheus": true,
+    "prometheus_port": 8088,
+    "custom_metrics": true,
+    "export_reports": true
+  },
+  "tags": ["normal", "production", "baseline"],
+  "environments": {
+    "development": {
+      "host": "http://localhost:8000",
+      "api_key": "dev-api-key"
+    },
+    "staging": {
+      "host": "https://staging.zakera.ai",
+      "api_key": "staging-api-key"
+    },
+    "production": {
+      "host": "https://api.zakera.ai",
+      "api_key": "prod-api-key"
+    }
+  }
+}
