@@ -1,109 +1,96 @@
 /**
  * Conversation Search Component
- * 
- * Provides real-time search functionality with text highlighting.
- * Supports searching through conversation history with debouncing.
+ * Provides real-time search functionality with highlighting
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { debounce } from 'lodash';
-import './ConversationSearch.css';
 
-export interface SearchResult {
-  conversationId: string;
-  messageId: string;
+interface Message {
+  id: string;
   content: string;
-  timestamp: Date;
   role: 'user' | 'assistant';
-  highlightedContent?: string;
+  timestamp: string;
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+}
+
+interface SearchResult {
+  conversationId: string;
+  conversationTitle: string;
+  messageId: string;
+  messageContent: string;
+  matchIndex: number;
+  matchLength: number;
 }
 
 interface ConversationSearchProps {
-  conversations: any[];
-  onResultClick: (result: SearchResult) => void;
-  onClose?: () => void;
+  conversations: Conversation[];
+  onResultClick: (conversationId: string, messageId: string) => void;
   placeholder?: string;
+  className?: string;
 }
 
-export const ConversationSearch: React.FC<ConversationSearchProps> = ({
+const ConversationSearch: React.FC<ConversationSearchProps> = ({
   conversations,
   onResultClick,
-  onClose,
   placeholder = 'Search conversations...',
+  className = '',
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Focus input on mount
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  // Highlight matching text
-  const highlightMatch = (text: string, query: string): string => {
-    if (!query.trim()) return text;
-    
-    const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
-  };
-
-  // Escape special regex characters
-  const escapeRegex = (str: string): string => {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  };
-
-  // Search through conversations
+  // Search function
   const performSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
-      setIsSearching(false);
       return;
     }
 
-    setIsSearching(true);
-    
+    const query = searchQuery.toLowerCase();
     const searchResults: SearchResult[] = [];
-    const lowerQuery = searchQuery.toLowerCase();
 
-    conversations.forEach((conversation) => {
-      conversation.messages?.forEach((message: any) => {
-        const content = message.content || '';
-        const lowerContent = content.toLowerCase();
-        
-        if (lowerContent.includes(lowerQuery)) {
+    conversations.forEach(conversation => {
+      // Search in conversation title
+      const titleIndex = conversation.title.toLowerCase().indexOf(query);
+      if (titleIndex !== -1) {
+        searchResults.push({
+          conversationId: conversation.id,
+          conversationTitle: conversation.title,
+          messageId: '',
+          messageContent: conversation.title,
+          matchIndex: titleIndex,
+          matchLength: query.length,
+        });
+      }
+
+      // Search in messages
+      conversation.messages.forEach(message => {
+        const contentIndex = message.content.toLowerCase().indexOf(query);
+        if (contentIndex !== -1) {
           searchResults.push({
             conversationId: conversation.id,
+            conversationTitle: conversation.title,
             messageId: message.id,
-            content,
-            timestamp: new Date(message.timestamp),
-            role: message.role,
-            highlightedContent: highlightMatch(content, searchQuery),
+            messageContent: message.content,
+            matchIndex: contentIndex,
+            matchLength: query.length,
           });
         }
       });
     });
 
-    // Sort by relevance and recency
-    searchResults.sort((a, b) => {
-      // First by how many times the query appears
-      const aCount = (a.content.toLowerCase().match(new RegExp(lowerQuery, 'g')) || []).length;
-      const bCount = (b.content.toLowerCase().match(new RegExp(lowerQuery, 'g')) || []).length;
-      
-      if (aCount !== bCount) {
-        return bCount - aCount;
-      }
-      
-      // Then by timestamp
-      return b.timestamp.getTime() - a.timestamp.getTime();
-    });
-
-    setResults(searchResults.slice(0, 50)); // Limit to 50 results
+    setResults(searchResults.slice(0, 10)); // Limit to 10 results
     setSelectedIndex(0);
-    setIsSearching(false);
   }, [conversations]);
 
   // Debounced search
@@ -112,225 +99,197 @@ export const ConversationSearch: React.FC<ConversationSearchProps> = ({
     [performSearch]
   );
 
-  // Handle query change
-  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newQuery = e.target.value;
-    setQuery(newQuery);
-    debouncedSearch(newQuery);
-  };
-
-  // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev < results.length - 1 ? prev + 1 : prev
-        );
-        break;
-      
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => prev > 0 ? prev - 1 : 0);
-        break;
-      
-      case 'Enter':
-        e.preventDefault();
-        if (results[selectedIndex]) {
-          onResultClick(results[selectedIndex]);
-        }
-        break;
-      
-      case 'Escape':
-        e.preventDefault();
-        onClose?.();
-        break;
-    }
-  };
-
-  // Scroll selected result into view
   useEffect(() => {
-    const selectedElement = resultsRef.current?.children[selectedIndex] as HTMLElement;
-    if (selectedElement) {
-      selectedElement.scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth',
-      });
-    }
-  }, [selectedIndex]);
+    debouncedSearch(query);
+    return () => debouncedSearch.cancel();
+  }, [query, debouncedSearch]);
 
-  // Format timestamp
-  const formatTimestamp = (date: Date): string => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K to focus search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        setIsOpen(true);
+      }
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString();
+      // Escape to close
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+        inputRef.current?.blur();
+      }
+
+      // Arrow keys navigation
+      if (isOpen && results.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.max(prev - 1, 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          const result = results[selectedIndex];
+          if (result) {
+            handleResultClick(result);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, results, selectedIndex]);
+
+  const handleResultClick = (result: SearchResult) => {
+    onResultClick(result.conversationId, result.messageId);
+    setIsOpen(false);
+    setQuery('');
   };
 
-  // Truncate content for preview
-  const truncateContent = (content: string, maxLength: number = 150): string => {
-    if (content.length <= maxLength) return content;
-    return content.substring(0, maxLength) + '...';
+  const handleClear = () => {
+    setQuery('');
+    setResults([]);
+    inputRef.current?.focus();
+  };
+
+  const highlightMatch = (text: string, matchIndex: number, matchLength: number) => {
+    const before = text.slice(0, matchIndex);
+    const match = text.slice(matchIndex, matchIndex + matchLength);
+    const after = text.slice(matchIndex + matchLength);
+
+    return (
+      <>
+        {before}
+        <mark className="bg-yellow-200 dark:bg-yellow-900 text-gray-900 dark:text-gray-100 px-0.5 rounded">
+          {match}
+        </mark>
+        {after}
+      </>
+    );
+  };
+
+  const truncateText = (text: string, matchIndex: number, contextLength: number = 50) => {
+    const start = Math.max(0, matchIndex - contextLength);
+    const end = Math.min(text.length, matchIndex + contextLength + query.length);
+    const truncated = text.slice(start, end);
+    
+    return (
+      <>
+        {start > 0 && '...'}
+        {truncated}
+        {end < text.length && '...'}
+      </>
+    );
   };
 
   return (
-    <div className="conversation-search">
-      <div className="search-header">
-        <div className="search-input-container">
-          <svg
-            className="search-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            ref={inputRef}
-            type="text"
-            className="search-input"
-            placeholder={placeholder}
-            value={query}
-            onChange={handleQueryChange}
-            onKeyDown={handleKeyDown}
-          />
-          {query && (
-            <button
-              className="clear-button"
-              onClick={() => {
-                setQuery('');
-                setResults([]);
-                inputRef.current?.focus();
-              }}
-              aria-label="Clear search"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </div>
-        {onClose && (
+    <div className={`relative ${className}`}>
+      {/* Search Input */}
+      <div className="relative">
+        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          className="
+            w-full pl-10 pr-10 py-2.5 
+            bg-white dark:bg-gray-800
+            border border-gray-300 dark:border-gray-700
+            rounded-lg
+            text-gray-900 dark:text-gray-100
+            placeholder-gray-500 dark:placeholder-gray-400
+            focus:outline-none focus:ring-2 focus:ring-primary-500
+            transition-colors duration-200
+          "
+          aria-label="Search conversations"
+        />
+        {query && (
           <button
-            className="close-button"
-            onClick={onClose}
-            aria-label="Close search"
+            onClick={handleClear}
+            className="
+              absolute right-3 top-1/2 -translate-y-1/2
+              p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700
+              transition-colors duration-200
+            "
+            aria-label="Clear search"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <XMarkIcon className="w-4 h-4 text-gray-400" />
           </button>
         )}
       </div>
 
-      <div className="search-results" ref={resultsRef}>
-        {isSearching && (
-          <div className="search-status">
-            <div className="spinner" />
-            Searching...
-          </div>
-        )}
-
-        {!isSearching && query && results.length === 0 && (
-          <div className="search-status no-results">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <p>No results found for "{query}"</p>
-            <p className="help-text">Try different keywords</p>
-          </div>
-        )}
-
-        {!isSearching && !query && (
-          <div className="search-status empty">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            <p>Search your conversations</p>
-            <p className="help-text">
-              Use ↑↓ to navigate, Enter to select, Esc to close
-            </p>
-          </div>
-        )}
-
-        {!isSearching && results.length > 0 && (
-          <>
-            <div className="results-count">
-              {results.length} result{results.length !== 1 ? 's' : ''} found
-            </div>
-            {results.map((result, index) => (
-              <div
-                key={`${result.conversationId}-${result.messageId}`}
-                className={`search-result-item ${index === selectedIndex ? 'selected' : ''}`}
-                onClick={() => onResultClick(result)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                <div className="result-header">
-                  <span className={`result-role ${result.role}`}>
-                    {result.role === 'user' ? '👤 You' : '🤖 AI'}
-                  </span>
-                  <span className="result-timestamp">
-                    {formatTimestamp(result.timestamp)}
-                  </span>
-                </div>
-                <div
-                  className="result-content"
-                  dangerouslySetInnerHTML={{
-                    __html: truncateContent(result.highlightedContent || result.content),
-                  }}
-                />
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-
-      <div className="search-footer">
-        <div className="keyboard-hints">
-          <kbd>↑↓</kbd> Navigate
-          <kbd>↵</kbd> Select
-          <kbd>Esc</kbd> Close
+      {/* Keyboard Shortcut Hint */}
+      {!query && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+          <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">⌘K</kbd>
         </div>
-      </div>
+      )}
+
+      {/* Search Results Dropdown */}
+      {isOpen && results.length > 0 && (
+        <div
+          ref={resultsRef}
+          className="
+            absolute top-full mt-2 w-full
+            bg-white dark:bg-gray-800
+            border border-gray-200 dark:border-gray-700
+            rounded-lg shadow-lg
+            max-h-96 overflow-y-auto
+            z-50
+          "
+        >
+          {results.map((result, index) => (
+            <button
+              key={`${result.conversationId}-${result.messageId}-${index}`}
+              onClick={() => handleResultClick(result)}
+              className={`
+                w-full px-4 py-3 text-left
+                border-b border-gray-100 dark:border-gray-700 last:border-b-0
+                hover:bg-gray-50 dark:hover:bg-gray-750
+                transition-colors duration-150
+                ${index === selectedIndex ? 'bg-gray-50 dark:bg-gray-750' : ''}
+              `}
+            >
+              {/* Conversation Title */}
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
+                {result.messageId 
+                  ? result.conversationTitle
+                  : highlightMatch(result.conversationTitle, result.matchIndex, result.matchLength)
+                }
+              </div>
+              
+              {/* Message Content (if applicable) */}
+              {result.messageId && (
+                <div className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                  {truncateText(result.messageContent, result.matchIndex)}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* No Results */}
+      {isOpen && query && results.length === 0 && (
+        <div className="
+          absolute top-full mt-2 w-full
+          bg-white dark:bg-gray-800
+          border border-gray-200 dark:border-gray-700
+          rounded-lg shadow-lg
+          px-4 py-8 text-center
+          z-50
+        ">
+          <MagnifyingGlassIcon className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+          <p className="text-gray-600 dark:text-gray-400">
+            No results found for &quot;{query}&quot;
+          </p>
+        </div>
+      )}
     </div>
   );
 };

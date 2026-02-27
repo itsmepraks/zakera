@@ -1,8 +1,6 @@
 /**
  * Theme Context for Dark Mode Support
- * 
- * Provides theme switching functionality with persistence to localStorage.
- * Supports light and dark modes with smooth transitions.
+ * Provides theme state and toggle functionality throughout the app
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
@@ -24,11 +22,11 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+  // Initialize theme from localStorage or system preference
   const [theme, setThemeState] = useState<Theme>(() => {
-    // Check localStorage first
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      return savedTheme;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
+    if (stored) {
+      return stored;
     }
     
     // Check system preference
@@ -39,14 +37,27 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     return 'light';
   });
 
+  // Update document class and localStorage when theme changes
   useEffect(() => {
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.classList.remove('light', 'dark');
-    document.documentElement.classList.add(theme);
+    const root = window.document.documentElement;
     
-    // Save to localStorage
+    // Remove old theme
+    root.classList.remove('light', 'dark');
+    
+    // Add new theme
+    root.classList.add(theme);
+    
+    // Update localStorage
     localStorage.setItem(THEME_STORAGE_KEY, theme);
+    
+    // Update meta theme-color for mobile browsers
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute(
+        'content',
+        theme === 'dark' ? '#1a1a1a' : '#ffffff'
+      );
+    }
   }, [theme]);
 
   // Listen for system theme changes
@@ -54,31 +65,23 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     
     const handleChange = (e: MediaQueryListEvent) => {
-      // Only auto-switch if user hasn't manually set a preference
-      const hasManualPreference = localStorage.getItem(THEME_STORAGE_KEY);
-      if (!hasManualPreference) {
+      // Only auto-change if user hasn't manually set a preference
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (!stored) {
         setThemeState(e.matches ? 'dark' : 'light');
       }
     };
     
-    // Modern browsers
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-    }
-    // Legacy browsers
-    else if (mediaQuery.addListener) {
-      mediaQuery.addListener(handleChange);
-      return () => mediaQuery.removeListener(handleChange);
-    }
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
+
+  const toggleTheme = () => {
+    setThemeState(prev => prev === 'light' ? 'dark' : 'light');
+  };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-  };
-
-  const toggleTheme = () => {
-    setThemeState(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
   };
 
   const value: ThemeContextType = {
@@ -94,6 +97,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   );
 };
 
+// Custom hook for using theme
 export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
@@ -102,20 +106,4 @@ export const useTheme = (): ThemeContextType => {
   return context;
 };
 
-// Export hook for theme-aware styling
-export const useThemeColors = () => {
-  const { theme } = useTheme();
-  
-  return {
-    background: theme === 'dark' ? '#1a1a1a' : '#ffffff',
-    surface: theme === 'dark' ? '#2d2d2d' : '#f5f5f5',
-    primary: theme === 'dark' ? '#3b82f6' : '#2563eb',
-    secondary: theme === 'dark' ? '#8b5cf6' : '#7c3aed',
-    text: theme === 'dark' ? '#e5e5e5' : '#1a1a1a',
-    textSecondary: theme === 'dark' ? '#a3a3a3' : '#666666',
-    border: theme === 'dark' ? '#404040' : '#e5e5e5',
-    error: theme === 'dark' ? '#ef4444' : '#dc2626',
-    success: theme === 'dark' ? '#10b981' : '#059669',
-    warning: theme === 'dark' ? '#f59e0b' : '#d97706',
-  };
-};
+export default ThemeContext;
