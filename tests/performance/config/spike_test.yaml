@@ -1,0 +1,110 @@
+# Spike Test Configuration
+# Tests system behavior under sudden traffic increases
+
+# Basic configuration
+users: 200
+spawn_rate: 100  # Very rapid ramp-up
+run_time: 15m
+host: http://localhost:8000
+
+# Locust options
+stop_timeout: 20
+web_port: 8089
+headless: true
+loglevel: INFO
+
+# Test parameters
+wait_time:
+  min: 1
+  max: 4
+
+# Request configuration
+request_timeout: 45
+max_retries: 3
+
+# Tags
+tags:
+  - spike
+  - api
+  - resilience
+
+# User behavior weights (varied)
+user_behaviors:
+  chat_only: 50
+  with_tools: 30
+  power_user: 20
+
+# Model provider distribution
+model_distribution:
+  gemini-1.5-flash: 45  # Fast models for spike recovery
+  gpt-3.5-turbo: 25
+  llama-3-8b: 15
+  claude-3-haiku: 10
+  gpt-4-turbo: 5
+
+# Conversation patterns
+conversation:
+  avg_messages: 6
+  min_messages: 2
+  max_messages: 12
+  think_time_between_messages: 2
+
+# Spike test specific configuration
+spike_options:
+  # Define spike pattern
+  pattern:
+    - phase: baseline
+      users: 20
+      duration: 3m
+    
+    - phase: spike
+      users: 200
+      spawn_rate: 100  # Sudden spike
+      duration: 5m
+    
+    - phase: recovery
+      users: 20
+      duration: 4m
+    
+    - phase: second_spike
+      users: 200
+      spawn_rate: 100
+      duration: 3m
+  
+  # What to measure
+  metrics_focus:
+    - time_to_scale
+    - error_rate_during_spike
+    - recovery_time
+    - cache_effectiveness
+    - connection_pool_exhaustion
+  
+  # Expected behavior
+  expectations:
+    scale_up_time_max: 30s
+    error_spike_duration_max: 60s
+    recovery_time_max: 120s
+
+# Performance thresholds (relaxed during spike)
+thresholds:
+  p95_latency_ms: 2000
+  p99_latency_ms: 4000
+  error_rate_percent: 3.0
+  min_throughput_rps: 20
+
+# Specific thresholds during spike
+spike_thresholds:
+  initial_spike_error_rate: 10.0  # Acceptable during first minute
+  sustained_error_rate: 3.0  # Should recover to this
+  p95_latency_during_spike: 3000
+  recovery_period: 120s  # Time to return to normal
+
+# Reporting
+report:
+  html: true
+  csv: true
+  json: true
+  print_stats: true
+  print_percentiles: true
+  spike_analysis: true  # Special spike analysis
+  include_timeline: true

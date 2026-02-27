@@ -1,0 +1,145 @@
+# Endurance Test Configuration
+# Long-running test to detect memory leaks and degradation
+
+# Basic configuration
+users: 100
+spawn_rate: 10
+run_time: 24h  # 24-hour test
+host: http://localhost:8000
+
+# Locust options
+stop_timeout: 60
+web_port: 8089
+headless: true
+loglevel: WARNING  # Reduce log volume
+
+# Test parameters
+wait_time:
+  min: 2
+  max: 8  # Longer wait to simulate real usage
+
+# Request configuration
+request_timeout: 45
+max_retries: 3
+
+# Tags
+tags:
+  - endurance
+  - stability
+  - memory
+
+# User behavior weights (realistic long-term usage)
+user_behaviors:
+  chat_only: 60
+  with_tools: 25
+  power_user: 15
+
+# Model provider distribution
+model_distribution:
+  gemini-1.5-flash: 35
+  gpt-3.5-turbo: 30
+  llama-3-8b: 20
+  claude-3-haiku: 10
+  gpt-4-turbo: 5
+
+# Conversation patterns
+conversation:
+  avg_messages: 10
+  min_messages: 5
+  max_messages: 20
+  think_time_between_messages: 4
+
+# Endurance test specific options
+endurance_options:
+  # Monitoring intervals
+  health_check_interval: 5m
+  metrics_snapshot_interval: 15m
+  
+  # Resource monitoring
+  monitor:
+    - memory_usage
+    - cpu_usage
+    - disk_usage
+    - database_connections
+    - open_file_descriptors
+    - thread_count
+    - log_file_size
+  
+  # What to look for
+  degradation_indicators:
+    - increasing_response_time
+    - increasing_memory_usage
+    - connection_pool_growth
+    - error_rate_increase
+    - cache_hit_rate_decrease
+  
+  # Alert conditions
+  alerts:
+    memory_growth_per_hour_mb: 50
+    response_time_increase_percent: 20
+    error_rate_increase_percent: 2
+    disk_usage_percent: 80
+  
+  # Periodic tasks
+  scheduled_actions:
+    - action: snapshot_metrics
+      interval: 1h
+    - action: analyze_trends
+      interval: 4h
+    - action: generate_interim_report
+      interval: 6h
+
+# Performance thresholds (should remain stable)
+thresholds:
+  p95_latency_ms: 1000
+  p99_latency_ms: 2000
+  error_rate_percent: 1.0
+  min_throughput_rps: 10
+  
+  # Stability thresholds
+  max_latency_increase_percent: 15  # Over 24h
+  max_error_rate_increase_percent: 1
+  max_memory_increase_mb: 500
+
+# Checkpoints for analysis
+checkpoints:
+  - time: 1h
+    name: early_baseline
+  - time: 6h
+    name: mid_morning
+  - time: 12h
+    name: halfway
+  - time: 18h
+    name: late_stage
+  - time: 24h
+    name: completion
+
+# Reporting (generate multiple reports)
+report:
+  html: true
+  csv: true
+  json: true
+  print_stats: true
+  print_percentiles: true
+  
+  # Endurance-specific reports
+  trend_analysis: true
+  memory_profile: true
+  stability_score: true
+  degradation_analysis: true
+  
+  # Generate interim reports
+  interim_reports:
+    enabled: true
+    interval: 6h
+    include_graphs: true
+  
+  # Final report sections
+  include:
+    - executive_summary
+    - hourly_breakdown
+    - trend_graphs
+    - resource_usage_over_time
+    - error_analysis
+    - performance_degradation
+    - recommendations

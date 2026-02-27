@@ -1,0 +1,93 @@
+# Stress Test Configuration
+# Pushes system to its limits to find breaking points
+
+# Basic configuration
+users: 500
+spawn_rate: 20
+run_time: 30m
+host: http://localhost:8000
+
+# Locust options
+stop_timeout: 30
+web_port: 8089
+headless: true
+loglevel: WARNING
+
+# Test parameters
+wait_time:
+  min: 0.5
+  max: 3
+
+# Request configuration
+request_timeout: 60
+max_retries: 2
+
+# Tags
+tags:
+  - stress
+  - api
+  - all
+
+# User behavior weights (more aggressive)
+user_behaviors:
+  chat_only: 40
+  with_tools: 35
+  power_user: 25  # More power users
+
+# Model provider distribution
+model_distribution:
+  gemini-1.5-flash: 35  # Fast models preferred under stress
+  gpt-3.5-turbo: 30
+  llama-3-8b: 20  # Local models for cost savings
+  claude-3-haiku: 10
+  gpt-4-turbo: 5
+
+# Conversation patterns (shorter, more frequent)
+conversation:
+  avg_messages: 5
+  min_messages: 2
+  max_messages: 10
+  think_time_between_messages: 1  # Less think time
+
+# Aggressive thresholds for stress test
+thresholds:
+  p95_latency_ms: 3000  # Higher acceptable latency under stress
+  p99_latency_ms: 5000
+  error_rate_percent: 5.0  # More errors acceptable
+  min_throughput_rps: 50
+
+# Stress test specific options
+stress_options:
+  # Gradually increase load
+  stages:
+    - users: 100
+      duration: 5m
+    - users: 250
+      duration: 10m
+    - users: 400
+      duration: 10m
+    - users: 500
+      duration: 5m
+  
+  # Monitor these for breaking points
+  watch_metrics:
+    - cpu_usage
+    - memory_usage
+    - database_connections
+    - response_time_p99
+    - error_rate
+  
+  # Auto-stop conditions
+  stop_on:
+    error_rate_above: 20.0  # Stop if errors exceed 20%
+    p99_latency_above: 10000  # Stop if p99 > 10s
+
+# Reporting
+report:
+  html: true
+  csv: true
+  json: true
+  print_stats: true
+  print_percentiles: true
+  include_failures: true
+  failure_analysis: true

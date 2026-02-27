@@ -1,0 +1,65 @@
+# Normal Load Test Configuration
+# Simulates typical production traffic patterns
+
+# Basic configuration
+users: 50
+spawn_rate: 5
+run_time: 10m
+host: http://localhost:8000
+
+# Locust options
+stop_timeout: 10
+web_port: 8089
+headless: false
+loglevel: INFO
+
+# Test parameters
+wait_time:
+  min: 1
+  max: 5
+
+# Request configuration
+request_timeout: 30
+max_retries: 3
+
+# Tags for filtering tasks
+tags:
+  - api
+  - chat
+  - conversation
+
+# User behavior weights
+user_behaviors:
+  chat_only: 60  # 60% users only chat
+  with_tools: 30  # 30% use tools
+  power_user: 10  # 10% power users (many features)
+
+# Model provider distribution (percentage)
+model_distribution:
+  gemini-1.5-flash: 40
+  gpt-3.5-turbo: 25
+  claude-3-haiku: 15
+  llama-3-8b: 10  # Local Ollama
+  gpt-4-turbo: 10
+
+# Conversation patterns
+conversation:
+  avg_messages: 8
+  min_messages: 3
+  max_messages: 15
+  think_time_between_messages: 3  # seconds
+
+# Performance thresholds
+thresholds:
+  p95_latency_ms: 1000
+  p99_latency_ms: 2000
+  error_rate_percent: 1.0
+  min_throughput_rps: 5
+
+# Reporting
+report:
+  html: true
+  csv: true
+  json: true
+  print_stats: true
+  print_percentiles: true
