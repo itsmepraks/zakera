@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Performance testing service
+  performance:
+    build:
+      context: .
+      dockerfile: Dockerfile.performance
+    container_name: zakera-performance-tests
+    environment:
+      - BASE_URL=${BASE_URL:-http://api:8000}
+      - API_KEY=${API_KEY}
+      - WS_URL=${WS_URL:-ws://api:8000}
+      - LOGLEVEL=${LOGLEVEL:-INFO}
+    volumes:
+      - ./reports:/app/reports
+      - ./test_data:/app/test_data
+    networks:
+      - zakera-test-network
+    depends_on:
+      - api
+    command: /bin/sh -c "./run_tests.sh normal --headless"
+  
+  # Zakera API (target for testing)
+  api:
+    image: zakera-api:latest
+    container_name: zakera-api-test
+    environment:
+      - ENV=test
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/zakera_test
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    networks:
+      - zakera-test-network
+    depends_on:
+      - db
+      - redis
+  
+  # Database
+  db:
+    image: postgres:15-alpine
+    container_name: zakera-db-test
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=zakera_test
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+    networks:
+      - zakera-test-network
+  
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: zakera-redis-test
+    networks:
+      - zakera-test-network
+  
+  # Locust Master (for distributed testing)
+  locust-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.performance
+    container_name: zakera-locust-master
+    ports:
+      - "8089:8089"
+    environment:
+      - LOCUST_MODE=master
+      - BASE_URL=http://api:8000
+    volumes:
+      - ./reports:/app/reports
+    networks:
+      - zakera-test-network
+    command: locust -f locustfiles/mixed_scenario_test.py --master --expect-workers 3
+  
+  # Locust Workers (for distributed testing)
+  locust-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.performance
+    environment:
+      - LOCUST_MODE=worker
+      - LOCUST_MASTER_HOST=locust-master
+      - BASE_URL=http://api:8000
+    networks:
+      - zakera-test-network
+    depends_on:
+      - locust-master
+    command: locust -f locustfiles/mixed_scenario_test.py --worker --master-host locust-master
+    deploy:
+      replicas: 3
+
+networks:
+  zakera-test-network:
+    driver: bridge
+
+volumes:
+  test-db-data:

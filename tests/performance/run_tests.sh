@@ -1,229 +1,232 @@
 #!/bin/bash
-
-# Performance Test Runner Script
-# Runs all performance test scenarios and generates reports
+# Zakera Performance Testing Runner Script
 
 set -e
 
-# Colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
+# Colors
 RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESULTS_DIR="${SCRIPT_DIR}/results"
-HOST="${LOCUST_HOST:-http://localhost:8000}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+# Default values
+SCENARIO="normal"
+HEADLESS=false
+WEB_UI=false
+HOST="${BASE_URL:-http://localhost:8000}"
+USERS=""
+SPAWN_RATE=""
+RUN_TIME=""
+REPORT=true
 
-# Create results directory
-mkdir -p "${RESULTS_DIR}"
+# Help message
+show_help() {
+    echo -e "${GREEN}Zakera Performance Testing Runner${NC}"
+    echo ""
+    echo "Usage: ./run_tests.sh [scenario] [options]"
+    echo ""
+    echo "Scenarios:"
+    echo "  normal       - Normal load test (default)"
+    echo "  stress       - Stress test"
+    echo "  spike        - Spike test"
+    echo "  endurance    - Endurance test (24h)"
+    echo ""
+    echo "Options:"
+    echo "  --headless           Run without web UI"
+    echo "  --web-ui             Run with web UI (default: false)"
+    echo "  --host HOST          Target host (default: \$BASE_URL or localhost:8000)"
+    echo "  --users NUM          Number of users"
+    echo "  --spawn-rate NUM     Users spawned per second"
+    echo "  --run-time TIME      Test duration (e.g., 10m, 1h)"
+    echo "  --no-report          Don't generate report"
+    echo "  -h, --help           Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./run_tests.sh normal"
+    echo "  ./run_tests.sh stress --headless"
+    echo "  ./run_tests.sh spike --users 200 --run-time 15m"
+    echo "  ./run_tests.sh normal --host https://api.zakera.ai"
+    echo ""
+}
 
-echo -e "${GREEN}🚀 Zakera Performance Test Suite${NC}"
-echo "=================================="
-echo "Host: ${HOST}"
-echo "Results: ${RESULTS_DIR}"
-echo "Timestamp: ${TIMESTAMP}"
+# Parse arguments
+if [ $# -eq 0 ]; then
+    SCENARIO="normal"
+else
+    SCENARIO="$1"
+    shift
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --headless)
+            HEADLESS=true
+            shift
+            ;;
+        --web-ui)
+            WEB_UI=true
+            HEADLESS=false
+            shift
+            ;;
+        --host)
+            HOST="$2"
+            shift 2
+            ;;
+        --users)
+            USERS="$2"
+            shift 2
+            ;;
+        --spawn-rate)
+            SPAWN_RATE="$2"
+            shift 2
+            ;;
+        --run-time)
+            RUN_TIME="$2"
+            shift 2
+            ;;
+        --no-report)
+            REPORT=false
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Validate scenario
+if [[ ! "$SCENARIO" =~ ^(normal|stress|spike|endurance)$ ]]; then
+    echo -e "${RED}Invalid scenario: $SCENARIO${NC}"
+    echo "Valid scenarios: normal, stress, spike, endurance"
+    exit 1
+fi
+
+# Load environment variables
+if [ -f .env ]; then
+    echo -e "${BLUE}Loading environment variables...${NC}"
+    export $(cat .env | grep -v '^#' | xargs)
+fi
+
+# Check if Locust is installed
+if ! command -v locust &> /dev/null; then
+    echo -e "${RED}Locust is not installed!${NC}"
+    echo "Install it with: pip install -r requirements.txt"
+    exit 1
+fi
+
+# Create reports directory
+mkdir -p reports
+
+# Select configuration file
+CONFIG_FILE="config/${SCENARIO}_load.yaml"
+if [ "$SCENARIO" = "normal" ]; then
+    CONFIG_FILE="config/normal_load.yaml"
+elif [ "$SCENARIO" = "stress" ]; then
+    CONFIG_FILE="config/stress_test.yaml"
+elif [ "$SCENARIO" = "spike" ]; then
+    CONFIG_FILE="config/spike_test.yaml"
+elif [ "$SCENARIO" = "endurance" ]; then
+    CONFIG_FILE="config/endurance_test.yaml"
+fi
+
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}Configuration file not found: $CONFIG_FILE${NC}"
+    exit 1
+fi
+
+# Select locustfile (default to mixed scenario for comprehensive testing)
+LOCUSTFILE="locustfiles/mixed_scenario_test.py"
+
+# Build Locust command
+CMD="locust -f $LOCUSTFILE --config $CONFIG_FILE --host $HOST"
+
+# Add custom parameters if provided
+if [ -n "$USERS" ]; then
+    CMD="$CMD --users $USERS"
+fi
+
+if [ -n "$SPAWN_RATE" ]; then
+    CMD="$CMD --spawn-rate $SPAWN_RATE"
+fi
+
+if [ -n "$RUN_TIME" ]; then
+    CMD="$CMD --run-time $RUN_TIME"
+fi
+
+# Add headless mode
+if [ "$HEADLESS" = true ]; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    CMD="$CMD --headless --html reports/${SCENARIO}_${TIMESTAMP}.html --csv reports/${SCENARIO}_${TIMESTAMP}"
+fi
+
+# Print test information
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}Zakera Performance Test${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo -e "${BLUE}Scenario:${NC} $SCENARIO"
+echo -e "${BLUE}Target:${NC} $HOST"
+echo -e "${BLUE}Config:${NC} $CONFIG_FILE"
+echo -e "${BLUE}Headless:${NC} $HEADLESS"
+if [ "$SCENARIO" = "endurance" ]; then
+    echo -e "${YELLOW}⚠ Warning: Endurance test will run for 24 hours!${NC}"
+fi
+echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# Function to check if API is ready
-check_api() {
-    echo -e "${YELLOW}⏳ Checking if API is ready...${NC}"
-    
-    for i in {1..30}; do
-        if curl -f -s "${HOST}/api/v1/monitoring/health" > /dev/null 2>&1; then
-            echo -e "${GREEN}✅ API is ready${NC}"
-            return 0
-        fi
-        echo -n "."
-        sleep 2
-    done
-    
-    echo -e "${RED}❌ API is not responding${NC}"
-    exit 1
-}
+# Run the test
+echo -e "${GREEN}Starting test...${NC}"
+echo "Command: $CMD"
+echo ""
 
-# Function to run a test
-run_test() {
-    local test_name=$1
-    local config_file=$2
-    local description=$3
-    
+if eval "$CMD"; then
     echo ""
-    echo -e "${GREEN}📊 Running: ${test_name}${NC}"
-    echo "Description: ${description}"
-    echo "---"
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}Test completed successfully!${NC}"
+    echo -e "${GREEN}========================================${NC}"
     
-    local result_prefix="${RESULTS_DIR}/${test_name}_${TIMESTAMP}"
-    
-    locust -f "${SCRIPT_DIR}/locustfile.py" \
-           --config "${SCRIPT_DIR}/config/${config_file}" \
-           --host "${HOST}" \
-           --headless \
-           --html "${result_prefix}.html" \
-           --csv "${result_prefix}" \
-           --logfile "${result_prefix}.log" \
-           --loglevel INFO
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ ${test_name} completed successfully${NC}"
-    else
-        echo -e "${RED}❌ ${test_name} failed${NC}"
-        return 1
-    fi
-}
-
-# Function to generate summary report
-generate_summary() {
-    echo ""
-    echo -e "${GREEN}📈 Generating Summary Report${NC}"
-    echo "---"
-    
-    python3 << EOF
+    # Generate additional reports if requested
+    if [ "$REPORT" = true ] && [ "$HEADLESS" = true ]; then
+        echo ""
+        echo -e "${BLUE}Generating additional reports...${NC}"
+        
+        # Generate markdown summary
+        LATEST_JSON=$(ls -t reports/${SCENARIO}_*.json 2>/dev/null | head -n 1)
+        if [ -f "$LATEST_JSON" ]; then
+            python -c "
 import json
-import glob
-from pathlib import Path
-
-results_dir = Path("${RESULTS_DIR}")
-csv_files = glob.glob(str(results_dir / "*_stats.csv"))
-
-print(f"\n📊 Test Summary ({len(csv_files)} tests)")
-print("=" * 80)
-
-for csv_file in sorted(csv_files):
-    test_name = Path(csv_file).stem.replace('_stats', '')
-    print(f"\n{test_name}:")
-    
-    try:
-        with open(csv_file.replace('_stats.csv', '_stats_history.csv'), 'r') as f:
-            lines = f.readlines()
-            if len(lines) > 1:
-                last_line = lines[-1].strip().split(',')
-                print(f"  Total Requests: {last_line[2]}")
-                print(f"  Failures: {last_line[3]}")
-                print(f"  Avg Response: {last_line[4]}ms")
-    except:
-        print("  (Unable to read results)")
-
-print("\n" + "=" * 80)
-print(f"📁 Full reports available in: ${RESULTS_DIR}")
-print(f"🌐 Open HTML reports in your browser")
-EOF
-}
-
-# Function to validate SLAs
-validate_sla() {
-    echo ""
-    echo -e "${GREEN}✓ Validating SLAs${NC}"
-    echo "---"
-    
-    # Check if any test exceeded SLA
-    local sla_passed=true
-    
-    # Add SLA validation logic here
-    # For now, just report success
-    
-    if [ "$sla_passed" = true ]; then
-        echo -e "${GREEN}✅ All SLAs passed${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Some SLAs failed - review reports${NC}"
-    fi
-}
-
-# Main test execution
-main() {
-    # Check API availability
-    check_api
-    
-    # Run test scenarios
-    local failed_tests=0
-    
-    # Normal Load Test
-    if ! run_test "normal_load" "normal_load.py" "Baseline performance test"; then
-        ((failed_tests++))
-    fi
-    
-    # Stress Test
-    if ! run_test "stress_test" "stress_test.py" "Heavy load test"; then
-        ((failed_tests++))
-    fi
-    
-    # Spike Test
-    if ! run_test "spike_test" "spike_test.py" "Sudden traffic spike test"; then
-        ((failed_tests++))
-    fi
-    
-    # Endurance Test (optional - takes 2 hours)
-    if [ "${RUN_ENDURANCE}" = "true" ]; then
-        if ! run_test "endurance_test" "endurance_test.py" "Long-running stability test"; then
-            ((failed_tests++))
+import sys
+with open('$LATEST_JSON', 'r') as f:
+    data = json.load(f)
+    print('\\n## Test Summary')
+    print(f'\\n**Scenario:** $SCENARIO')
+    print(f'**Timestamp:** $(date)')
+    print('\\n### Results')
+    if 'stats' in data:
+        for stat in data['stats']:
+            if stat['name'] != 'Aggregated':
+                print(f'- {stat[\"name\"]}: {stat[\"num_requests\"]} requests, avg: {stat[\"avg_response_time\"]:.2f}ms')
+" > reports/${SCENARIO}_summary.md
+            echo -e "${GREEN}Summary generated: reports/${SCENARIO}_summary.md${NC}"
         fi
     fi
     
-    # Generate summary
-    generate_summary
-    
-    # Validate SLAs
-    validate_sla
-    
-    # Final status
+    # Print summary
     echo ""
-    echo "=================================="
-    if [ $failed_tests -eq 0 ]; then
-        echo -e "${GREEN}✅ All tests completed successfully${NC}"
-        exit 0
-    else
-        echo -e "${RED}❌ ${failed_tests} test(s) failed${NC}"
-        exit 1
-    fi
-}
-
-# Handle script arguments
-case "${1:-all}" in
-    all)
-        main
-        ;;
-    normal)
-        check_api
-        run_test "normal_load" "normal_load.py" "Baseline performance test"
-        ;;
-    stress)
-        check_api
-        run_test "stress_test" "stress_test.py" "Heavy load test"
-        ;;
-    spike)
-        check_api
-        run_test "spike_test" "spike_test.py" "Sudden traffic spike test"
-        ;;
-    endurance)
-        check_api
-        run_test "endurance_test" "endurance_test.py" "Long-running stability test"
-        ;;
-    clean)
-        echo -e "${YELLOW}🧹 Cleaning results directory${NC}"
-        rm -rf "${RESULTS_DIR}"/*
-        echo -e "${GREEN}✅ Cleaned${NC}"
-        ;;
-    help)
-        echo "Usage: $0 [all|normal|stress|spike|endurance|clean|help]"
-        echo ""
-        echo "Commands:"
-        echo "  all       - Run all performance tests (default)"
-        echo "  normal    - Run normal load test only"
-        echo "  stress    - Run stress test only"
-        echo "  spike     - Run spike test only"
-        echo "  endurance - Run endurance test only (2 hours)"
-        echo "  clean     - Clean results directory"
-        echo "  help      - Show this help message"
-        echo ""
-        echo "Environment Variables:"
-        echo "  LOCUST_HOST     - Target host (default: http://localhost:8000)"
-        echo "  RUN_ENDURANCE   - Set to 'true' to include endurance test in 'all'"
-        ;;
-    *)
-        echo -e "${RED}Unknown command: $1${NC}"
-        echo "Run '$0 help' for usage information"
-        exit 1
-        ;;
-esac
+    echo -e "${BLUE}Reports saved in: ${NC}reports/"
+    echo -e "${BLUE}Open HTML report: ${NC}reports/${SCENARIO}_${TIMESTAMP}.html"
+    
+    exit 0
+else
+    echo ""
+    echo -e "${RED}========================================${NC}"
+    echo -e "${RED}Test failed!${NC}"
+    echo -e "${RED}========================================${NC}"
+    exit 1
+fi
