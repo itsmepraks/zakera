@@ -1,92 +1,117 @@
-"""
-Locust performance testing suite for Zakera AI Chat Agent.
+"""Main Locust test file for Zakera AI Chat Agent performance testing.
 
-This module provides comprehensive load testing for:
-- REST API endpoints
-- WebSocket connections
-- Model provider interactions
-- Authentication flows
-- Tool execution
-
-Run with: locust -f tests/performance/locustfile.py
+Usage:
+    # Normal load test
+    locust -f tests/performance/locustfile.py --host http://localhost:8000 --tags normal
+    
+    # Stress test
+    locust -f tests/performance/locustfile.py --host http://localhost:8000 --tags stress
+    
+    # With web UI
+    locust -f tests/performance/locustfile.py --host http://localhost:8000
+    
+    # Headless with HTML report
+    locust -f tests/performance/locustfile.py \
+        --host http://localhost:8000 \
+        --users 50 \
+        --spawn-rate 5 \
+        --run-time 5m \
+        --headless \
+        --html reports/performance.html
 """
 
 import json
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict
 
-from locust import HttpUser, TaskSet, task, between, events
+from locust import HttpUser, TaskSet, between, tag, task
 from locust.contrib.fasthttp import FastHttpUser
-import websocket
+
+from .config import config, get_scenario_config
+from .utils.auth import AuthHelper
+from .utils.data_generator import DataGenerator
+from .utils.metrics import CustomMetrics
 
 
-class APIEndpointTasks(TaskSet):
-    """Task set for testing REST API endpoints."""
+class ChatBehavior(TaskSet):
+    """Task set for chat-related operations."""
     
     def on_start(self):
-        """Initialize user session with authentication."""
+        """Initialize user session."""
+        self.auth_helper = AuthHelper(self.client)
+        self.data_gen = DataGenerator()
+        self.metrics = CustomMetrics()
+        
         # Login and get token
-        response = self.client.post("/api/v1/auth/login", json={
-            "username": f"testuser_{random.randint(1000, 9999)}",
-            "password": "testpassword123"
-        })
+        self.token = self.auth_helper.login()
+        self.headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
         
-        if response.status_code == 200:
-            self.token = response.json().get("access_token")
-            self.headers = {"Authorization": f"Bearer {self.token}"}
-        else:
-            # Register new user if login fails
-            self.client.post("/api/v1/auth/register", json={
-                "username": f"testuser_{random.randint(1000, 9999)}",
-                "email": f"test{random.randint(1000, 9999)}@example.com",
-                "password": "testpassword123"
-            })
-            response = self.client.post("/api/v1/auth/login", json={
-                "username": f"testuser_{random.randint(1000, 9999)}",
-                "password": "testpassword123"
-            })
-            self.token = response.json().get("access_token")
-            self.headers = {"Authorization": f"Bearer {self.token}"}
-        
+        # Create initial conversation
         self.conversation_id = None
-        self.messages = [
-            "What is artificial intelligence?",
-            "Explain machine learning in simple terms",
-            "How does natural language processing work?",
-            "What are neural networks?",
-            "Tell me about deep learning"
-        ]
+        self._create_conversation()
     
-    @task(5)
-    def send_chat_message(self):
-        """Test sending chat messages (highest weight)."""
-        message = random.choice(self.messages)
+    def _create_conversation(self):
+        """Create a new conversation."""
+        with self.client.post(
+            config.ENDPOINTS["conversations"],
+            headers=self.headers,
+            json={"title": "Performance Test Conversation"},
+            catch_response=True
+        ) as response:
+            if response.status_code == 201:
+                self.conversation_id = response.json()["id"]
+                response.success()
+            else:
+                response.failure(f"Failed to create conversation: {response.status_code}")
+    
+    @task(70)
+    @tag("normal", "stress", "spike")
+    def send_message(self):
+        """Send a chat message."""
+        if not self.conversation_id:
+            self._create_conversation()
+        
+        message = random.choice(config.TEST_MESSAGES)
+        start_time = time.time()
         
         with self.client.post(
-            "/api/v1/chat/send",
+            config.ENDPOINTS["chat"],
+            headers=self.headers,
             json={
                 "message": message,
                 "conversation_id": self.conversation_id,
-                "model": random.choice(["gpt-3.5-turbo", "gemini-1.5-flash", "claude-3-haiku"]),
+                "model": config.DEFAULT_MODEL,
                 "stream": False
             },
-            headers=self.headers,
             catch_response=True,
-            name="/api/v1/chat/send"
+            name="/api/v1/chat"
         ) as response:
+            duration = (time.time() - start_time) * 1000
+            
             if response.status_code == 200:
                 data = response.json()
-                self.conversation_id = data.get("conversation_id")
+                self.metrics.record_model_latency(
+                    config.PROVIDER,
+                    duration
+                )
+                if "usage" in data:
+                    self.metrics.record_token_usage(
+                        data["usage"].get("total_tokens", 0)
+                    )
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure(f"Send message failed: {response.status_code}")
     
-    @task(3)
-    def get_conversations(self):
-        """Test retrieving conversation list."""
+    @task(10)
+    @tag("normal", "stress")
+    def list_conversations(self):
+        """List user conversations."""
         with self.client.get(
-            "/api/v1/conversations",
+            config.ENDPOINTS["conversations"],
             headers=self.headers,
             catch_response=True,
             name="/api/v1/conversations"
@@ -94,16 +119,17 @@ class APIEndpointTasks(TaskSet):
             if response.status_code == 200:
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure(f"List conversations failed: {response.status_code}")
     
-    @task(2)
-    def get_conversation_history(self):
-        """Test retrieving conversation history."""
+    @task(5)
+    @tag("normal")
+    def get_conversation(self):
+        """Get conversation details."""
         if not self.conversation_id:
             return
         
         with self.client.get(
-            f"/api/v1/conversations/{self.conversation_id}",
+            f"{config.ENDPOINTS['conversations']}/{self.conversation_id}",
             headers=self.headers,
             catch_response=True,
             name="/api/v1/conversations/{id}"
@@ -111,333 +137,222 @@ class APIEndpointTasks(TaskSet):
             if response.status_code == 200:
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure(f"Get conversation failed: {response.status_code}")
     
-    @task(2)
-    def search_conversations(self):
-        """Test conversation search functionality."""
-        with self.client.get(
-            f"/api/v1/conversations/search?q={random.choice(['AI', 'machine', 'learning'])}",
-            headers=self.headers,
-            catch_response=True,
-            name="/api/v1/conversations/search"
-        ) as response:
-            if response.status_code == 200:
-                response.success()
-            else:
-                response.failure(f"Failed with status {response.status_code}")
-    
-    @task(1)
-    def execute_tool(self):
-        """Test tool execution."""
-        with self.client.post(
-            "/api/v1/tools/execute",
-            json={
-                "tool_name": "web_search",
-                "parameters": {"query": "latest AI news"}
-            },
-            headers=self.headers,
-            catch_response=True,
-            name="/api/v1/tools/execute"
-        ) as response:
-            if response.status_code == 200:
-                response.success()
-            else:
-                response.failure(f"Failed with status {response.status_code}")
-    
-    @task(1)
+    @task(3)
+    @tag("normal")
     def export_conversation(self):
-        """Test conversation export."""
+        """Export conversation."""
         if not self.conversation_id:
             return
         
+        export_format = random.choice(["json", "markdown", "text"])
+        
         with self.client.get(
-            f"/api/v1/conversations/{self.conversation_id}/export?format=json",
+            config.ENDPOINTS["export"].format(conversation_id=self.conversation_id),
             headers=self.headers,
+            params={"format": export_format},
             catch_response=True,
             name="/api/v1/conversations/{id}/export"
         ) as response:
             if response.status_code == 200:
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure(f"Export failed: {response.status_code}")
     
-    @task(1)
-    def health_check(self):
-        """Test health check endpoint."""
+    @task(2)
+    @tag("normal", "stress")
+    def list_providers(self):
+        """List available model providers."""
         with self.client.get(
-            "/api/v1/monitoring/health",
+            config.ENDPOINTS["providers"],
+            headers=self.headers,
+            catch_response=True,
+            name="/api/v1/models/providers"
+        ) as response:
+            if response.status_code == 200:
+                response.success()
+            else:
+                response.failure(f"List providers failed: {response.status_code}")
+    
+    @task(10)
+    @tag("normal", "stress", "spike", "endurance")
+    def health_check(self):
+        """Check API health."""
+        with self.client.get(
+            config.ENDPOINTS["health"],
             catch_response=True,
             name="/api/v1/monitoring/health"
         ) as response:
             if response.status_code == 200:
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure(f"Health check failed: {response.status_code}")
 
 
-class StreamingChatTasks(TaskSet):
-    """Task set for testing streaming chat responses."""
+class ConversationFlowBehavior(TaskSet):
+    """Task set for complete conversation flow."""
     
     def on_start(self):
         """Initialize user session."""
-        # Reuse authentication logic
-        response = self.client.post("/api/v1/auth/login", json={
-            "username": f"streamuser_{random.randint(1000, 9999)}",
-            "password": "testpassword123"
-        })
-        
-        if response.status_code != 200:
-            self.client.post("/api/v1/auth/register", json={
-                "username": f"streamuser_{random.randint(1000, 9999)}",
-                "email": f"stream{random.randint(1000, 9999)}@example.com",
-                "password": "testpassword123"
-            })
-            response = self.client.post("/api/v1/auth/login", json={
-                "username": f"streamuser_{random.randint(1000, 9999)}",
-                "password": "testpassword123"
-            })
-        
-        self.token = response.json().get("access_token")
-        self.headers = {"Authorization": f"Bearer {self.token}"}
+        self.auth_helper = AuthHelper(self.client)
+        self.token = self.auth_helper.login()
+        self.headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json"
+        }
     
     @task
-    def streaming_chat(self):
-        """Test streaming chat endpoint."""
-        start_time = time.time()
-        
+    @tag("endurance")
+    def complete_conversation_flow(self):
+        """Execute a complete conversation workflow."""
+        # 1. Create conversation
         with self.client.post(
-            "/api/v1/chat/stream",
-            json={
-                "message": "Write a detailed explanation of quantum computing",
-                "model": "gpt-3.5-turbo",
-                "stream": True
-            },
+            config.ENDPOINTS["conversations"],
             headers=self.headers,
-            stream=True,
-            catch_response=True,
-            name="/api/v1/chat/stream"
+            json={"title": "Flow Test"},
+            catch_response=True
         ) as response:
-            if response.status_code == 200:
-                chunks = 0
-                for line in response.iter_lines():
-                    if line:
-                        chunks += 1
-                
-                total_time = int((time.time() - start_time) * 1000)
-                events.request.fire(
-                    request_type="STREAM",
-                    name="/api/v1/chat/stream",
-                    response_time=total_time,
-                    response_length=chunks,
-                    exception=None,
-                    context={}
-                )
-                response.success()
-            else:
-                response.failure(f"Failed with status {response.status_code}")
-
-
-class WebSocketTasks(TaskSet):
-    """Task set for testing WebSocket connections."""
-    
-    def on_start(self):
-        """Establish WebSocket connection."""
-        # Get auth token first
-        response = self.client.post("/api/v1/auth/login", json={
-            "username": f"wsuser_{random.randint(1000, 9999)}",
-            "password": "testpassword123"
-        })
+            if response.status_code != 201:
+                response.failure("Failed to create conversation")
+                return
+            conversation_id = response.json()["id"]
+            response.success()
         
-        if response.status_code != 200:
-            self.client.post("/api/v1/auth/register", json={
-                "username": f"wsuser_{random.randint(1000, 9999)}",
-                "email": f"ws{random.randint(1000, 9999)}@example.com",
-                "password": "testpassword123"
-            })
-            response = self.client.post("/api/v1/auth/login", json={
-                "username": f"wsuser_{random.randint(1000, 9999)}",
-                "password": "testpassword123"
-            })
-        
-        self.token = response.json().get("access_token")
-        self.ws = None
-    
-    @task
-    def websocket_chat(self):
-        """Test WebSocket chat interaction."""
-        start_time = time.time()
-        
-        try:
-            # Connect to WebSocket
-            ws_url = f"ws://localhost:8000/api/v1/ws/chat?token={self.token}"
-            self.ws = websocket.create_connection(ws_url, timeout=10)
+        # 2. Send multiple messages
+        for i in range(5):
+            message = random.choice(config.TEST_MESSAGES)
+            with self.client.post(
+                config.ENDPOINTS["chat"],
+                headers=self.headers,
+                json={
+                    "message": message,
+                    "conversation_id": conversation_id,
+                    "model": config.DEFAULT_MODEL
+                },
+                catch_response=True
+            ) as response:
+                if response.status_code == 200:
+                    response.success()
+                else:
+                    response.failure(f"Message {i} failed")
             
-            # Send message
-            self.ws.send(json.dumps({
-                "type": "message",
-                "content": "Hello, how are you?",
-                "model": "gpt-3.5-turbo"
-            }))
-            
-            # Receive response
-            response = self.ws.recv()
-            data = json.loads(response)
-            
-            total_time = int((time.time() - start_time) * 1000)
-            
-            events.request.fire(
-                request_type="WS",
-                name="/api/v1/ws/chat",
-                response_time=total_time,
-                response_length=len(response),
-                exception=None,
-                context={}
-            )
-            
-            self.ws.close()
-            
-        except Exception as e:
-            total_time = int((time.time() - start_time) * 1000)
-            events.request.fire(
-                request_type="WS",
-                name="/api/v1/ws/chat",
-                response_time=total_time,
-                response_length=0,
-                exception=e,
-                context={}
-            )
-    
-    def on_stop(self):
-        """Clean up WebSocket connection."""
-        if self.ws:
-            try:
-                self.ws.close()
-            except:
-                pass
-
-
-class ModelProviderTasks(TaskSet):
-    """Task set for testing different model providers."""
-    
-    def on_start(self):
-        """Initialize user session."""
-        response = self.client.post("/api/v1/auth/login", json={
-            "username": f"modeluser_{random.randint(1000, 9999)}",
-            "password": "testpassword123"
-        })
+            time.sleep(random.uniform(1, 3))
         
-        if response.status_code != 200:
-            self.client.post("/api/v1/auth/register", json={
-                "username": f"modeluser_{random.randint(1000, 9999)}",
-                "email": f"model{random.randint(1000, 9999)}@example.com",
-                "password": "testpassword123"
-            })
-            response = self.client.post("/api/v1/auth/login", json={
-                "username": f"modeluser_{random.randint(1000, 9999)}",
-                "password": "testpassword123"
-            })
-        
-        self.token = response.json().get("access_token")
-        self.headers = {"Authorization": f"Bearer {self.token}"}
-        
-        self.models = [
-            "gpt-3.5-turbo",
-            "gpt-4",
-            "claude-3-haiku",
-            "claude-3-sonnet",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-        ]
-    
-    @task
-    def test_model_provider(self):
-        """Test different model providers."""
-        model = random.choice(self.models)
-        
-        with self.client.post(
-            "/api/v1/chat/send",
-            json={
-                "message": "What is the capital of France?",
-                "model": model,
-                "stream": False
-            },
+        # 3. Export conversation
+        with self.client.get(
+            config.ENDPOINTS["export"].format(conversation_id=conversation_id),
             headers=self.headers,
-            catch_response=True,
-            name=f"/api/v1/chat/send [model={model}]"
+            params={"format": "json"},
+            catch_response=True
         ) as response:
             if response.status_code == 200:
                 response.success()
             else:
-                response.failure(f"Failed with status {response.status_code}")
+                response.failure("Export failed")
+        
+        # 4. Delete conversation
+        with self.client.delete(
+            f"{config.ENDPOINTS['conversations']}/{conversation_id}",
+            headers=self.headers,
+            catch_response=True
+        ) as response:
+            if response.status_code in [200, 204]:
+                response.success()
+            else:
+                response.failure("Delete failed")
 
 
 class ZakeraUser(FastHttpUser):
-    """
-    Main user class for load testing.
+    """Main user class for load testing."""
     
-    Uses FastHttpUser for better performance in high-load scenarios.
-    """
+    # Use FastHttpUser for better performance
+    tasks = {ChatBehavior: 3, ConversationFlowBehavior: 1}
     
-    # Wait time between tasks (simulates real user behavior)
-    wait_time = between(1, 3)
-    
-    # Task distribution
-    tasks = {
-        APIEndpointTasks: 10,      # 50% of users
-        StreamingChatTasks: 3,     # 15% of users
-        WebSocketTasks: 3,         # 15% of users
-        ModelProviderTasks: 4,     # 20% of users
-    }
+    # Wait time between tasks
+    scenario_config = get_scenario_config()
+    wait_time = between(
+        scenario_config.get("min_wait", config.MIN_WAIT),
+        scenario_config.get("max_wait", config.MAX_WAIT)
+    )
     
     # Connection settings
-    connection_timeout = 10.0
-    network_timeout = 10.0
+    connection_timeout = 30.0
+    network_timeout = 30.0
+    
+    def on_start(self):
+        """Called when a simulated user starts."""
+        self.start_time = time.time()
+        print(f"User {self.environment.runner.user_count} started")
+    
+    def on_stop(self):
+        """Called when a simulated user stops."""
+        duration = time.time() - self.start_time
+        print(f"User stopped after {duration:.2f} seconds")
 
 
-class NormalLoadUser(ZakeraUser):
-    """User class for normal load testing."""
-    wait_time = between(2, 5)
+class WebSocketUser(HttpUser):
+    """User class for WebSocket testing."""
+    
+    wait_time = between(1, 3)
+    
+    @task
+    @tag("websocket")
+    def websocket_chat(self):
+        """Test WebSocket chat functionality."""
+        # WebSocket testing requires separate implementation
+        # See test_websocket.py for details
+        pass
 
 
-class StressTestUser(ZakeraUser):
-    """User class for stress testing."""
-    wait_time = between(0.5, 1)
-
-
-class SpikeTestUser(ZakeraUser):
-    """User class for spike testing."""
-    wait_time = between(0.1, 0.5)
-
-
-# Event listeners for custom metrics
-@events.init.add_listener
-def on_locust_init(environment, **kwargs):
-    """Initialize custom metrics collection."""
-    print("🚀 Starting Zakera Performance Test Suite")
-    print(f"📊 Target: {environment.host}")
+# Event hooks for custom reporting
+from locust import events
 
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
-    """Log test start."""
-    print("✅ Test started")
+    """Called when test starts."""
+    print(f"\n{'='*80}")
+    print(f"Starting Performance Test")
+    print(f"Scenario: {config.SCENARIO}")
+    print(f"Host: {environment.host}")
+    print(f"Users: {config.USERS}")
+    print(f"Spawn Rate: {config.SPAWN_RATE}")
+    print(f"Run Time: {config.RUN_TIME}")
+    print(f"{'='*80}\n")
 
 
 @events.test_stop.add_listener
 def on_test_stop(environment, **kwargs):
-    """Log test completion and statistics."""
-    print("🏁 Test completed")
-    print("\n📊 Final Statistics:")
+    """Called when test stops."""
+    print(f"\n{'='*80}")
+    print(f"Performance Test Completed")
+    print(f"Total Requests: {environment.stats.total.num_requests}")
+    print(f"Total Failures: {environment.stats.total.num_failures}")
+    print(f"Failure Rate: {environment.stats.total.fail_ratio:.2%}")
+    print(f"Average Response Time: {environment.stats.total.avg_response_time:.2f}ms")
+    print(f"Median Response Time: {environment.stats.total.median_response_time:.2f}ms")
+    print(f"95th Percentile: {environment.stats.total.get_response_time_percentile(0.95):.2f}ms")
+    print(f"99th Percentile: {environment.stats.total.get_response_time_percentile(0.99):.2f}ms")
+    print(f"Max Response Time: {environment.stats.total.max_response_time:.2f}ms")
+    print(f"Requests per Second: {environment.stats.total.total_rps:.2f}")
+    print(f"{'='*80}\n")
     
-    stats = environment.stats
-    print(f"Total Requests: {stats.total.num_requests}")
-    print(f"Total Failures: {stats.total.num_failures}")
-    print(f"Average Response Time: {stats.total.avg_response_time:.2f}ms")
-    print(f"Min Response Time: {stats.total.min_response_time}ms")
-    print(f"Max Response Time: {stats.total.max_response_time}ms")
-    print(f"Requests/s: {stats.total.total_rps:.2f}")
+    # Check thresholds
+    p95 = environment.stats.total.get_response_time_percentile(0.95)
+    error_rate = environment.stats.total.fail_ratio * 100
     
-    if stats.total.num_requests > 0:
-        failure_rate = (stats.total.num_failures / stats.total.num_requests) * 100
-        print(f"Failure Rate: {failure_rate:.2f}%")
+    failures = []
+    if p95 > config.THRESHOLDS["p95_latency_ms"]:
+        failures.append(f"P95 latency ({p95:.2f}ms) exceeds threshold ({config.THRESHOLDS['p95_latency_ms']}ms)")
+    
+    if error_rate > config.THRESHOLDS["error_rate_percent"]:
+        failures.append(f"Error rate ({error_rate:.2f}%) exceeds threshold ({config.THRESHOLDS['error_rate_percent']}%)")
+    
+    if failures:
+        print("\n⚠️  PERFORMANCE THRESHOLD FAILURES:")
+        for failure in failures:
+            print(f"  - {failure}")
+        print()
+    else:
+        print("\n✅ All performance thresholds met!\n")

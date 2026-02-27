@@ -1,471 +1,364 @@
-# Zakera Performance Testing Suite
+# Performance Testing Suite
 
-Comprehensive performance testing infrastructure for the Zakera AI Chat Agent using Locust.
+Comprehensive performance testing framework for Zakera AI Chat Agent using Locust.
 
-## 📋 Table of Contents
+## Overview
 
-- [Overview](#overview)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Test Scenarios](#test-scenarios)
-- [Configuration](#configuration)
-- [Running Tests](#running-tests)
-- [Reporting](#reporting)
-- [CI/CD Integration](#cicd-integration)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
+This testing suite provides load testing, stress testing, and spike testing capabilities for:
+- REST API endpoints
+- WebSocket connections
+- Model provider interactions
+- Tool execution system
+- Database operations
 
-## 🎯 Overview
+## Quick Start
 
-This performance testing suite provides comprehensive load testing capabilities for:
-
-- **REST API Endpoints**: Chat, conversation management, user operations
-- **WebSocket Connections**: Real-time chat streaming
-- **Model Provider Interactions**: Testing all 8 LLM providers
-- **Mixed Scenarios**: Realistic usage patterns
-
-### Key Metrics Tracked
-
-- Request latency (p50, p95, p99)
-- Throughput (requests/second)
-- Error rate by endpoint
-- WebSocket connection stability
-- Model provider response times
-- Token consumption rates
-- System resource utilization
-
-## ✨ Features
-
-### Test Types
-
-1. **API Load Testing** (`api_load_test.py`)
-   - Chat message endpoints
-   - Conversation management
-   - User authentication
-   - Tool execution
-
-2. **WebSocket Testing** (`websocket_load_test.py`)
-   - Real-time message streaming
-   - Connection stability
-   - Concurrent connections
-   - Reconnection behavior
-
-3. **Model Provider Testing** (`model_provider_test.py`)
-   - All 8 providers (OpenAI, Anthropic, Gemini, etc.)
-   - Provider-specific latencies
-   - Failover scenarios
-   - Cost tracking
-
-4. **Mixed Scenario Testing** (`mixed_scenario_test.py`)
-   - Realistic user behavior
-   - Combined REST + WebSocket
-   - Tool usage patterns
-   - Conversation flows
-
-### Test Scenarios
-
-1. **Normal Load** - Typical production traffic
-2. **Stress Test** - Find breaking points
-3. **Spike Test** - Sudden traffic increases
-4. **Endurance Test** - Long-running stability
-
-## 🚀 Quick Start
-
-### Prerequisites
+### Installation
 
 ```bash
-# Python 3.9+
-python --version
+# Install performance testing dependencies
+pip install locust pytest-benchmark
 
-# Install dependencies
-cd tests/performance
-pip install -r requirements.txt
+# Or use the Makefile
+make install-perf-test
 ```
 
-### Environment Setup
+### Running Tests
 
+#### 1. Normal Load Test (Recommended)
 ```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit with your configuration
-BASE_URL=http://localhost:8000
-API_KEY=your-api-key-here
-WS_URL=ws://localhost:8000
+# Command line mode with 50 users
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 50 \
+  --spawn-rate 5 \
+  --run-time 5m \
+  --tags normal
 ```
 
-### Run Your First Test
-
+#### 2. Web UI Mode
 ```bash
-# Using Makefile (recommended)
-make test-normal
+# Start Locust web interface
+locust -f tests/performance/locustfile.py --host http://localhost:8000
 
-# Or directly with Locust
-locust -f locustfiles/api_load_test.py --config config/normal_load.yaml
-
-# With web UI
-locust -f locustfiles/api_load_test.py --host http://localhost:8000
-# Then open http://localhost:8089
+# Open browser: http://localhost:8089
 ```
 
-## 📊 Test Scenarios
-
-### 1. Normal Load Test
-
-**Purpose**: Simulate typical production traffic
-
-**Configuration** (`config/normal_load.yaml`):
-```yaml
-users: 50
-spawn_rate: 5
-run_time: 10m
-```
-
-**Expected Results**:
-- Avg response time: < 500ms
-- 95th percentile: < 1000ms
-- Error rate: < 1%
-
-**Run**:
+#### 3. Stress Test
 ```bash
-make test-normal
-# or
-./run_tests.sh normal
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 200 \
+  --spawn-rate 20 \
+  --run-time 10m \
+  --tags stress
 ```
 
-### 2. Stress Test
-
-**Purpose**: Find system breaking points
-
-**Configuration** (`config/stress_test.yaml`):
-```yaml
-users: 500
-spawn_rate: 20
-run_time: 30m
-```
-
-**Goals**:
-- Identify maximum capacity
-- Find bottlenecks
-- Test error handling
-- Observe degradation patterns
-
-**Run**:
+#### 4. Spike Test
 ```bash
-make test-stress
-# or
-./run_tests.sh stress
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 500 \
+  --spawn-rate 50 \
+  --run-time 3m \
+  --tags spike
 ```
 
-### 3. Spike Test
+## Test Scenarios
 
-**Purpose**: Test sudden traffic increases
+### Normal Load
+**Purpose**: Simulate typical production usage
+- **Users**: 50 concurrent users
+- **Spawn Rate**: 5 users/second
+- **Duration**: 5-10 minutes
+- **Wait Time**: 1-3 seconds between requests
+- **Success Criteria**: <100ms p95 latency, <1% error rate
 
-**Configuration** (`config/spike_test.yaml`):
-```yaml
-users: 200
-spawn_rate: 100  # Rapid ramp-up
-run_time: 15m
-```
+### Stress Test
+**Purpose**: Find system breaking point
+- **Users**: 200-500 concurrent users
+- **Spawn Rate**: 20 users/second
+- **Duration**: 10-15 minutes
+- **Wait Time**: 0.5-2 seconds
+- **Success Criteria**: Graceful degradation, <5% error rate
 
-**Scenarios**:
-- Sudden user influx
-- Auto-scaling trigger
-- Recovery behavior
+### Spike Test
+**Purpose**: Test sudden traffic increase
+- **Users**: 0 → 500 → 0 users
+- **Spawn Rate**: 50 users/second
+- **Duration**: 3-5 minutes
+- **Wait Time**: 0.1-1 second
+- **Success Criteria**: System recovers, no crashes
 
-**Run**:
-```bash
-make test-spike
-# or
-./run_tests.sh spike
-```
+### Endurance Test
+**Purpose**: Long-running stability
+- **Users**: 100 concurrent users
+- **Spawn Rate**: 10 users/second
+- **Duration**: 1-4 hours
+- **Wait Time**: 2-5 seconds
+- **Success Criteria**: No memory leaks, stable performance
 
-### 4. Endurance Test
-
-**Purpose**: Long-running stability test
-
-**Configuration** (`config/endurance_test.yaml`):
-```yaml
-users: 100
-spawn_rate: 10
-run_time: 24h
-```
-
-**Monitors**:
-- Memory leaks
-- Connection pool exhaustion
-- Database performance degradation
-- Log accumulation
-
-**Run**:
-```bash
-make test-endurance
-# or
-./run_tests.sh endurance
-```
-
-## ⚙️ Configuration
-
-### Configuration Files
-
-All scenarios use YAML configuration in `config/`:
-
-```yaml
-# Example: config/normal_load.yaml
-users: 50                    # Total concurrent users
-spawn_rate: 5                # Users added per second
-run_time: 10m                # Test duration
-host: http://localhost:8000  # Target host
-
-# Advanced options
-stop_timeout: 10
-web_port: 8089
-headless: false
-loglevel: INFO
-
-# Custom tags
-tags:
-  - api
-  - chat
-```
+## Test Configuration
 
 ### Environment Variables
 
 ```bash
-# .env file
-BASE_URL=http://localhost:8000
-API_KEY=your-test-api-key
-WS_URL=ws://localhost:8000
+# API Configuration
+export PERF_TEST_HOST="http://localhost:8000"
+export PERF_TEST_API_KEY="your-test-api-key"
 
-# Authentication
-JWT_SECRET=your-jwt-secret
-TEST_USER_EMAIL=test@example.com
-TEST_USER_PASSWORD=testpass123
+# Test Parameters
+export PERF_TEST_USERS=50
+export PERF_TEST_SPAWN_RATE=5
+export PERF_TEST_RUN_TIME="5m"
 
-# Model providers (for provider testing)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=AIza...
+# Scenario Selection
+export PERF_TEST_SCENARIO="normal"  # normal, stress, spike, endurance
 
-# Test data
-TEST_DATA_DIR=./test_data
-RESULTS_DIR=./reports
-
-# Monitoring
-PROMETHEUS_URL=http://localhost:9090
-GRAFANA_URL=http://localhost:3001
+# Model Provider
+export PERF_TEST_MODEL="gpt-3.5-turbo"
+export PERF_TEST_PROVIDER="openai"
 ```
 
-## 🏃 Running Tests
+### Configuration File
 
-### Using Makefile (Recommended)
+Edit `tests/performance/config.py` for advanced settings:
 
-```bash
-# Run specific scenario
-make test-normal      # Normal load test
-make test-stress      # Stress test
-make test-spike       # Spike test
-make test-endurance   # Endurance test
-
-# Run specific test file
-make test-api         # API endpoints only
-make test-websocket   # WebSocket only
-make test-providers   # Model providers only
-make test-mixed       # Mixed scenarios
-
-# Run all tests
-make test-all
-
-# Generate report
-make report
-
-# Clean up
-make clean
+```python
+class PerformanceTestConfig:
+    # API endpoints to test
+    ENDPOINTS = [
+        "/api/v1/chat",
+        "/api/v1/conversations",
+        "/api/v1/monitoring/health"
+    ]
+    
+    # Load distribution (weight)
+    TASK_WEIGHTS = {
+        "send_message": 70,
+        "list_conversations": 20,
+        "health_check": 10
+    }
+    
+    # Performance thresholds
+    THRESHOLDS = {
+        "p95_latency_ms": 100,
+        "error_rate_percent": 1.0,
+        "throughput_rps": 100
+    }
 ```
 
-### Using run_tests.sh
+## Test Files
 
-```bash
-# Basic usage
-./run_tests.sh [scenario] [options]
+### Core Files
+- `locustfile.py` - Main entry point, orchestrates all tests
+- `config.py` - Configuration and settings
+- `test_api_endpoints.py` - REST API load tests
+- `test_websocket.py` - WebSocket connection tests
+- `test_model_providers.py` - Model provider performance
+- `test_tools.py` - Tool execution tests
 
-# Examples
-./run_tests.sh normal
-./run_tests.sh stress --users 1000
-./run_tests.sh spike --headless
-./run_tests.sh endurance --run-time 48h
+### Utilities
+- `utils/metrics.py` - Custom metrics collection
+- `utils/auth.py` - Authentication helpers
+- `utils/data_generator.py` - Test data generation
+- `utils/report_generator.py` - HTML report generation
 
-# With custom host
-./run_tests.sh normal --host https://api.zakera.ai
+### Scenarios
+- `scenarios/normal_load.json` - Normal load parameters
+- `scenarios/stress_test.json` - Stress test parameters
+- `scenarios/spike_test.json` - Spike test parameters
+- `scenarios/endurance_test.json` - Endurance test parameters
 
-# With web UI
-./run_tests.sh normal --web-ui
-```
-
-### Using Docker
-
-```bash
-# Build performance testing image
-docker-compose -f docker-compose.performance.yml build
-
-# Run tests in container
-docker-compose -f docker-compose.performance.yml up
-
-# Run specific scenario
-docker-compose -f docker-compose.performance.yml run performance normal
-
-# With custom configuration
-docker-compose -f docker-compose.performance.yml run performance stress --users 1000
-```
-
-### Direct Locust Usage
-
-```bash
-# Web UI mode (interactive)
-locust -f locustfiles/api_load_test.py --host http://localhost:8000
-# Open http://localhost:8089
-
-# Headless mode (automated)
-locust -f locustfiles/api_load_test.py \
-  --host http://localhost:8000 \
-  --users 100 \
-  --spawn-rate 10 \
-  --run-time 10m \
-  --headless \
-  --html reports/results.html
-
-# Distributed mode (multiple workers)
-locust -f locustfiles/api_load_test.py --master &
-locust -f locustfiles/api_load_test.py --worker &
-locust -f locustfiles/api_load_test.py --worker &
-```
-
-## 📈 Reporting
+## Reporting
 
 ### Built-in Reports
 
-Locust generates several report formats:
+Locust generates reports automatically:
 
 ```bash
-# HTML report (default)
---html reports/results.html
+# Generate HTML report
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 50 \
+  --spawn-rate 5 \
+  --run-time 5m \
+  --html reports/performance_report.html
 
-# CSV reports
---csv reports/results
-# Generates:
-# - results_stats.csv
-# - results_stats_history.csv
-# - results_failures.csv
-
-# JSON report (for programmatic analysis)
---json reports/results.json
+# Generate CSV files
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 50 \
+  --spawn-rate 5 \
+  --run-time 5m \
+  --csv reports/performance_data
 ```
 
-### Custom Report Generation
+### Custom Reports
+
+Generate custom performance reports:
 
 ```bash
-# Generate comprehensive report
-python utils/report_generator.py \
-  --input reports/results.json \
-  --output reports/analysis.html \
-  --format html
-
-# Compare multiple test runs
-python utils/report_generator.py \
-  --compare reports/run1.json reports/run2.json \
-  --output reports/comparison.html
-
-# Export to PDF
-python utils/report_generator.py \
-  --input reports/results.json \
-  --output reports/report.pdf \
-  --format pdf
+python tests/performance/utils/report_generator.py \
+  --input reports/performance_data_stats.csv \
+  --output reports/custom_report.html
 ```
 
-### Metrics Collection
+### Prometheus Integration
 
+Export metrics to Prometheus:
+
+```bash
+# Start Locust with Prometheus exporter
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --prometheus-port 8088
+
+# Metrics available at: http://localhost:8088/metrics
+```
+
+## Key Metrics
+
+### Response Time Metrics
+- **Average Response Time**: Mean latency across all requests
+- **Median (p50)**: 50th percentile response time
+- **p95**: 95th percentile response time
+- **p99**: 99th percentile response time
+- **Max**: Maximum observed response time
+
+### Throughput Metrics
+- **Requests per Second (RPS)**: Total throughput
+- **Failures per Second**: Error rate
+- **Current Users**: Active concurrent users
+
+### Error Metrics
+- **Total Failures**: Number of failed requests
+- **Failure Rate**: Percentage of failed requests
+- **Error Types**: Breakdown by error type
+
+### Model Provider Metrics
+- **Provider Latency**: Response time by provider
+- **Token Usage**: Tokens consumed per request
+- **Cost per Request**: Estimated cost
+- **Fallback Rate**: Provider failover frequency
+
+## Best Practices
+
+### 1. Baseline First
+```bash
+# Run baseline test to establish performance profile
+locust -f tests/performance/locustfile.py \
+  --host http://localhost:8000 \
+  --users 10 \
+  --spawn-rate 1 \
+  --run-time 2m \
+  --html reports/baseline.html
+```
+
+### 2. Gradual Load Increase
+```bash
+# Start with low load, increase gradually
+for users in 10 50 100 200; do
+  locust -f tests/performance/locustfile.py \
+    --host http://localhost:8000 \
+    --users $users \
+    --spawn-rate 5 \
+    --run-time 3m \
+    --html reports/load_$users.html
+done
+```
+
+### 3. Monitor System Resources
+```bash
+# Monitor CPU, memory, disk during tests
+watch -n 1 'docker stats'
+
+# Monitor application logs
+tail -f logs/app.log
+
+# Check Grafana dashboards
+open http://localhost:3001
+```
+
+### 4. Test in Isolation
+- Run tests in a dedicated environment
+- Disable unnecessary services
+- Use consistent test data
+- Clear caches between runs
+
+### 5. Warm Up Period
 ```python
-# Custom metrics are collected automatically
-from utils.metrics_collector import MetricsCollector
-
-metrics = MetricsCollector()
-metrics.collect()
-
-# Available metrics:
-# - API endpoint performance
-# - WebSocket connection stats
-# - Model provider latencies
-# - Error rates and types
-# - Resource utilization
-# - Cost estimates
+# In locustfile.py
+class MyUser(HttpUser):
+    @task
+    def my_task(self):
+        # Skip first 30 seconds for warm-up
+        if time.time() - self.start_time < 30:
+            return
+        # ... rest of test
 ```
 
-### Report Contents
+## Troubleshooting
 
-1. **Executive Summary**
-   - Test configuration
-   - Overall results
-   - Pass/fail criteria
-   - Recommendations
+### Issue: High Error Rate
 
-2. **Performance Metrics**
-   - Response time distribution
-   - Throughput over time
-   - Error rate analysis
-   - Latency percentiles
+**Symptoms**: >5% error rate during tests
 
-3. **Endpoint Analysis**
-   - Per-endpoint statistics
-   - Slowest endpoints
-   - Most error-prone endpoints
-   - Request distribution
+**Solutions**:
+1. Check API logs for errors
+2. Verify API keys and authentication
+3. Reduce load (users/spawn rate)
+4. Increase server resources
+5. Check rate limiting settings
 
-4. **Resource Utilization**
-   - CPU usage
-   - Memory consumption
-   - Network bandwidth
-   - Database connections
+### Issue: Slow Response Times
 
-5. **Model Provider Stats**
-   - Response times by provider
-   - Token consumption
-   - Cost analysis
-   - Failure rates
+**Symptoms**: p95 > 1000ms
 
-6. **Charts and Graphs**
-   - Time series plots
-   - Distribution histograms
-   - Heatmaps
-   - Comparison charts
+**Solutions**:
+1. Check database query performance
+2. Review model provider latency
+3. Enable caching (Redis)
+4. Optimize database indexes
+5. Scale horizontally
 
-## 🔄 CI/CD Integration
+### Issue: WebSocket Disconnections
 
-### GitHub Actions
+**Symptoms**: Frequent WebSocket errors
 
-Add to `.github/workflows/performance-tests.yml`:
+**Solutions**:
+1. Increase connection timeout
+2. Check network stability
+3. Review WebSocket handler code
+4. Monitor server resources
+5. Implement reconnection logic
+
+### Issue: Inconsistent Results
+
+**Symptoms**: Large variance between runs
+
+**Solutions**:
+1. Run longer tests (10+ minutes)
+2. Increase sample size
+3. Use consistent test data
+4. Eliminate external dependencies
+5. Test at same time of day
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
 
 ```yaml
 name: Performance Tests
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # Daily at 2 AM
+    - cron: '0 0 * * 0'  # Weekly
   workflow_dispatch:
-    inputs:
-      scenario:
-        description: 'Test scenario'
-        required: true
-        default: 'normal'
-        type: choice
-        options:
-          - normal
-          - stress
-          - spike
 
 jobs:
   performance-test:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v3
       
@@ -476,262 +369,125 @@ jobs:
       
       - name: Install dependencies
         run: |
-          cd tests/performance
           pip install -r requirements.txt
+          pip install locust
+      
+      - name: Start services
+        run: docker-compose up -d
+      
+      - name: Wait for services
+        run: sleep 30
       
       - name: Run performance tests
-        env:
-          BASE_URL: ${{ secrets.STAGING_URL }}
-          API_KEY: ${{ secrets.TEST_API_KEY }}
         run: |
-          cd tests/performance
-          ./run_tests.sh ${{ github.event.inputs.scenario || 'normal' }} --headless
+          locust -f tests/performance/locustfile.py \
+            --host http://localhost:8000 \
+            --users 50 \
+            --spawn-rate 5 \
+            --run-time 5m \
+            --headless \
+            --html reports/performance.html \
+            --csv reports/performance
       
-      - name: Generate report
-        run: |
-          cd tests/performance
-          make report
-      
-      - name: Upload results
+      - name: Upload reports
         uses: actions/upload-artifact@v3
         with:
-          name: performance-results
-          path: tests/performance/reports/
+          name: performance-reports
+          path: reports/
       
-      - name: Comment PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            const report = fs.readFileSync('tests/performance/reports/summary.md', 'utf8');
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: report
-            });
+      - name: Check thresholds
+        run: python tests/performance/utils/check_thresholds.py
 ```
 
-### Performance Benchmarks
+## Advanced Usage
 
-Set performance benchmarks that fail the build:
-
-```yaml
-# tests/performance/benchmarks.yaml
-api_endpoints:
-  /api/v1/chat/send:
-    p95_latency_ms: 1000
-    error_rate_percent: 1.0
-  /api/v1/conversations:
-    p95_latency_ms: 500
-    error_rate_percent: 0.5
-
-websocket:
-  connection_success_rate: 99.0
-  message_latency_ms: 500
-
-model_providers:
-  openai:
-    p95_latency_ms: 2000
-  anthropic:
-    p95_latency_ms: 2500
-  gemini:
-    p95_latency_ms: 1500
-
-system:
-  max_error_rate_percent: 2.0
-  min_throughput_rps: 100
-```
-
-## 📚 Best Practices
-
-### 1. Test Environment
-
-- Use dedicated staging environment
-- Match production configuration
-- Isolate from production traffic
-- Use realistic data volumes
-
-### 2. Test Data
+### Custom User Behavior
 
 ```python
-# Use realistic test data
-from utils.data_generator import DataGenerator
+from locust import HttpUser, task, between
 
-generator = DataGenerator()
-
-# Generate varied messages
-messages = generator.generate_messages(
-    count=1000,
-    topics=['tech', 'science', 'general'],
-    lengths=['short', 'medium', 'long']
-)
-
-# Use different user personas
-users = generator.generate_users(
-    count=100,
-    types=['casual', 'power', 'api']
-)
+class CustomUser(HttpUser):
+    wait_time = between(1, 3)
+    
+    def on_start(self):
+        """Login before starting tasks"""
+        self.client.post("/api/v1/auth/login", json={
+            "username": "test_user",
+            "password": "test_pass"
+        })
+    
+    @task(3)  # Weight: 3x more likely
+    def send_message(self):
+        self.client.post("/api/v1/chat", json={
+            "message": "Hello, AI!",
+            "model": "gpt-3.5-turbo"
+        })
+    
+    @task(1)
+    def list_conversations(self):
+        self.client.get("/api/v1/conversations")
 ```
 
-### 3. Gradual Load Increase
+### Sequential Task Flow
 
 ```python
-# Don't spike from 0 to 1000 users instantly
-spawn_rate = 10  # Add 10 users per second
+from locust import HttpUser, TaskSet, task
 
-# Allow warmup period
-wait_time = between(1, 5)  # Seconds between requests
+class ConversationFlow(TaskSet):
+    @task
+    def flow(self):
+        # 1. Create conversation
+        resp = self.client.post("/api/v1/conversations")
+        conv_id = resp.json()["id"]
+        
+        # 2. Send messages
+        for i in range(5):
+            self.client.post(f"/api/v1/conversations/{conv_id}/messages", json={
+                "message": f"Message {i}"
+            })
+        
+        # 3. Export conversation
+        self.client.get(f"/api/v1/conversations/{conv_id}/export")
+        
+        # 4. Delete conversation
+        self.client.delete(f"/api/v1/conversations/{conv_id}")
 ```
 
-### 4. Monitor During Tests
+## Performance Targets
 
-```bash
-# Watch system metrics
-watch -n 1 'docker stats'
+### Production Requirements
 
-# Monitor Prometheus
-curl http://localhost:9090/api/v1/query?query=rate(http_requests_total[1m])
+| Metric | Target | Critical |
+|--------|--------|----------|
+| p95 Latency | < 100ms | < 500ms |
+| p99 Latency | < 200ms | < 1000ms |
+| Error Rate | < 0.1% | < 1% |
+| Throughput | > 100 RPS | > 50 RPS |
+| Uptime | > 99.9% | > 99% |
 
-# Check logs
-tail -f logs/api.log
-```
+### Scalability Targets
 
-### 5. Interpret Results
+| Users | Expected RPS | Max Latency |
+|-------|--------------|-------------|
+| 10 | 10 | 50ms |
+| 50 | 50 | 100ms |
+| 100 | 100 | 200ms |
+| 500 | 300 | 500ms |
+| 1000 | 500 | 1000ms |
 
-- **Look for patterns**: Gradual degradation vs sudden failure
-- **Check error types**: Timeouts vs 500 errors vs connection failures
-- **Identify bottlenecks**: CPU, memory, database, external APIs
-- **Consider costs**: Model API costs during high load
+## Resources
 
-### 6. Iterate and Improve
+- [Locust Documentation](https://docs.locust.io/)
+- [Performance Testing Best Practices](https://www.softwaretestinghelp.com/performance-testing-best-practices/)
+- [API Load Testing Guide](https://www.blazemeter.com/blog/api-load-testing)
 
-1. Establish baseline metrics
-2. Run tests after changes
-3. Compare results
-4. Document findings
-5. Set alerts for regressions
+## Support
 
-## 🐛 Troubleshooting
-
-### Common Issues
-
-#### 1. Connection Errors
-
-```bash
-# Issue: Cannot connect to host
-# Solution: Check if API is running
-curl http://localhost:8000/api/v1/health
-
-# Check network
-ping localhost
-telnet localhost 8000
-```
-
-#### 2. Authentication Failures
-
-```bash
-# Issue: 401 Unauthorized
-# Solution: Check API key
-echo $API_KEY
-
-# Test authentication
-curl -H "Authorization: Bearer $API_KEY" \
-  http://localhost:8000/api/v1/user/me
-```
-
-#### 3. High Error Rates
-
-```python
-# Issue: Many 500 errors
-# Solution: Check API logs
-tail -f logs/api.log | grep ERROR
-
-# Check database connections
-ps aux | grep postgres
-
-# Monitor system resources
-top
-free -h
-df -h
-```
-
-#### 4. WebSocket Connection Issues
-
-```python
-# Issue: WebSocket connections failing
-# Solution: Check WebSocket endpoint
-wscat -c ws://localhost:8000/api/v1/chat/ws
-
-# Check nginx config (if using)
-nginx -t
-
-# Verify WebSocket support
-curl -i -N -H "Connection: Upgrade" \
-  -H "Upgrade: websocket" \
-  http://localhost:8000/api/v1/chat/ws
-```
-
-#### 5. Test Hangs or Stalls
-
-```bash
-# Issue: Locust stops responding
-# Solution: Check for deadlocks
-ps aux | grep locust
-kill -9 <pid>
-
-# Restart with debug logging
-locust -f locustfiles/api_load_test.py --loglevel DEBUG
-
-# Check system resources
-df -h  # Disk space
-free -h  # Memory
-```
-
-### Debug Mode
-
-```bash
-# Run with verbose logging
-export LOGLEVEL=DEBUG
-./run_tests.sh normal
-
-# Enable Locust debug output
-locust -f locustfiles/api_load_test.py --loglevel DEBUG
-
-# Print all HTTP requests/responses
-export LOCUST_DEBUG_HTTP=1
-```
-
-### Getting Help
-
-1. Check logs in `reports/` directory
-2. Review Locust documentation: https://docs.locust.io
-3. Open issue on GitHub
-4. Check Zakera monitoring dashboards
-
-## 📖 Additional Resources
-
-- [Locust Documentation](https://docs.locust.io)
-- [Performance Testing Best Practices](https://docs.locust.io/en/stable/writing-a-locustfile.html)
-- [Zakera API Documentation](../../docs/API.md)
-- [Zakera Architecture](../../docs/ARCHITECTURE.md)
-
-## 🤝 Contributing
-
-To add new test scenarios:
-
-1. Create new locustfile in `locustfiles/`
-2. Add configuration in `config/`
-3. Update this README
-4. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details
+For issues or questions:
+- GitHub Issues: https://github.com/itsmepraks/zakera/issues
+- Discussions: https://github.com/itsmepraks/zakera/discussions
 
 ---
 
 **Last Updated**: February 2026  
-**Version**: 1.0.0  
-**Maintained by**: Zakera Team
+**Version**: 1.0.0
