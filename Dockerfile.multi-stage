@@ -1,0 +1,134 @@
+# Multi-stage Dockerfile for optimized builds
+# Supports development, testing, and production targets
+
+# Stage 1: Base Python image with common dependencies
+FROM python:3.11-slim as base
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \\
+    curl \\
+    git \\
+    build-essential \\
+    libpq-dev \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \\
+    pip install --no-cache-dir -r requirements.txt
+
+# Stage 2: Development environment with debugging tools
+FROM base as development
+
+# Install development dependencies
+RUN pip install --no-cache-dir \\
+    debugpy \\
+    ipdb \\
+    pytest \\
+    pytest-cov \\
+    pytest-asyncio \\
+    black \\
+    flake8 \\
+    mypy \\
+    bandit
+
+# Copy application code (will be overridden by volume mount)
+COPY . /app/
+
+# Expose ports
+EXPOSE 8000 8001 5678
+
+# Development command with hot-reload and debugger
+CMD ["python", "-m", "debugpy", "--listen", "0.0.0.0:5678", "-m", "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--log-level", "debug"]
+
+# Stage 3: Testing environment
+FROM base as testing
+
+# Install test dependencies
+RUN pip install --no-cache-dir \\
+    pytest \\
+    pytest-cov \\
+    pytest-asyncio \\
+    pytest-xdist \\
+    pytest-timeout \\
+    pytest-mock \\
+    httpx \\
+    faker
+
+# Copy application and tests
+COPY . /app/
+
+# Run tests
+CMD ["pytest", "tests/", "-v", "--cov=src", "--cov-report=html", "--cov-report=term", "--cov-report=xml"]
+
+# Stage 4: Builder for production
+FROM base as builder
+
+# Copy application
+COPY . /app/
+
+# Remove development files
+RUN rm -rf tests/ docs/ .git/ .github/ *.md
+
+# Stage 5: Production runtime
+FROM python:3.11-slim as production
+
+# Install only runtime system dependencies
+RUN apt-get update && apt-get install -y \\
+    curl \\
+    libpq5 \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash zakera
+
+WORKDIR /app
+
+# Copy Python dependencies from base
+COPY --from=base /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=base /usr/local/bin /usr/local/bin
+
+# Copy application from builder
+COPY --from=builder --chown=zakera:zakera /app /app
+
+# Switch to non-root user
+USER zakera
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \\
+  CMD curl -f http://localhost:8000/api/v1/monitoring/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Production command
+CMD ["gunicorn", "src.api.main:app", \\
+     "--worker-class", "uvicorn.workers.UvicornWorker", \\
+     "--workers", "4", \\
+     "--bind", "0.0.0.0:8000", \\
+     "--timeout", "120", \\
+     "--graceful-timeout", "30", \\
+     "--keep-alive", "5", \\
+     "--log-level", "info", \\
+     "--access-logfile", "-", \\
+     "--error-logfile", "-"]
+
+# Stage 6: Performance testing environment
+FROM base as performance-testing
+
+# Install Locust and performance testing dependencies
+RUN pip install --no-cache-dir \\
+    locust \\
+    pytest-benchmark \\
+    memory-profiler
+
+COPY tests/performance /app/tests/performance
+COPY src /app/src
+
+WORKDIR /app/tests/performance
+
+# Run performance tests
+CMD ["locust", "--locustfile", "locustfile.py", "--host", "http://backend:8000"]

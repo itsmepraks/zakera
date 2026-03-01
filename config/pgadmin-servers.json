@@ -1,0 +1,24 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Zakera Development",
+      "Group": "Development",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "zakera_dev",
+      "Username": "zakera",
+      "SSLMode": "prefer",
+      "Comment": "Zakera development database"
+    },
+    "2": {
+      "Name": "Zakera Performance Testing",
+      "Group": "Testing",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "zakera_perf_test",
+      "Username": "zakera_test",
+      "SSLMode": "prefer",
+      "Comment": "Database for performance testing"
+    }
+  }
+}

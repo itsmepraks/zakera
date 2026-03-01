@@ -1,0 +1,238 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zakera-performance-testing",
+    "title": "Zakera - Performance Testing Dashboard",
+    "tags": ["zakera", "performance", "locust", "load-testing"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Performance Test Overview",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(locust_requests_total)",
+            "legendFormat": "Total Requests",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(locust_failures_total)",
+            "legendFormat": "Total Failures",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(locust_users)",
+            "legendFormat": "Active Users",
+            "refId": "C"
+          },
+          {
+            "expr": "avg(locust_response_time_p95)",
+            "legendFormat": "P95 Latency (ms)",
+            "refId": "D"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "textMode": "value_and_name",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate Over Time",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(locust_requests_total[1m])",
+            "legendFormat": "{{scenario}} - {{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 10,
+              "drawStyle": "line"
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Response Time Percentiles",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "locust_response_time_p50",
+            "legendFormat": "P50 (Median)",
+            "refId": "A"
+          },
+          {
+            "expr": "locust_response_time_p95",
+            "legendFormat": "P95",
+            "refId": "B"
+          },
+          {
+            "expr": "locust_response_time_p99",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Failure Rate by Endpoint",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(sum by (endpoint) (rate(locust_failures_total[5m])) / sum by (endpoint) (rate(locust_requests_total[5m]))) * 100",
+            "legendFormat": "{{endpoint}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        },
+        "options": {
+          "displayMode": "gradient",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Users by Scenario",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "locust_users",
+            "legendFormat": "{{scenario}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "users",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Test Scenario Status",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 20, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "locust_requests_total",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true, "job": true, "instance": true},
+              "indexByName": {},
+              "renameByName": {
+                "scenario": "Scenario",
+                "endpoint": "Endpoint",
+                "Value": "Total Requests"
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [{"displayName": "Total Requests", "desc": true}]
+        }
+      },
+      {
+        "id": 7,
+        "title": "Model Provider Performance",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 28, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "avg by (provider) (locust_model_response_time)",
+            "legendFormat": "{{provider}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "scenario",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(locust_requests_total, scenario)",
+          "multi": true,
+          "includeAll": true,
+          "current": {"text": "All", "value": "$__all"}
+        },
+        {
+          "name": "endpoint",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(locust_requests_total, endpoint)",
+          "multi": true,
+          "includeAll": true,
+          "current": {"text": "All", "value": "$__all"}
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Test Start/End",
+          "datasource": "Prometheus",
+          "expr": "changes(locust_users[1m]) != 0",
+          "tagKeys": "scenario",
+          "textFormat": "Scenario: {{scenario}}",
+          "iconColor": "blue"
+        }
+      ]
+    }
+  }
+}

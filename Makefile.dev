@@ -1,0 +1,319 @@
+# Enhanced Development Makefile for Zakera
+# Provides comprehensive development workflow commands
+
+.PHONY: help dev dev-up dev-down dev-logs dev-build dev-rebuild
+.PHONY: db-shell redis-cli pgadmin redisinsight
+.PHONY: test test-unit test-integration test-e2e test-performance
+.PHONY: lint format type-check security-scan
+.PHONY: docs docs-serve api-docs
+.PHONY: clean clean-all
+
+# Default target
+.DEFAULT_GOAL := help
+
+# Colors for output
+COLOR_RESET = \033[0m
+COLOR_BLUE = \033[34m
+COLOR_GREEN = \033[32m
+COLOR_YELLOW = \033[33m
+
+## Help command
+help: ## Show this help message
+	@echo '$(COLOR_BLUE)Zakera Development Commands$(COLOR_RESET)'
+	@echo ''
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "$(COLOR_GREEN)%-20s$(COLOR_RESET) %s\\n", $$1, $$2}'
+
+## Development Environment
+dev: ## Start full development environment
+	@echo '$(COLOR_BLUE)Starting Zakera development environment...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml up -d
+	@echo '$(COLOR_GREEN)Development environment is running!$(COLOR_RESET)'
+	@echo ''
+	@echo 'Services:'
+	@echo '  API:          http://localhost:8000'
+	@echo '  API Docs:     http://localhost:8000/api/docs'
+	@echo '  Prometheus:   http://localhost:9090'
+	@echo '  Grafana:      http://localhost:3001 (admin/admin)'
+	@echo '  Jaeger:       http://localhost:16686'
+	@echo '  Mailhog:      http://localhost:8025'
+	@echo ''
+	@echo 'Run $(COLOR_YELLOW)make dev-logs$(COLOR_RESET) to view logs'
+
+dev-tools: ## Start development environment with all tools
+	@echo '$(COLOR_BLUE)Starting with all development tools...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml --profile tools --profile observability up -d
+	@echo '$(COLOR_GREEN)Development environment with tools is running!$(COLOR_RESET)'
+	@echo ''
+	@echo 'Additional Tools:'
+	@echo '  pgAdmin:      http://localhost:5050'
+	@echo '  RedisInsight: http://localhost:8001'
+	@echo '  Loki:         http://localhost:3100'
+
+dev-up: dev ## Alias for dev
+
+dev-down: ## Stop development environment
+	@echo '$(COLOR_YELLOW)Stopping development environment...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml down
+	@echo '$(COLOR_GREEN)Development environment stopped$(COLOR_RESET)'
+
+dev-restart: ## Restart development environment
+	@echo '$(COLOR_YELLOW)Restarting development environment...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml restart
+
+dev-logs: ## Show logs from all services
+	docker-compose -f docker-compose.dev.yml logs -f
+
+dev-logs-api: ## Show logs from API only
+	docker-compose -f docker-compose.dev.yml logs -f backend
+
+dev-build: ## Build development images
+	@echo '$(COLOR_BLUE)Building development images...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml build
+
+dev-rebuild: ## Rebuild and restart development environment
+	@echo '$(COLOR_BLUE)Rebuilding development environment...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml up -d --build
+
+dev-status: ## Show status of all services
+	@echo '$(COLOR_BLUE)Development Environment Status:$(COLOR_RESET)'
+	@docker-compose -f docker-compose.dev.yml ps
+
+## Database Management
+db-shell: ## Open PostgreSQL shell
+	docker-compose -f docker-compose.dev.yml exec postgres psql -U zakera -d zakera_dev
+
+db-migrate: ## Run database migrations
+	docker-compose -f docker-compose.dev.yml exec backend alembic upgrade head
+
+db-migrate-create: ## Create new migration (usage: make db-migrate-create MSG="description")
+	docker-compose -f docker-compose.dev.yml exec backend alembic revision --autogenerate -m "$(MSG)"
+
+db-reset: ## Reset database (WARNING: deletes all data)
+	@echo '$(COLOR_YELLOW)WARNING: This will delete all data!$(COLOR_RESET)'
+	@read -p "Are you sure? [y/N] " -n 1 -r; \\
+	echo; \\
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \\
+		docker-compose -f docker-compose.dev.yml exec postgres psql -U zakera -d zakera_dev -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"; \\
+		docker-compose -f docker-compose.dev.yml exec backend alembic upgrade head; \\
+		echo '$(COLOR_GREEN)Database reset complete$(COLOR_RESET)'; \\
+	fi
+
+db-seed: ## Seed database with test data
+	docker-compose -f docker-compose.dev.yml exec backend python scripts/seed_dev_data.py
+
+pgadmin: ## Open pgAdmin in browser
+	@open http://localhost:5050 || xdg-open http://localhost:5050 || echo "pgAdmin: http://localhost:5050"
+
+## Redis Management
+redis-cli: ## Open Redis CLI
+	docker-compose -f docker-compose.dev.yml exec redis redis-cli -a dev_redis_password
+
+redis-flush: ## Flush all Redis cache (WARNING: deletes all cached data)
+	@echo '$(COLOR_YELLOW)WARNING: This will delete all cached data!$(COLOR_RESET)'
+	@read -p "Are you sure? [y/N] " -n 1 -r; \\
+	echo; \\
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \\
+		docker-compose -f docker-compose.dev.yml exec redis redis-cli -a dev_redis_password FLUSHALL; \\
+		echo '$(COLOR_GREEN)Redis cache flushed$(COLOR_RESET)'; \\
+	fi
+
+redis-stats: ## Show Redis statistics
+	docker-compose -f docker-compose.dev.yml exec redis redis-cli -a dev_redis_password INFO stats
+
+redisinsight: ## Open RedisInsight in browser
+	@open http://localhost:8001 || xdg-open http://localhost:8001 || echo "RedisInsight: http://localhost:8001"
+
+## Testing
+test: ## Run all tests
+	@echo '$(COLOR_BLUE)Running all tests...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml exec backend pytest tests/ -v
+
+test-unit: ## Run unit tests only
+	docker-compose -f docker-compose.dev.yml exec backend pytest tests/unit/ -v
+
+test-integration: ## Run integration tests
+	docker-compose -f docker-compose.dev.yml exec backend pytest tests/integration/ -v
+
+test-e2e: ## Run end-to-end tests
+	docker-compose -f docker-compose.dev.yml exec backend pytest tests/e2e/ -v
+
+test-performance: ## Run performance tests
+	@echo '$(COLOR_BLUE)Starting performance tests...$(COLOR_RESET)'
+	cd tests/performance && ./run_tests.sh normal
+
+test-coverage: ## Generate test coverage report
+	docker-compose -f docker-compose.dev.yml exec backend pytest tests/ --cov=src --cov-report=html --cov-report=term
+	@echo '$(COLOR_GREEN)Coverage report: htmlcov/index.html$(COLOR_RESET)'
+
+test-watch: ## Run tests in watch mode
+	docker-compose -f docker-compose.dev.yml exec backend pytest-watch tests/
+
+## Code Quality
+lint: ## Run linters
+	@echo '$(COLOR_BLUE)Running linters...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml exec backend flake8 src/
+	@echo '$(COLOR_GREEN)Linting complete$(COLOR_RESET)'
+
+format: ## Format code with Black
+	@echo '$(COLOR_BLUE)Formatting code...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml exec backend black src/ tests/
+	@echo '$(COLOR_GREEN)Formatting complete$(COLOR_RESET)'
+
+format-check: ## Check code formatting
+	docker-compose -f docker-compose.dev.yml exec backend black --check src/ tests/
+
+type-check: ## Run type checking with mypy
+	@echo '$(COLOR_BLUE)Running type checker...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml exec backend mypy src/
+
+security-scan: ## Run security vulnerability scan
+	@echo '$(COLOR_BLUE)Running security scan...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml exec backend bandit -r src/ -f json -o security-report.json
+	@echo '$(COLOR_GREEN)Security scan complete$(COLOR_RESET)'
+
+qa: lint type-check test ## Run all quality checks
+
+## Monitoring & Observability
+prometheus: ## Open Prometheus in browser
+	@open http://localhost:9090 || xdg-open http://localhost:9090 || echo "Prometheus: http://localhost:9090"
+
+grafana: ## Open Grafana in browser
+	@open http://localhost:3001 || xdg-open http://localhost:3001 || echo "Grafana: http://localhost:3001 (admin/admin)"
+
+jaeger: ## Open Jaeger UI in browser
+	@open http://localhost:16686 || xdg-open http://localhost:16686 || echo "Jaeger: http://localhost:16686"
+
+metrics: ## Show current metrics
+	@curl -s http://localhost:8001/metrics | head -n 50
+
+logs-tail: ## Tail application logs
+	tail -f logs/zakera.log
+
+## Documentation
+docs: ## Build documentation
+	@echo '$(COLOR_BLUE)Building documentation...$(COLOR_RESET)'
+	cd docs && make html
+
+docs-serve: ## Serve documentation locally
+	@echo '$(COLOR_BLUE)Serving documentation...$(COLOR_RESET)'
+	cd docs/_build/html && python -m http.server 8080
+
+api-docs: ## Open API documentation
+	@open http://localhost:8000/api/docs || xdg-open http://localhost:8000/api/docs || echo "API Docs: http://localhost:8000/api/docs"
+
+api-redoc: ## Open ReDoc API documentation
+	@open http://localhost:8000/api/redoc || xdg-open http://localhost:8000/api/redoc || echo "ReDoc: http://localhost:8000/api/redoc"
+
+api-openapi: ## Download OpenAPI schema
+	curl http://localhost:8000/api/openapi.json > docs/api/openapi.json
+	@echo '$(COLOR_GREEN)OpenAPI schema saved to docs/api/openapi.json$(COLOR_RESET)'
+
+## Utility Commands
+shell: ## Open shell in backend container
+	docker-compose -f docker-compose.dev.yml exec backend /bin/bash
+
+shell-python: ## Open Python shell with app context
+	docker-compose -f docker-compose.dev.yml exec backend python -i -c "from src.api.main import app; from src.model import *; from src.utils import *"
+
+generate-secret: ## Generate secure secret key
+	@python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+backup-db: ## Backup database
+	@mkdir -p backups
+	docker-compose -f docker-compose.dev.yml exec postgres pg_dump -U zakera -d zakera_dev > backups/zakera_dev_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo '$(COLOR_GREEN)Database backup created$(COLOR_RESET)'
+
+restore-db: ## Restore database from backup (usage: make restore-db BACKUP=filename.sql)
+	docker-compose -f docker-compose.dev.yml exec -T postgres psql -U zakera -d zakera_dev < $(BACKUP)
+	@echo '$(COLOR_GREEN)Database restored$(COLOR_RESET)'
+
+## Cleanup
+clean: ## Remove temporary files and caches
+	@echo '$(COLOR_YELLOW)Cleaning temporary files...$(COLOR_RESET)'
+	find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name '*.pyc' -delete 2>/dev/null || true
+	find . -type d -name '.pytest_cache' -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name '.coverage' -exec rm -rf {} + 2>/dev/null || true
+	rm -rf htmlcov/ .mypy_cache/ .tox/ dist/ build/ *.egg-info/
+	@echo '$(COLOR_GREEN)Cleanup complete$(COLOR_RESET)'
+
+clean-docker: ## Remove Docker containers and volumes
+	@echo '$(COLOR_YELLOW)Removing Docker resources...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml down -v
+	@echo '$(COLOR_GREEN)Docker cleanup complete$(COLOR_RESET)'
+
+clean-all: clean clean-docker ## Remove all temporary files, containers, and volumes
+
+## Performance
+perf-test-normal: ## Run normal load performance test
+	cd tests/performance && make test-normal
+
+perf-test-stress: ## Run stress test
+	cd tests/performance && make test-stress
+
+perf-report: ## Open latest performance report
+	@open tests/performance/reports/latest/report.html || xdg-open tests/performance/reports/latest/report.html
+
+## Quick Actions
+quick-start: dev db-migrate db-seed ## Quick start: Start dev + migrate + seed data
+	@echo '$(COLOR_GREEN)Zakera is ready for development!$(COLOR_RESET)'
+
+quick-stop: dev-down clean ## Quick stop: Stop and clean
+
+quick-reset: dev-down clean-docker dev db-migrate db-seed ## Reset everything
+
+## Frontend
+frontend-dev: ## Start frontend in development mode
+	cd src/frontend && npm run dev
+
+frontend-build: ## Build frontend for production
+	cd src/frontend && npm run build
+
+frontend-test: ## Run frontend tests
+	cd src/frontend && npm test
+
+frontend-lint: ## Lint frontend code
+	cd src/frontend && npm run lint
+
+## CI/CD Simulation
+ci-test: ## Simulate CI/CD testing pipeline
+	@echo '$(COLOR_BLUE)Simulating CI/CD pipeline...$(COLOR_RESET)'
+	docker-compose -f docker-compose.dev.yml -f docker-compose.test.yml run --rm test-runner
+
+ci-lint: format-check lint type-check ## Run all CI lint checks
+
+ci-build: ## Build production images
+	docker build -t zakera:latest --target production .
+
+## Monitoring
+mon-dashboards: grafana ## Open Grafana dashboards
+
+mon-metrics: prometheus ## Open Prometheus
+
+mon-traces: jaeger ## Open Jaeger traces
+
+mon-health: ## Check all service health
+	@echo '$(COLOR_BLUE)Checking service health...$(COLOR_RESET)'
+	@echo 'API:' && curl -s http://localhost:8000/api/v1/monitoring/health | jq . || echo 'Not running'
+	@echo 'Postgres:' && docker-compose -f docker-compose.dev.yml exec postgres pg_isready -U zakera || echo 'Not running'
+	@echo 'Redis:' && docker-compose -f docker-compose.dev.yml exec redis redis-cli -a dev_redis_password PING || echo 'Not running'
+
+## Development Workflow
+dev-workflow: ## Show recommended development workflow
+	@echo '$(COLOR_BLUE)Zakera Development Workflow:$(COLOR_RESET)'
+	@echo ''
+	@echo '1. Start environment:    $(COLOR_GREEN)make quick-start$(COLOR_RESET)'
+	@echo '2. View logs:            $(COLOR_GREEN)make dev-logs$(COLOR_RESET)'
+	@echo '3. Open API docs:        $(COLOR_GREEN)make api-docs$(COLOR_RESET)'
+	@echo '4. Run tests:            $(COLOR_GREEN)make test$(COLOR_RESET)'
+	@echo '5. Check metrics:        $(COLOR_GREEN)make grafana$(COLOR_RESET)'
+	@echo '6. Make changes:         Edit code (hot-reload enabled)'
+	@echo '7. Test changes:         $(COLOR_GREEN)make test$(COLOR_RESET)'
+	@echo '8. Lint code:            $(COLOR_GREEN)make lint$(COLOR_RESET)'
+	@echo '9. Stop environment:     $(COLOR_GREEN)make dev-down$(COLOR_RESET)'
+	@echo ''
+	@echo 'Quick commands:'
+	@echo '  Full QA:               $(COLOR_GREEN)make qa$(COLOR_RESET)'
+	@echo '  Database shell:        $(COLOR_GREEN)make db-shell$(COLOR_RESET)'
+	@echo '  Redis CLI:             $(COLOR_GREEN)make redis-cli$(COLOR_RESET)'
+	@echo '  Container shell:       $(COLOR_GREEN)make shell$(COLOR_RESET)'

@@ -1,0 +1,162 @@
+# Prometheus Recording and Alerting Rules for Redis Cache
+# Monitors cache performance, memory, and operations
+
+groups:
+  - name: redis_cache
+    interval: 15s
+    rules:
+      # Recording Rules
+      - record: redis:hit_rate:5m
+        expr: |
+          (
+            sum(rate(redis_cache_hits_total[5m]))
+            / 
+            (
+              sum(rate(redis_cache_hits_total[5m]))
+              + 
+              sum(rate(redis_cache_misses_total[5m]))
+            )
+          ) * 100
+      
+      - record: redis:operations:rate:1m
+        expr: |
+          sum(rate(redis_cache_hits_total[1m]))
+          + sum(rate(redis_cache_misses_total[1m]))
+          + sum(rate(redis_cache_sets_total[1m]))
+          + sum(rate(redis_cache_deletes_total[1m]))
+      
+      - record: redis:memory_usage_percentage
+        expr: |
+          (redis_memory_used_bytes / redis_memory_max_bytes) * 100
+      
+      - record: redis:eviction_rate:5m
+        expr: rate(redis_evicted_keys_total[5m])
+      
+      - record: redis:operation_latency:p95
+        expr: |
+          histogram_quantile(0.95,
+            rate(redis_operation_duration_seconds_bucket[5m])
+          ) * 1000
+      
+      - record: redis:operation_latency:p99
+        expr: |
+          histogram_quantile(0.99,
+            rate(redis_operation_duration_seconds_bucket[5m])
+          ) * 1000
+
+      # Alerting Rules
+      - alert: RedisCacheLowHitRate
+        expr: redis:hit_rate:5m < 60
+        for: 10m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "Redis cache hit rate is low"
+          description: "Hit rate is {{ $value | humanizePercentage }} (threshold: 60%)"
+      
+      - alert: RedisCacheVeryLowHitRate
+        expr: redis:hit_rate:5m < 40
+        for: 5m
+        labels:
+          severity: critical
+          component: redis_cache
+        annotations:
+          summary: "Redis cache hit rate is critically low"
+          description: "Hit rate is {{ $value | humanizePercentage }} (threshold: 40%)"
+      
+      - alert: RedisHighMemoryUsage
+        expr: redis:memory_usage_percentage > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 80%)"
+      
+      - alert: RedisMemoryFull
+        expr: redis:memory_usage_percentage > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: redis_cache
+        annotations:
+          summary: "Redis memory is nearly full"
+          description: "Memory usage is {{ $value | humanizePercentage }} (threshold: 95%)"
+      
+      - alert: RedisHighEvictionRate
+        expr: redis:eviction_rate:5m > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "High Redis key eviction rate"
+          description: "Evicting {{ $value | humanize }} keys/sec (threshold: 100/sec)"
+      
+      - alert: RedisCacheSlowOperations
+        expr: redis:operation_latency:p95 > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "Redis operations are slow"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 50ms)"
+      
+      - alert: RedisConnectionsNearLimit
+        expr: |
+          (redis_connected_clients / redis_max_clients) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "Redis connection pool near capacity"
+          description: "Using {{ $value | humanizePercentage }} of max connections"
+      
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis_cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is not responding"
+
+  - name: redis_cache_efficiency
+    interval: 5m
+    rules:
+      # Cache efficiency trends
+      - record: redis:hit_rate:1h
+        expr: |
+          (
+            sum(increase(redis_cache_hits_total[1h]))
+            / 
+            (
+              sum(increase(redis_cache_hits_total[1h]))
+              + 
+              sum(increase(redis_cache_misses_total[1h]))
+            )
+          ) * 100
+      
+      - record: redis:avg_entry_size_bytes
+        expr: |
+          redis_memory_used_bytes / redis_db_keys
+      
+      - alert: CacheEfficiencyDegrading
+        expr: |
+          (
+            redis:hit_rate:1h
+            / 
+            redis:hit_rate:1h offset 1d
+          ) < 0.9
+        for: 30m
+        labels:
+          severity: warning
+          component: redis_cache
+        annotations:
+          summary: "Cache efficiency is degrading"
+          description: "Hit rate decreased by >10% compared to yesterday"
