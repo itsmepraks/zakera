@@ -1,0 +1,333 @@
+# Docker Compose for Enhanced Development Workflow
+# Includes hot-reloading, debugging, and complete observability stack
+
+version: '3.8'
+
+services:
+  # PostgreSQL with pgAdmin
+  postgres:
+    image: postgres:15-alpine
+    container_name: zakera-postgres-dev
+    environment:
+      POSTGRES_DB: zakera_dev
+      POSTGRES_USER: zakera
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/seed-dev-data.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zakera -d zakera_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - zakera-dev
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: zakera-pgadmin-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@zakera.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+      - ./config/pgadmin-servers.json:/pgadmin4/servers.json
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - zakera-dev
+    profiles:
+      - tools
+
+  # Redis with RedisInsight
+  redis:
+    image: redis:7-alpine
+    container_name: zakera-redis-dev
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-dev_redis_password}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+    volumes:
+      - redis_dev_data:/data
+      - ./config/redis-dev.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - zakera-dev
+
+  # RedisInsight for Redis management
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: zakera-redisinsight-dev
+    ports:
+      - "8001:8001"
+    volumes:
+      - redisinsight_dev_data:/db
+    depends_on:
+      - redis
+    networks:
+      - zakera-dev
+    profiles:
+      - tools
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: zakera-jaeger-dev
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+    volumes:
+      - jaeger_dev_data:/badger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
+      - "14268:14268"  # Jaeger HTTP
+      - "6831:6831/udp"  # Jaeger Thrift
+    networks:
+      - zakera-dev
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: zakera-prometheus-dev
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_dev_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - zakera-dev
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: zakera-grafana-dev
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_INSTALL_PLUGINS: grafana-piechart-panel,grafana-clock-panel
+      GF_FEATURE_TOGGLES_ENABLE: publicDashboards
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_NAME: Main Org.
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_dev_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - jaeger
+    networks:
+      - zakera-dev
+    restart: unless-stopped
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: zakera-loki-dev
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_dev_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - zakera-dev
+    profiles:
+      - observability
+
+  # Promtail for log shipping
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: zakera-promtail-dev
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - ./logs:/app/logs:ro
+    networks:
+      - zakera-dev
+    depends_on:
+      - loki
+    profiles:
+      - observability
+
+  # Backend API with hot-reload
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.11}
+    container_name: zakera-backend-dev
+    environment:
+      # Development mode
+      ENV: development
+      DEBUG: "true"
+      LOG_LEVEL: DEBUG
+      
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      RELOAD: "true"  # Enable hot-reload
+      
+      # Database
+      DATABASE_URL: postgresql://zakera:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/zakera_dev
+      DB_ECHO: "true"  # Log all SQL queries
+      
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-dev_redis_password}@redis:6379/0
+      
+      # AI Model Configuration
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-openai}
+      MODEL_NAME: ${MODEL_NAME:-gpt-3.5-turbo}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY}
+      
+      # Security (Development)
+      SECRET_KEY: dev-secret-key-not-for-production
+      ALLOWED_ORIGINS: "*"  # Allow all origins in dev
+      CORS_ALLOW_CREDENTIALS: "true"
+      
+      # Monitoring
+      ENABLE_METRICS: "true"
+      METRICS_PORT: 8001
+      
+      # Distributed Tracing
+      ENABLE_TRACING: "true"
+      TRACE_SAMPLING_RATE: 1.0  # 100% sampling in dev
+      JAEGER_AGENT_HOST: jaeger
+      JAEGER_AGENT_PORT: 6831
+      OTLP_ENDPOINT: http://jaeger:4317
+      OTEL_SERVICE_NAME: zakera-api-dev
+      
+      # Development Tools
+      ENABLE_SWAGGER: "true"
+      ENABLE_REDOC: "true"
+      ENABLE_PROFILING: "true"
+    volumes:
+      # Hot-reload: mount source code
+      - ./src:/app/src:ro
+      - ./alembic:/app/alembic:ro
+      - ./tests:/app/tests:ro
+      - ./config:/app/config:ro
+      # Logs
+      - ./logs:/app/logs
+      # Development cache
+      - dev_pip_cache:/root/.cache/pip
+    ports:
+      - "8000:8000"  # API
+      - "8001:8001"  # Metrics
+      - "5678:5678"  # Debugpy (Python debugger)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      prometheus:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/monitoring/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - zakera-dev
+    restart: unless-stopped
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: zakera-mailhog-dev
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - zakera-dev
+    profiles:
+      - tools
+
+  # Swagger UI for API documentation
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: zakera-swagger-dev
+    environment:
+      SWAGGER_JSON: /api/openapi.json
+      BASE_URL: /swagger
+    volumes:
+      - ./docs/api/openapi.json:/api/openapi.json:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - zakera-dev
+    profiles:
+      - tools
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  pgadmin_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  redisinsight_dev_data:
+    driver: local
+  jaeger_dev_data:
+    driver: local
+  prometheus_dev_data:
+    driver: local
+  grafana_dev_data:
+    driver: local
+  loki_dev_data:
+    driver: local
+  dev_pip_cache:
+    driver: local
+
+networks:
+  zakera-dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
