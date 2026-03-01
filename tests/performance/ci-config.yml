@@ -1,0 +1,208 @@
+# CI-specific configuration for Locust performance tests
+# This file provides optimized settings for running tests in GitHub Actions
+
+name: "CI Performance Test Configuration"
+version: "1.0"
+
+# Environment settings for CI
+environment:
+  # Reduce resource usage in CI
+  database:
+    pool_size: 5
+    max_overflow: 10
+    pool_pre_ping: true
+  
+  redis:
+    max_connections: 10
+    socket_timeout: 5
+    socket_connect_timeout: 5
+  
+  # Logging configuration for CI
+  logging:
+    level: "WARNING"  # Reduce log verbosity
+    format: "json"    # Structured logs for parsing
+    output: "stdout"
+
+# Test scenarios optimized for CI runtime
+scenarios:
+  normal:
+    users: 50
+    spawn_rate: 5
+    duration_seconds: 300  # 5 minutes
+    description: "Normal production load test"
+  
+  stress:
+    users: 500
+    spawn_rate: 50
+    duration_seconds: 600  # 10 minutes
+    description: "High load stress test"
+  
+  spike:
+    users: 200
+    spawn_rate: 100  # Rapid spawn for spike simulation
+    duration_seconds: 900  # 15 minutes
+    description: "Spike load test with rapid user increase"
+  
+  endurance:
+    users: 100
+    spawn_rate: 10
+    duration_seconds: 3600  # 1 hour (reduced from 24h for CI)
+    description: "Memory leak and stability test (CI version)"
+
+# Locust configuration
+locust:
+  # Stop on error thresholds
+  stop_timeout: 30
+  
+  # Task weights (higher = more frequent)
+  tasks:
+    chat_message: 5      # Most common operation
+    get_conversations: 2
+    create_conversation: 1
+    search: 1
+    health_check: 1
+  
+  # Wait time between tasks (seconds)
+  wait_time:
+    min: 1
+    max: 3
+  
+  # Reporting options
+  reports:
+    html: true
+    csv: true
+    json: true
+    
+    # Include these in reports
+    include_percentiles: [0.5, 0.75, 0.9, 0.95, 0.99]
+
+# Performance thresholds (from .github/performance-baselines.json)
+thresholds:
+  # Endpoint-specific thresholds
+  endpoints:
+    "/api/v1/chat":
+      p95_ms: 2000
+      p99_ms: 5000
+      failure_rate_percent: 1.0
+    
+    "/api/v1/conversations":
+      p95_ms: 500
+      p99_ms: 1000
+      failure_rate_percent: 1.0
+    
+    "/api/v1/monitoring/health":
+      p95_ms: 100
+      p99_ms: 200
+      failure_rate_percent: 0.1
+  
+  # Overall system thresholds
+  overall:
+    max_failure_rate_percent: 2.0
+    min_total_rps: 20.0
+
+# Model provider testing
+model_providers:
+  # Test these providers in parallel
+  enabled:
+    - openai
+    - anthropic
+    - gemini
+    - perplexity
+    - cohere
+    - groq
+    - mistral
+  
+  # Provider-specific settings
+  settings:
+    timeout_seconds: 30
+    retry_attempts: 2
+    max_tokens: 100  # Shorter responses for faster testing
+
+# Monitoring and observability
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: false  # Not available in CI
+  
+  # Custom metrics to track
+  custom_metrics:
+    - name: "request_duration_ms"
+      type: "histogram"
+      buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000]
+    
+    - name: "total_requests"
+      type: "counter"
+    
+    - name: "failed_requests"
+      type: "counter"
+    
+    - name: "active_users"
+      type: "gauge"
+
+# Reporting and artifacts
+artifacts:
+  # Where to save reports
+  output_dir: "reports"
+  
+  # Retention settings
+  retention_days: 30
+  
+  # File naming
+  naming_pattern: "{scenario}_{timestamp}"
+  
+  # What to include
+  include:
+    - html_report
+    - csv_stats
+    - json_data
+    - analysis_summary
+    - performance_graphs
+
+# CI-specific optimizations
+optimizations:
+  # Cache settings
+  cache:
+    enabled: true
+    pip_cache: true
+    docker_layers: true
+  
+  # Parallel execution
+  parallel:
+    enabled: true
+    max_workers: 4
+  
+  # Resource limits (for CI runners)
+  resources:
+    memory_limit_mb: 4096
+    cpu_limit: 2
+
+# Alerting configuration
+alerting:
+  # Create GitHub issue on critical failures
+  github_issues:
+    enabled: true
+    labels:
+      - "performance"
+      - "regression"
+      - "automated"
+  
+  # Comment on PRs
+  pr_comments:
+    enabled: true
+    always_comment: false  # Only comment if there are issues
+    include_graphs: true
+
+# Historical tracking
+historical:
+  enabled: true
+  
+  # Store results for trend analysis
+  storage:
+    type: "github_pages"  # Future: deploy to GitHub Pages
+    path: "performance-history"
+  
+  # Comparison settings
+  comparison:
+    enabled: true
+    baseline: "main"  # Branch to compare against
+    threshold_increase_percent: 10  # Alert if >10% slower

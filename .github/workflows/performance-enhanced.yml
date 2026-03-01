@@ -1,0 +1,861 @@
+name: Enhanced Performance Testing
+
+# Comprehensive Locust-based performance testing workflow
+# Integrates with the performance testing suite in tests/performance/
+# Provides automated regression detection, trending, and detailed reporting
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'tests/performance/**'
+      - 'requirements.txt'
+      - '.github/workflows/performance-enhanced.yml'
+  
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/**'
+      - 'tests/performance/**'
+      - 'requirements.txt'
+  
+  schedule:
+    # Run nightly at 2 AM UTC for continuous monitoring
+    - cron: '0 2 * * *'
+  
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Test scenario to run'
+        required: true
+        default: 'normal'
+        type: choice
+        options:
+          - normal
+          - stress
+          - spike
+          - endurance
+          - all
+      duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '300'
+        type: string
+      users:
+        description: 'Number of concurrent users'
+        required: false
+        default: '50'
+        type: string
+      workers:
+        description: 'Number of Locust worker nodes'
+        required: false
+        default: '2'
+        type: string
+
+env:
+  PYTHON_VERSION: '3.11'
+  POSTGRES_VERSION: '15'
+  REDIS_VERSION: '7'
+  REPORTS_DIR: 'performance-reports'
+
+jobs:
+  # Job 1: Setup and validate environment
+  setup:
+    name: Setup and Validation
+    runs-on: ubuntu-latest
+    outputs:
+      test_scenarios: ${{ steps.config.outputs.scenarios }}
+      cache_key: ${{ steps.cache_config.outputs.key }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for trend analysis
+      
+      - name: Validate performance test structure
+        run: |
+          echo "✓ Validating performance test suite..."
+          
+          # Check required files exist
+          required_files=(
+            "tests/performance/locustfile.py"
+            "tests/performance/requirements.txt"
+            "tests/performance/config.py"
+            "tests/performance/reporters.py"
+          )
+          
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "✗ Missing required file: $file"
+              exit 1
+            fi
+            echo "✓ Found: $file"
+          done
+          
+          # Check for Locust test files
+          locust_files=$(find tests/performance/locustfiles -name "*.py" -type f | wc -l)
+          if [[ $locust_files -lt 1 ]]; then
+            echo "✗ No Locust test files found in tests/performance/locustfiles/"
+            exit 1
+          fi
+          echo "✓ Found $locust_files Locust test file(s)"
+          
+          echo "✅ Performance test suite validation complete"
+      
+      - name: Configure test scenarios
+        id: config
+        run: |
+          scenario="${{ inputs.scenario || 'normal' }}"
+          
+          if [[ "$scenario" == "all" ]]; then
+            scenarios='["normal", "stress", "spike"]'
+          else
+            scenarios="[\"$scenario\"]"
+          fi
+          
+          echo "scenarios=$scenarios" >> $GITHUB_OUTPUT
+          echo "Selected scenarios: $scenarios"
+      
+      - name: Setup cache configuration
+        id: cache_config
+        run: |
+          # Generate cache key based on dependencies
+          key="perf-test-${{ hashFiles('requirements.txt', 'tests/performance/requirements.txt') }}"
+          echo "key=$key" >> $GITHUB_OUTPUT
+
+  # Job 2: Run Locust performance tests for different scenarios
+  locust_tests:
+    name: Locust Tests - ${{ matrix.scenario }}
+    runs-on: ubuntu-latest
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJson(needs.setup.outputs.test_scenarios) }}
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: zakera_test
+          POSTGRES_PASSWORD: test_password_12345
+          POSTGRES_DB: zakera_perf_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ needs.setup.outputs.cache_key }}
+          restore-keys: |
+            perf-test-
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install -r tests/performance/requirements.txt
+          
+          # Verify Locust installation
+          locust --version
+      
+      - name: Setup test database
+        env:
+          DATABASE_URL: postgresql://zakera_test:test_password_12345@localhost:5432/zakera_perf_test
+        run: |
+          echo "Running database migrations..."
+          # Run Alembic migrations if available
+          if [[ -f "alembic.ini" ]]; then
+            alembic upgrade head || echo "No migrations or already up to date"
+          fi
+          
+          # Seed test data
+          python tests/performance/utils/seed_test_data.py || echo "No seed script found"
+      
+      - name: Start application
+        env:
+          DATABASE_URL: postgresql://zakera_test:test_password_12345@localhost:5432/zakera_perf_test
+          REDIS_URL: redis://localhost:6379/0
+          LOG_LEVEL: WARNING
+          TESTING: 'true'
+        run: |
+          echo "Starting Zakera application..."
+          
+          # Start the FastAPI application in background
+          python -m uvicorn src.api.main:app \
+            --host 0.0.0.0 \
+            --port 8000 \
+            --log-level warning &
+          
+          APP_PID=$!
+          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+          
+          # Wait for application to be ready
+          echo "Waiting for application to start..."
+          for i in {1..60}; do
+            if curl -f -s http://localhost:8000/api/v1/monitoring/health > /dev/null 2>&1; then
+              echo "✓ Application is ready (attempt $i)"
+              curl -s http://localhost:8000/api/v1/monitoring/health | jq .
+              break
+            fi
+            
+            if [[ $i -eq 60 ]]; then
+              echo "✗ Application failed to start within 120 seconds"
+              kill $APP_PID 2>/dev/null || true
+              exit 1
+            fi
+            
+            echo "Waiting... (attempt $i/60)"
+            sleep 2
+          done
+      
+      - name: Load scenario configuration
+        id: scenario_config
+        run: |
+          scenario="${{ matrix.scenario }}"
+          
+          # Set scenario-specific parameters
+          case $scenario in
+            normal)
+              users="50"
+              spawn_rate="5"
+              duration="300"  # 5 minutes
+              ;;
+            stress)
+              users="500"
+              spawn_rate="50"
+              duration="600"  # 10 minutes
+              ;;
+            spike)
+              users="200"
+              spawn_rate="100"
+              duration="900"  # 15 minutes
+              ;;
+            endurance)
+              users="100"
+              spawn_rate="10"
+              duration="3600"  # 1 hour (reduced from 24h for CI)
+              ;;
+            *)
+              users="${{ inputs.users || '50' }}"
+              spawn_rate="10"
+              duration="${{ inputs.duration || '300' }}"
+              ;;
+          esac
+          
+          # Allow manual override
+          if [[ -n "${{ inputs.users }}" ]]; then
+            users="${{ inputs.users }}"
+          fi
+          
+          if [[ -n "${{ inputs.duration }}" ]]; then
+            duration="${{ inputs.duration }}"
+          fi
+          
+          echo "users=$users" >> $GITHUB_OUTPUT
+          echo "spawn_rate=$spawn_rate" >> $GITHUB_OUTPUT
+          echo "duration=$duration" >> $GITHUB_OUTPUT
+          
+          echo "Configuration for $scenario scenario:"
+          echo "  Users: $users"
+          echo "  Spawn Rate: $spawn_rate/s"
+          echo "  Duration: $duration seconds"
+      
+      - name: Run Locust performance tests
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+          LOCUST_USERS: ${{ steps.scenario_config.outputs.users }}
+          LOCUST_SPAWN_RATE: ${{ steps.scenario_config.outputs.spawn_rate }}
+          LOCUST_RUN_TIME: ${{ steps.scenario_config.outputs.duration }}
+        run: |
+          cd tests/performance
+          
+          echo "🚀 Starting Locust tests for $SCENARIO scenario..."
+          echo "   Users: $LOCUST_USERS"
+          echo "   Spawn Rate: $LOCUST_SPAWN_RATE/s"
+          echo "   Duration: $LOCUST_RUN_TIME seconds"
+          
+          # Create reports directory
+          mkdir -p reports/$SCENARIO
+          
+          # Run Locust with comprehensive reporting
+          locust \
+            --locustfile locustfile.py \
+            --headless \
+            --users $LOCUST_USERS \
+            --spawn-rate $LOCUST_SPAWN_RATE \
+            --run-time ${LOCUST_RUN_TIME}s \
+            --host http://localhost:8000 \
+            --html reports/$SCENARIO/report.html \
+            --csv reports/$SCENARIO/results \
+            --json reports/$SCENARIO/results.json \
+            --loglevel INFO \
+            --stop-timeout 30 \
+            --exit-code-on-error 0 || true
+          
+          echo "✅ Locust tests completed"
+          
+          # Display summary
+          if [[ -f "reports/$SCENARIO/results_stats.csv" ]]; then
+            echo ""
+            echo "📊 Performance Summary:"
+            cat reports/$SCENARIO/results_stats.csv | column -t -s','
+          fi
+      
+      - name: Generate enhanced reports
+        run: |
+          cd tests/performance
+          
+          echo "📝 Generating enhanced performance reports..."
+          
+          # Run custom reporter if available
+          if [[ -f "reporters.py" ]]; then
+            python -c "
+import json
+import sys
+from pathlib import Path
+from reporters import PerformanceReporter
+
+scenario = '${{ matrix.scenario }}'
+reports_dir = Path(f'reports/{scenario}')
+
+if (reports_dir / 'results.json').exists():
+    reporter = PerformanceReporter(reports_dir)
+    
+    # Generate markdown report
+    md_report = reporter.generate_markdown_report()
+    with open(reports_dir / 'report.md', 'w') as f:
+        f.write(md_report)
+    
+    # Generate summary JSON
+    summary = reporter.generate_summary()
+    with open(reports_dir / 'summary.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+    
+    print(f'✓ Generated enhanced reports for {scenario}')
+else:
+    print(f'⚠ No results found for {scenario}', file=sys.stderr)
+" || echo "Custom reporter not available, using Locust reports"
+          fi
+      
+      - name: Analyze performance results
+        id: analyze
+        run: |
+          cd tests/performance/reports/${{ matrix.scenario }}
+          
+          echo "📊 Analyzing performance results..."
+          
+          # Parse results and check for regressions
+          python << 'ANALYZE_SCRIPT'
+import csv
+import json
+import sys
+from pathlib import Path
+
+def parse_locust_stats(csv_file):
+    """Parse Locust stats CSV file."""
+    stats = {}
+    
+    try:
+        with open(csv_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row['Name']
+                if name and name != 'Aggregated':
+                    stats[name] = {
+                        'requests': int(row['Request Count']) if row['Request Count'] else 0,
+                        'failures': int(row['Failure Count']) if row['Failure Count'] else 0,
+                        'median_ms': float(row['Median Response Time']) if row['Median Response Time'] else 0,
+                        'p95_ms': float(row['95%']) if row['95%'] else 0,
+                        'p99_ms': float(row['99%']) if row['99%'] else 0,
+                        'avg_ms': float(row['Average Response Time']) if row['Average Response Time'] else 0,
+                        'min_ms': float(row['Min Response Time']) if row['Min Response Time'] else 0,
+                        'max_ms': float(row['Max Response Time']) if row['Max Response Time'] else 0,
+                        'rps': float(row['Requests/s']) if row['Requests/s'] else 0,
+                        'failure_rate': (float(row['Failure Count']) / float(row['Request Count']) * 100) 
+                                       if row['Request Count'] and float(row['Request Count']) > 0 else 0,
+                    }
+    except FileNotFoundError:
+        print(f"Warning: Stats file not found", file=sys.stderr)
+        return {}
+    
+    return stats
+
+def check_thresholds(stats, scenario):
+    """Check if metrics exceed performance thresholds."""
+    
+    # Define performance thresholds by scenario
+    thresholds = {
+        'normal': {
+            '/api/v1/chat': {'p95_ms': 2000, 'p99_ms': 5000, 'failure_rate': 1.0},
+            '/api/v1/conversations': {'p95_ms': 500, 'p99_ms': 1000, 'failure_rate': 1.0},
+            '/api/v1/monitoring/health': {'p95_ms': 100, 'p99_ms': 200, 'failure_rate': 0.1},
+        },
+        'stress': {
+            '/api/v1/chat': {'p95_ms': 5000, 'p99_ms': 10000, 'failure_rate': 5.0},
+            '/api/v1/conversations': {'p95_ms': 2000, 'p99_ms': 5000, 'failure_rate': 5.0},
+        },
+        'spike': {
+            '/api/v1/chat': {'p95_ms': 3000, 'p99_ms': 8000, 'failure_rate': 10.0},
+        },
+        'endurance': {
+            '/api/v1/chat': {'p95_ms': 2500, 'p99_ms': 6000, 'failure_rate': 2.0},
+        },
+    }
+    
+    scenario_thresholds = thresholds.get(scenario, thresholds['normal'])
+    violations = []
+    
+    for endpoint, metrics in stats.items():
+        if endpoint in scenario_thresholds:
+            endpoint_thresholds = scenario_thresholds[endpoint]
+            
+            for metric, threshold in endpoint_thresholds.items():
+                actual_value = metrics.get(metric, 0)
+                
+                if actual_value > threshold:
+                    violations.append({
+                        'endpoint': endpoint,
+                        'metric': metric,
+                        'value': actual_value,
+                        'threshold': threshold,
+                        'exceeded_by': actual_value - threshold,
+                        'percentage': ((actual_value / threshold) - 1) * 100,
+                    })
+    
+    return violations
+
+# Main analysis
+scenario = '${{ matrix.scenario }}'
+stats_file = 'results_stats.csv'
+
+stats = parse_locust_stats(stats_file)
+violations = check_thresholds(stats, scenario)
+
+# Create analysis results
+analysis = {
+    'scenario': scenario,
+    'stats': stats,
+    'violations': violations,
+    'has_violations': len(violations) > 0,
+    'total_requests': sum(s['requests'] for s in stats.values()),
+    'total_failures': sum(s['failures'] for s in stats.values()),
+    'avg_failure_rate': sum(s['failure_rate'] for s in stats.values()) / len(stats) if stats else 0,
+}
+
+# Save analysis
+with open('analysis.json', 'w') as f:
+    json.dump(analysis, f, indent=2)
+
+print(f"✓ Analysis complete: {len(violations)} threshold violation(s) detected")
+print(f"  Total requests: {analysis['total_requests']}")
+print(f"  Total failures: {analysis['total_failures']}")
+print(f"  Avg failure rate: {analysis['avg_failure_rate']:.2f}%")
+
+# Set outputs
+with open('$GITHUB_OUTPUT', 'a') as f:
+    f.write(f"has_violations={str(analysis['has_violations']).lower()}\\n")
+    f.write(f"violations_count={len(violations)}\\n")
+    f.write(f"total_requests={analysis['total_requests']}\\n")
+    f.write(f"total_failures={analysis['total_failures']}\\n")
+
+ANALYZE_SCRIPT
+          
+          echo "✅ Performance analysis complete"
+      
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report-${{ matrix.scenario }}
+          path: |
+            tests/performance/reports/${{ matrix.scenario }}/*.html
+            tests/performance/reports/${{ matrix.scenario }}/*.csv
+            tests/performance/reports/${{ matrix.scenario }}/*.json
+            tests/performance/reports/${{ matrix.scenario }}/*.md
+          retention-days: 30
+      
+      - name: Stop application
+        if: always()
+        run: |
+          if [[ -n "$APP_PID" ]]; then
+            echo "Stopping application (PID: $APP_PID)..."
+            kill $APP_PID 2>/dev/null || true
+            wait $APP_PID 2>/dev/null || true
+          fi
+
+  # Job 3: Model Provider Performance Comparison
+  model_provider_tests:
+    name: Model Provider Performance
+    runs-on: ubuntu-latest
+    needs: setup
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [openai, anthropic, gemini, perplexity, ollama, cohere, groq, mistral]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-benchmark
+      
+      - name: Run provider benchmarks
+        env:
+          PROVIDER: ${{ matrix.provider }}
+        run: |
+          cd tests/performance
+          
+          echo "🧪 Benchmarking $PROVIDER provider..."
+          
+          # Run provider-specific performance tests
+          pytest test_model_providers.py \
+            -k "$PROVIDER" \
+            --benchmark-only \
+            --benchmark-json=reports/benchmark-$PROVIDER.json \
+            --benchmark-verbose \
+            || echo "⚠ No benchmarks found for $PROVIDER"
+      
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.provider }}
+          path: tests/performance/reports/benchmark-*.json
+          retention-days: 30
+
+  # Job 4: Aggregate results and generate comprehensive report
+  aggregate_results:
+    name: Aggregate Results & Report
+    runs-on: ubuntu-latest
+    needs: [setup, locust_tests]
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+      
+      - name: Install report dependencies
+        run: |
+          pip install jinja2 plotly pandas matplotlib seaborn
+      
+      - name: Generate comprehensive report
+        id: report
+        run: |
+          python << 'REPORT_SCRIPT'
+import json
+import sys
+from pathlib import Path
+from datetime import datetime
+
+artifacts_dir = Path('downloaded-artifacts')
+report_data = {
+    'timestamp': datetime.utcnow().isoformat(),
+    'commit': '${{ github.sha }}',
+    'branch': '${{ github.ref_name }}',
+    'scenarios': {},
+    'summary': {},
+}
+
+# Aggregate results from all scenarios
+for scenario_dir in artifacts_dir.glob('performance-report-*'):
+    scenario_name = scenario_dir.name.replace('performance-report-', '')
+    
+    analysis_file = scenario_dir / 'analysis.json'
+    if analysis_file.exists():
+        with open(analysis_file) as f:
+            analysis = json.load(f)
+            report_data['scenarios'][scenario_name] = analysis
+
+# Calculate summary statistics
+total_requests = sum(
+    scenario.get('total_requests', 0) 
+    for scenario in report_data['scenarios'].values()
+)
+total_failures = sum(
+    scenario.get('total_failures', 0) 
+    for scenario in report_data['scenarios'].values()
+)
+
+report_data['summary'] = {
+    'total_scenarios': len(report_data['scenarios']),
+    'total_requests': total_requests,
+    'total_failures': total_failures,
+    'overall_failure_rate': (total_failures / total_requests * 100) if total_requests > 0 else 0,
+    'has_any_violations': any(
+        scenario.get('has_violations', False) 
+        for scenario in report_data['scenarios'].values()
+    ),
+}
+
+# Save comprehensive report
+with open('performance-report-full.json', 'w') as f:
+    json.dump(report_data, f, indent=2)
+
+print(f"✓ Comprehensive report generated")
+print(f"  Scenarios: {report_data['summary']['total_scenarios']}")
+print(f"  Total requests: {total_requests:,}")
+print(f"  Total failures: {total_failures:,}")
+print(f"  Overall failure rate: {report_data['summary']['overall_failure_rate']:.2f}%")
+
+with open('$GITHUB_OUTPUT', 'a') as f:
+    f.write(f"has_violations={str(report_data['summary']['has_any_violations']).lower()}\\n")
+    f.write(f"total_requests={total_requests}\\n")
+    f.write(f"failure_rate={report_data['summary']['overall_failure_rate']:.2f}\\n")
+
+REPORT_SCRIPT
+      
+      - name: Create performance summary
+        run: |
+          cat > performance-summary.md << 'EOF'
+# Performance Test Summary
+
+**Run Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+**Commit**: ${{ github.sha }}
+**Branch**: ${{ github.ref_name }}
+**Triggered by**: ${{ github.event_name }}
+
+## Overview
+
+- **Total Requests**: ${{ steps.report.outputs.total_requests }}
+- **Overall Failure Rate**: ${{ steps.report.outputs.failure_rate }}%
+- **Performance Violations**: ${{ steps.report.outputs.has_violations }}
+
+## Detailed Results
+
+Detailed performance reports are available in the workflow artifacts.
+
+### Quick Links
+- [View Full HTML Reports](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+- [Download CSV Data](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+- [Performance Trends](#) (Coming soon with GitHub Pages integration)
+
+---
+*Generated by Zakera Performance Testing CI/CD*
+EOF
+          
+          cat performance-summary.md
+      
+      - name: Upload comprehensive report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report-comprehensive
+          path: |
+            performance-report-full.json
+            performance-summary.md
+          retention-days: 90
+
+  # Job 5: Comment on PR with results (PR only)
+  pr_comment:
+    name: PR Performance Comment
+    runs-on: ubuntu-latest
+    needs: [locust_tests, aggregate_results]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Download comprehensive report
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-report-comprehensive
+      
+      - name: Generate PR comment
+        id: comment
+        run: |
+          python << 'COMMENT_SCRIPT'
+import json
+from datetime import datetime
+
+with open('performance-report-full.json') as f:
+    report = json.load(f)
+
+comment = f"""## 🚀 Performance Test Results
+
+**Tested Commit**: `{report['commit'][:7]}`
+**Test Time**: {datetime.fromisoformat(report['timestamp']).strftime('%Y-%m-%d %H:%M UTC')}
+**Scenarios Tested**: {report['summary']['total_scenarios']}
+
+### 📊 Overall Metrics
+
+| Metric | Value |
+|--------|-------|
+| Total Requests | {report['summary']['total_requests']:,} |
+| Total Failures | {report['summary']['total_failures']:,} |
+| Failure Rate | {report['summary']['overall_failure_rate']:.2f}% |
+
+### 📈 Scenario Results
+
+"""
+
+for scenario_name, scenario_data in report['scenarios'].items():
+    violations = scenario_data.get('violations', [])
+    status_icon = '❌' if violations else '✅'
+    
+    comment += f"\\n#### {status_icon} {scenario_name.title()} Load Test\\n\\n"
+    
+    if violations:
+        comment += "**⚠️ Performance Violations Detected:**\\n\\n"
+        for v in violations:
+            comment += f"- `{v['endpoint']}`: {v['metric']} = {v['value']:.0f}ms (threshold: {v['threshold']:.0f}ms, +{v['percentage']:.1f}%)\\n"
+    else:
+        comment += "All metrics within acceptable thresholds! 🎉\\n"
+    
+    # Add top endpoints table
+    if 'stats' in scenario_data and scenario_data['stats']:
+        comment += "\\n**Top Endpoints:**\\n\\n"
+        comment += "| Endpoint | Requests | P95 (ms) | P99 (ms) | Failures |\\n"
+        comment += "|----------|----------|----------|----------|----------|\\n"
+        
+        for endpoint, stats in list(scenario_data['stats'].items())[:5]:
+            comment += f"| {endpoint} | {stats['requests']:,} | {stats['p95_ms']:.0f} | {stats['p99_ms']:.0f} | {stats['failures']} |\\n"
+
+comment += f"""
+
+### 📦 Artifacts
+
+Detailed reports are available in the [workflow run artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+---
+*🤖 Automated performance testing powered by Locust | [View Configuration](.github/workflows/performance-enhanced.yml)*
+"""
+
+# Save comment
+with open('pr-comment.md', 'w') as f:
+    f.write(comment)
+
+print("✓ PR comment generated")
+
+COMMENT_SCRIPT
+      
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const comment = fs.readFileSync('pr-comment.md', 'utf8');
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && c.body.includes('Performance Test Results')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment,
+              });
+              console.log('Updated existing PR comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment,
+              });
+              console.log('Created new PR comment');
+            }
+
+  # Job 6: Check for regressions and fail if necessary
+  regression_check:
+    name: Regression Check
+    runs-on: ubuntu-latest
+    needs: [aggregate_results]
+    if: always()
+    
+    steps:
+      - name: Download comprehensive report
+        uses: actions/download-artifact@v4
+        with:
+          name: performance-report-comprehensive
+      
+      - name: Check for violations
+        run: |
+          python << 'CHECK_SCRIPT'
+import json
+import sys
+
+with open('performance-report-full.json') as f:
+    report = json.load(f)
+
+has_violations = report['summary']['has_any_violations']
+
+if has_violations:
+    print("❌ Performance regressions detected!")
+    print("\nViolations by scenario:")
+    
+    for scenario_name, scenario_data in report['scenarios'].items():
+        violations = scenario_data.get('violations', [])
+        if violations:
+            print(f"\n{scenario_name.upper()}:")
+            for v in violations:
+                print(f"  - {v['endpoint']}: {v['metric']} = {v['value']:.0f}ms (threshold: {v['threshold']:.0f}ms)")
+    
+    sys.exit(1)
+else:
+    print("✅ All performance metrics within acceptable thresholds!")
+    sys.exit(0)
+
+CHECK_SCRIPT

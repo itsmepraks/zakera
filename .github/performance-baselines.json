@@ -1,0 +1,180 @@
+{
+  "_description": "Performance baseline thresholds for regression detection",
+  "_last_updated": "2026-02-28",
+  "version": "1.0",
+  
+  "scenarios": {
+    "normal": {
+      "description": "Normal production load (50 users, 5min)",
+      "thresholds": {
+        "endpoints": {
+          "/api/v1/chat": {
+            "p95_ms": 2000,
+            "p99_ms": 5000,
+            "failure_rate_percent": 1.0,
+            "min_rps": 5.0
+          },
+          "/api/v1/conversations": {
+            "p95_ms": 500,
+            "p99_ms": 1000,
+            "failure_rate_percent": 1.0,
+            "min_rps": 10.0
+          },
+          "/api/v1/monitoring/health": {
+            "p95_ms": 100,
+            "p99_ms": 200,
+            "failure_rate_percent": 0.1,
+            "min_rps": 20.0
+          },
+          "/api/v1/users/me": {
+            "p95_ms": 300,
+            "p99_ms": 600,
+            "failure_rate_percent": 1.0
+          },
+          "/api/v1/models": {
+            "p95_ms": 200,
+            "p99_ms": 400,
+            "failure_rate_percent": 0.5
+          }
+        },
+        "overall": {
+          "max_failure_rate_percent": 2.0,
+          "min_total_rps": 20.0
+        }
+      }
+    },
+    
+    "stress": {
+      "description": "Stress test (500 users, 10min)",
+      "thresholds": {
+        "endpoints": {
+          "/api/v1/chat": {
+            "p95_ms": 5000,
+            "p99_ms": 10000,
+            "failure_rate_percent": 5.0,
+            "min_rps": 20.0
+          },
+          "/api/v1/conversations": {
+            "p95_ms": 2000,
+            "p99_ms": 5000,
+            "failure_rate_percent": 5.0
+          },
+          "/api/v1/monitoring/health": {
+            "p95_ms": 500,
+            "p99_ms": 1000,
+            "failure_rate_percent": 2.0
+          }
+        },
+        "overall": {
+          "max_failure_rate_percent": 10.0,
+          "min_total_rps": 50.0
+        }
+      }
+    },
+    
+    "spike": {
+      "description": "Spike test with sudden traffic increase (200 users, 15min)",
+      "thresholds": {
+        "endpoints": {
+          "/api/v1/chat": {
+            "p95_ms": 3000,
+            "p99_ms": 8000,
+            "failure_rate_percent": 10.0
+          }
+        },
+        "overall": {
+          "max_failure_rate_percent": 15.0,
+          "scale_up_time_seconds": 30,
+          "recovery_time_seconds": 120
+        }
+      }
+    },
+    
+    "endurance": {
+      "description": "Endurance test for memory leaks (100 users, 1h in CI / 24h locally)",
+      "thresholds": {
+        "endpoints": {
+          "/api/v1/chat": {
+            "p95_ms": 2500,
+            "p99_ms": 6000,
+            "failure_rate_percent": 2.0
+          }
+        },
+        "overall": {
+          "max_failure_rate_percent": 5.0,
+          "max_latency_increase_percent": 15.0,
+          "max_memory_growth_mb": 500
+        }
+      }
+    }
+  },
+  
+  "model_providers": {
+    "openai": {
+      "avg_response_time_ms": 1500,
+      "p95_response_time_ms": 3000,
+      "max_failure_rate_percent": 2.0
+    },
+    "anthropic": {
+      "avg_response_time_ms": 1800,
+      "p95_response_time_ms": 3500,
+      "max_failure_rate_percent": 2.0
+    },
+    "gemini": {
+      "avg_response_time_ms": 1200,
+      "p95_response_time_ms": 2500,
+      "max_failure_rate_percent": 2.0
+    },
+    "perplexity": {
+      "avg_response_time_ms": 2000,
+      "p95_response_time_ms": 4000,
+      "max_failure_rate_percent": 3.0,
+      "note": "Includes search time"
+    },
+    "ollama": {
+      "avg_response_time_ms": 3000,
+      "p95_response_time_ms": 6000,
+      "max_failure_rate_percent": 1.0,
+      "note": "Local models, network not a factor"
+    },
+    "cohere": {
+      "avg_response_time_ms": 1400,
+      "p95_response_time_ms": 2800,
+      "max_failure_rate_percent": 2.0
+    },
+    "groq": {
+      "avg_response_time_ms": 500,
+      "p95_response_time_ms": 1000,
+      "max_failure_rate_percent": 2.0,
+      "note": "Ultra-fast inference"
+    },
+    "mistral": {
+      "avg_response_time_ms": 1600,
+      "p95_response_time_ms": 3200,
+      "max_failure_rate_percent": 2.0
+    },
+    "huggingface": {
+      "avg_response_time_ms": 2500,
+      "p95_response_time_ms": 5000,
+      "max_failure_rate_percent": 5.0,
+      "note": "Varies by model"
+    }
+  },
+  
+  "alerts": {
+    "enabled": true,
+    "channels": ["github_issues", "pr_comments"],
+    "thresholds": {
+      "critical": {
+        "failure_rate_percent": 10.0,
+        "p99_latency_ms": 10000,
+        "error_rate_percent": 5.0
+      },
+      "warning": {
+        "failure_rate_percent": 5.0,
+        "p99_latency_ms": 5000,
+        "error_rate_percent": 2.0
+      }
+    }
+  }
+}
