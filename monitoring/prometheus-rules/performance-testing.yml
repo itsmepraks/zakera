@@ -1,0 +1,111 @@
+# Prometheus Recording and Alerting Rules for Performance Testing
+# Integrates with Locust performance tests
+
+groups:
+  - name: performance_testing
+    interval: 30s
+    rules:
+      # Recording Rules - Pre-calculate expensive queries
+      - record: locust:request_rate:1m
+        expr: rate(locust_requests_total[1m])
+      
+      - record: locust:failure_rate:1m
+        expr: rate(locust_failures_total[1m])
+      
+      - record: locust:success_rate:1m
+        expr: |
+          rate(locust_requests_total[1m]) - rate(locust_failures_total[1m])
+      
+      - record: locust:error_percentage:5m
+        expr: |
+          (
+            sum(rate(locust_failures_total[5m]))
+            / 
+            sum(rate(locust_requests_total[5m]))
+          ) * 100
+      
+      - record: locust:p95_response_time:endpoint
+        expr: |
+          histogram_quantile(0.95,
+            sum by (endpoint, le) (
+              rate(locust_response_time_bucket[5m])
+            )
+          )
+      
+      - record: locust:p99_response_time:endpoint
+        expr: |
+          histogram_quantile(0.99,
+            sum by (endpoint, le) (
+              rate(locust_response_time_bucket[5m])
+            )
+          )
+
+      # Alerting Rules
+      - alert: PerformanceTestHighErrorRate
+        expr: locust:error_percentage:5m > 5
+        for: 2m
+        labels:
+          severity: warning
+          component: performance_test
+        annotations:
+          summary: "High error rate in performance tests"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+      
+      - alert: PerformanceTestCriticalErrorRate
+        expr: locust:error_percentage:5m > 10
+        for: 1m
+        labels:
+          severity: critical
+          component: performance_test
+        annotations:
+          summary: "Critical error rate in performance tests"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+      
+      - alert: PerformanceTestSlowEndpoint
+        expr: locust:p95_response_time:endpoint > 2000
+        for: 5m
+        labels:
+          severity: warning
+          component: performance_test
+        annotations:
+          summary: "Slow endpoint detected: {{ $labels.endpoint }}"
+          description: "P95 response time is {{ $value | humanizeDuration }} (threshold: 2s)"
+      
+      - alert: PerformanceTestVerySlowEndpoint
+        expr: locust:p99_response_time:endpoint > 5000
+        for: 2m
+        labels:
+          severity: critical
+          component: performance_test
+        annotations:
+          summary: "Very slow endpoint: {{ $labels.endpoint }}"
+          description: "P99 response time is {{ $value | humanizeDuration }} (threshold: 5s)"
+      
+      - alert: PerformanceTestLowThroughput
+        expr: locust:request_rate:1m < 5
+        for: 3m
+        labels:
+          severity: warning
+          component: performance_test
+        annotations:
+          summary: "Low request throughput in performance tests"
+          description: "Request rate is {{ $value | humanize }} req/s (threshold: 5 req/s)"
+
+  - name: performance_regression
+    interval: 1m
+    rules:
+      # Compare current performance to baseline
+      - alert: PerformanceRegression
+        expr: |
+          (
+            locust:p95_response_time:endpoint
+            / 
+            locust:p95_response_time:endpoint offset 1d
+          ) > 1.2
+        for: 5m
+        labels:
+          severity: warning
+          component: performance_test
+        annotations:
+          summary: "Performance regression detected"
+          description: "{{ $labels.endpoint }} is 20% slower than yesterday"
