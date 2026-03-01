@@ -1,0 +1,137 @@
+.conversation-sorting {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.sorting-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.sort-options {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-primary);
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sort-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sort-option.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.option-icon {
+  font-size: 14px;
+}
+
+.option-label {
+  font-size: 13px;
+}
+
+.direction-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-primary);
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.direction-btn {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.direction-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.direction-btn.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.group-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.group-select:hover {
+  border-color: var(--border-hover);
+}
+
+.group-select:focus {
+  border-color: var(--primary-color);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .conversation-sorting {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sorting-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sort-options {
+    flex-wrap: wrap;
+  }
+
+  .sort-option .option-label {
+    display: none;
+  }
+}
