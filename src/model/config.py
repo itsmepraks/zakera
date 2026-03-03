@@ -22,6 +22,7 @@ class ModelProviderType(Enum):
         GEMINI: Google Gemini API
         OLLAMA: Local Ollama models
         HUGGINGFACE: HuggingFace Transformers
+        OPENROUTER: OpenRouter unified API (100+ models)
         LOCAL: Generic local model provider
     """
     OPENAI = "openai"
@@ -29,6 +30,7 @@ class ModelProviderType(Enum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"
+    OPENROUTER = "openrouter"
     LOCAL = "local"
 
 
@@ -144,6 +146,8 @@ class ProviderConfig(BaseModel):
             logger.warning(f"Anthropic API key should start with 'sk-ant-', got: {v[:10]}...")
         elif provider_type == ModelProviderType.GEMINI and not v.startswith('AIza'):
             logger.warning(f"Gemini API key should start with 'AIza', got: {v[:10]}...")
+        elif provider_type == ModelProviderType.OPENROUTER and not v.startswith('sk-or-'):
+            logger.warning(f"OpenRouter API key should start with 'sk-or-', got: {v[:10]}...")
         
         return v
     
@@ -170,6 +174,55 @@ class ModelConfig:
     This class centralizes all model and provider configurations, making it easy
     to manage multiple providers and understand capabilities/costs of each model.
     """
+    
+    # OpenRouter Models (Unified access to 100+ models)
+    OPENROUTER_MODELS: Dict[str, ModelInfo] = {
+        "openai/gpt-4-turbo": ModelInfo(
+            name="openai/gpt-4-turbo",
+            provider=ModelProviderType.OPENROUTER,
+            tier=ModelTier.FLAGSHIP,
+            context_window=128000,
+            max_output_tokens=4096,
+            supports_functions=True,
+            cost_per_1k_input=0.01,
+            cost_per_1k_output=0.03,
+            description="GPT-4 Turbo via OpenRouter with extended context",
+            tags=["reasoning", "coding", "analysis", "long-context", "openrouter"]
+        ),
+        "anthropic/claude-3-opus": ModelInfo(
+            name="anthropic/claude-3-opus",
+            provider=ModelProviderType.OPENROUTER,
+            tier=ModelTier.FLAGSHIP,
+            context_window=200000,
+            max_output_tokens=4096,
+            cost_per_1k_input=0.015,
+            cost_per_1k_output=0.075,
+            description="Claude 3 Opus via OpenRouter - most intelligent",
+            tags=["reasoning", "analysis", "writing", "long-context", "openrouter"]
+        ),
+        "meta-llama/llama-3-70b-instruct": ModelInfo(
+            name="meta-llama/llama-3-70b-instruct",
+            provider=ModelProviderType.OPENROUTER,
+            tier=ModelTier.ADVANCED,
+            context_window=8192,
+            max_output_tokens=2048,
+            cost_per_1k_input=0.0008,
+            cost_per_1k_output=0.0008,
+            description="Llama 3 70B via OpenRouter - powerful open model",
+            tags=["open-source", "balanced", "efficient", "openrouter"]
+        ),
+        "mistralai/mixtral-8x7b-instruct": ModelInfo(
+            name="mistralai/mixtral-8x7b-instruct",
+            provider=ModelProviderType.OPENROUTER,
+            tier=ModelTier.ADVANCED,
+            context_window=32768,
+            max_output_tokens=4096,
+            cost_per_1k_input=0.0006,
+            cost_per_1k_output=0.0006,
+            description="Mixtral 8x7B via OpenRouter - mixture of experts",
+            tags=["open-source", "efficient", "long-context", "openrouter"]
+        ),
+    }
     
     # OpenAI Models
     OPENAI_MODELS: Dict[str, ModelInfo] = {
@@ -359,6 +412,15 @@ class ModelConfig:
     
     # Provider defaults
     PROVIDER_DEFAULTS: Dict[ModelProviderType, ProviderConfig] = {
+        ModelProviderType.OPENROUTER: ProviderConfig(
+            provider_type=ModelProviderType.OPENROUTER,
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            timeout=60,
+            max_retries=3,
+            rate_limit_per_minute=60,
+            priority=10
+        ),
         ModelProviderType.OPENAI: ProviderConfig(
             provider_type=ModelProviderType.OPENAI,
             api_key=os.getenv("OPENAI_API_KEY"),
@@ -366,7 +428,7 @@ class ModelConfig:
             timeout=60,
             max_retries=3,
             rate_limit_per_minute=60,
-            priority=10
+            priority=9
         ),
         ModelProviderType.ANTHROPIC: ProviderConfig(
             provider_type=ModelProviderType.ANTHROPIC,
@@ -375,7 +437,7 @@ class ModelConfig:
             timeout=60,
             max_retries=3,
             rate_limit_per_minute=50,
-            priority=9
+            priority=8
         ),
         ModelProviderType.GEMINI: ProviderConfig(
             provider_type=ModelProviderType.GEMINI,
@@ -383,20 +445,20 @@ class ModelConfig:
             base_url="https://generativelanguage.googleapis.com/v1beta",
             timeout=60,
             max_retries=3,
-            priority=8
+            priority=7
         ),
         ModelProviderType.OLLAMA: ProviderConfig(
             provider_type=ModelProviderType.OLLAMA,
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             timeout=120,
             max_retries=2,
-            priority=7
+            priority=6
         ),
         ModelProviderType.HUGGINGFACE: ProviderConfig(
             provider_type=ModelProviderType.HUGGINGFACE,
             timeout=180,
             max_retries=1,
-            priority=6
+            priority=5
         ),
     }
     
@@ -408,6 +470,7 @@ class ModelConfig:
             Dictionary mapping model identifiers to ModelInfo objects
         """
         all_models: Dict[str, ModelInfo] = {}
+        all_models.update(cls.OPENROUTER_MODELS)
         all_models.update(cls.OPENAI_MODELS)
         all_models.update(cls.ANTHROPIC_MODELS)
         all_models.update(cls.GEMINI_MODELS)
