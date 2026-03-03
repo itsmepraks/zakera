@@ -1,0 +1,104 @@
+groups:
+  - name: provider_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighProviderErrorRate
+        expr: |
+          rate(zakera_provider_requests_total{status="error"}[5m]) / 
+          rate(zakera_provider_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: provider
+        annotations:
+          summary: "High error rate for provider {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} has error rate of {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # High latency alert
+      - alert: HighProviderLatency
+        expr: |
+          histogram_quantile(0.95, 
+            rate(zakera_provider_request_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: provider
+        annotations:
+          summary: "High latency for provider {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} model {{ $labels.model }} has p95 latency of {{ $value }}s"
+
+      # Cost threshold alert
+      - alert: ProviderCostThresholdExceeded
+        expr: |
+          increase(zakera_provider_cost_total[1h]) > 10
+        for: 1h
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "Provider cost threshold exceeded"
+          description: "Provider {{ $labels.provider }} cost exceeded $10/hour (current: ${{ $value }})"
+
+      # Provider unavailable alert
+      - alert: ProviderUnavailable
+        expr: zakera_provider_available == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: provider
+        annotations:
+          summary: "Provider {{ $labels.provider }} is unavailable"
+          description: "Provider {{ $labels.provider }} has been unavailable for 2 minutes"
+
+      # Rate limit warnings
+      - alert: FrequentRateLimits
+        expr: |
+          rate(zakera_provider_rate_limits_hit_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: provider
+        annotations:
+          summary: "Frequent rate limits for provider {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} is hitting rate limits frequently"
+
+      # Cache hit rate degradation
+      - alert: LowCacheHitRate
+        expr: |
+          rate(zakera_provider_cache_hits_total[5m]) / 
+          (rate(zakera_provider_cache_hits_total[5m]) + 
+           rate(zakera_provider_cache_misses_total[5m])) < 0.3
+        for: 10m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Low cache hit rate for provider {{ $labels.provider }}"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} for {{ $labels.provider }}"
+
+      # High request volume
+      - alert: HighRequestVolume
+        expr: |
+          rate(zakera_provider_requests_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: info
+          component: provider
+        annotations:
+          summary: "High request volume for provider {{ $labels.provider }}"
+          description: "Provider {{ $labels.provider }} is receiving {{ $value }} requests/second"
+
+      # Token usage spike
+      - alert: TokenUsageSpike
+        expr: |
+          rate(zakera_provider_tokens_total{type="total"}[5m]) > 
+          rate(zakera_provider_tokens_total{type="total"}[1h]) * 2
+        for: 5m
+        labels:
+          severity: info
+          component: cost
+        annotations:
+          summary: "Token usage spike detected"
+          description: "Provider {{ $labels.provider }} token usage is 2x higher than hourly average"

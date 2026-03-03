@@ -1,0 +1,135 @@
+{
+  "dashboard": {
+    "title": "Zakera - Cost Tracking",
+    "uid": "zakera-cost-tracking",
+    "tags": ["zakera", "cost", "billing"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "title": "Cost per Provider (Last 24h)",
+        "type": "piechart",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [{
+          "expr": "increase(zakera_provider_cost_total[24h])",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }]
+      },
+      {
+        "title": "Cost per Model (Last 24h)",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [{
+          "expr": "increase(zakera_provider_cost_total[24h])",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }]
+      },
+      {
+        "title": "Cost Over Time",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8},
+        "targets": [{
+          "expr": "rate(zakera_provider_cost_total[5m]) * 3600",
+          "legendFormat": "{{provider}} - {{model}} ($/hour)",
+          "refId": "A"
+        }],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Cost per Hour"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Token Usage by Provider",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [{
+          "expr": "rate(zakera_provider_tokens_total{type='total'}[5m])",
+          "legendFormat": "{{provider}}",
+          "refId": "A"
+        }],
+        "yaxes": [
+          {"format": "short", "label": "Tokens/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Average Cost per Request",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [{
+          "expr": "rate(zakera_provider_cost_total[5m]) / rate(zakera_provider_requests_total[5m])",
+          "legendFormat": "{{provider}} - {{model}}",
+          "refId": "A"
+        }],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Cost/Request"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Total Cost Today",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 8, "h": 4},
+        "targets": [{
+          "expr": "increase(zakera_provider_cost_total[1d])",
+          "refId": "A"
+        }],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      },
+      {
+        "title": "Total Tokens Today",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 24, "w": 8, "h": 4},
+        "targets": [{
+          "expr": "increase(zakera_provider_tokens_total{type='total'}[1d])",
+          "refId": "A"
+        }],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "title": "Projected Monthly Cost",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 24, "w": 8, "h": 4},
+        "targets": [{
+          "expr": "increase(zakera_provider_cost_total[1d]) * 30",
+          "refId": "A"
+        }],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 100, "color": "yellow"},
+              {"value": 500, "color": "red"}
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD"
+          }
+        }
+      }
+    ]
+  }
+}
