@@ -1,0 +1,46 @@
+.message-timestamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #6B7280);
+  font-weight: 400;
+  transition: color 0.2s ease;
+  cursor: help;
+}
+
+.message-timestamp:hover {
+  color: var(--text-primary, #374151);
+}
+
+.timestamp-icon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.message-timestamp:hover .timestamp-icon {
+  opacity: 1;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .message-timestamp {
+    color: var(--text-secondary-dark, #9CA3AF);
+  }
+
+  .message-timestamp:hover {
+    color: var(--text-primary-dark, #E5E7EB);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .message-timestamp {
+    font-size: 0.7rem;
+  }
+
+  .timestamp-icon {
+    width: 10px;
+    height: 10px;
+  }
+}

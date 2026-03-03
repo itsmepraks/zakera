@@ -1,0 +1,228 @@
+.export-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.export-dialog {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.export-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.export-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6B7280;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.close-button:hover {
+  color: #111827;
+}
+
+.export-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+.export-info {
+  margin-bottom: 1.5rem;
+}
+
+.export-info p {
+  margin: 0.5rem 0;
+  color: #374151;
+}
+
+.format-selection label {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.format-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+}
+
+.format-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border: 2px solid #E5E7EB;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.format-button:hover {
+  border-color: #3B82F6;
+  background: #EFF6FF;
+}
+
+.format-button.selected {
+  border-color: #3B82F6;
+  background: #3B82F6;
+  color: white;
+}
+
+.format-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.format-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.format-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.export-progress {
+  margin-top: 1.5rem;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #E5E7EB;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3B82F6;
+  transition: width 0.3s ease;
+}
+
+.export-progress p {
+  text-align: center;
+  font-size: 0.875rem;
+  color: #6B7280;
+}
+
+.export-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-top: 1px solid #E5E7EB;
+}
+
+.cancel-button,
+.export-button {
+  padding: 0.625rem 1.25rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-button {
+  background: white;
+  border: 1px solid #D1D5DB;
+  color: #374151;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background: #F9FAFB;
+}
+
+.export-button {
+  background: #3B82F6;
+  border: none;
+  color: white;
+}
+
+.export-button:hover:not(:disabled) {
+  background: #2563EB;
+}
+
+.cancel-button:disabled,
+.export-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .export-dialog {
+    background: #1F2937;
+  }
+
+  .export-header,
+  .export-footer {
+    border-color: #374151;
+  }
+
+  .export-header h2 {
+    color: #F9FAFB;
+  }
+
+  .export-info p {
+    color: #E5E7EB;
+  }
+
+  .format-selection label {
+    color: #E5E7EB;
+  }
+
+  .format-button {
+    background: #374151;
+    border-color: #4B5563;
+    color: #E5E7EB;
+  }
+
+  .format-button:hover {
+    background: #4B5563;
+  }
+
+  .cancel-button {
+    background: #374151;
+    border-color: #4B5563;
+    color: #E5E7EB;
+  }
+}
