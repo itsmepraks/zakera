@@ -1,22 +1,28 @@
-"""Model package for AI chat agent.
+"""Model package initialization.
 
-Provides multi-provider LLM support including:
-- OpenAI (GPT-3.5, GPT-4)
-- Anthropic (Claude)
-- Google (Gemini)
-- Mistral AI
-- Ollama (Local models)
-- HuggingFace (Transformers)
+Exports all model providers and configurations for easy import.
 """
 
-from .providers import OpenAIProvider, AnthropicProvider, GoogleProvider
+from .providers import ModelProvider
+from .providers_anthropic import AnthropicProvider
+from .providers_cohere import CohereProvider
+from .providers_deepseek import DeepSeekProvider
+from .providers_gemini import GeminiProvider
+from .providers_groq import GroqProvider
+from .providers_huggingface import HuggingFaceProvider
 from .providers_mistral import MistralProvider
-from .model_manager import ModelManager
+from .providers_ollama import OllamaProvider
+from .providers_xai import XAIProvider
 
 __all__ = [
-    "OpenAIProvider",
+    "ModelProvider",
     "AnthropicProvider",
-    "GoogleProvider",
+    "CohereProvider",
+    "DeepSeekProvider",
+    "GeminiProvider",
+    "GroqProvider",
+    "HuggingFaceProvider",
     "MistralProvider",
-    "ModelManager",
+    "OllamaProvider",
+    "XAIProvider",
 ]
