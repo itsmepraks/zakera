@@ -5,6 +5,23 @@ All notable changes to the Zakera project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Maintenance - 2026-03-05
+- Regular documentation review and updates
+- Project health check and dependency monitoring
+- Continuous improvement of code quality standards
+
+### Planned Features (Roadmap)
+- Voice input/output support
+- Multi-language support
+- Plugin marketplace
+- Cloud deployment templates (AWS, GCP, Azure)
+- Mobile app (React Native)
+- Enterprise SSO integration
+- Advanced RAG (Retrieval-Augmented Generation)
+- Fine-tuning support
+
 ## [0.5.0] - 2026-02-14
 
 ### Project Status
@@ -77,18 +94,6 @@ Current release is production-ready with comprehensive features for AI chat agen
 - SQL injection protection
 - Input validation
 - Secure password hashing
-
-## [Unreleased]
-
-### Planned Features (Roadmap)
-- Voice input/output support
-- Multi-language support
-- Plugin marketplace
-- Cloud deployment templates (AWS, GCP, Azure)
-- Mobile app (React Native)
-- Enterprise SSO integration
-- Advanced RAG (Retrieval-Augmented Generation)
-- Fine-tuning support
 
 ---
 
