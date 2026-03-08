@@ -1,0 +1,212 @@
+---
+# Istio Gateway for advanced traffic management
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: zakera-gateway
+  namespace: zakera-production
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  # HTTPS
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: zakera-tls-cert
+    hosts:
+    - "api.zakera.ai"
+    - "zakera.ai"
+  # HTTP (redirect to HTTPS)
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "api.zakera.ai"
+    - "zakera.ai"
+    tls:
+      httpsRedirect: true
+
+---
+# Virtual Service for routing rules
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: zakera-vs
+  namespace: zakera-production
+spec:
+  hosts:
+  - "api.zakera.ai"
+  gateways:
+  - zakera-gateway
+  http:
+  # API v1 routes
+  - match:
+    - uri:
+        prefix: "/api/v1"
+    route:
+    - destination:
+        host: zakera-api-service
+        port:
+          number: 80
+      weight: 100
+    timeout: 60s
+    retries:
+      attempts: 3
+      perTryTimeout: 20s
+      retryOn: "5xx,reset,connect-failure,refused-stream"
+    corsPolicy:
+      allowOrigins:
+      - exact: "https://zakera.ai"
+      - exact: "https://www.zakera.ai"
+      allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowHeaders:
+      - content-type
+      - authorization
+      - x-requested-with
+      maxAge: "24h"
+  
+  # Health check routes (no auth)
+  - match:
+    - uri:
+        prefix: "/api/v1/monitoring"
+    route:
+    - destination:
+        host: zakera-api-service
+        port:
+          number: 80
+    timeout: 10s
+
+---
+# Destination Rule for traffic policies
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: zakera-api-dr
+  namespace: zakera-production
+spec:
+  host: zakera-api-service
+  trafficPolicy:
+    # Load balancing
+    loadBalancer:
+      consistentHash:
+        httpCookie:
+          name: "zakera-session"
+          ttl: 3600s
+    
+    # Connection pool settings
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+      http:
+        http1MaxPendingRequests: 1024
+        http2MaxRequests: 1024
+        maxRequestsPerConnection: 10
+    
+    # Outlier detection (circuit breaker)
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  
+  # Subsets for canary deployments
+  subsets:
+  - name: v1
+    labels:
+      version: v1.0.0
+  - name: v2
+    labels:
+      version: v2.0.0
+  - name: canary
+    labels:
+      version: canary
+
+---
+# Peer Authentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: zakera-mtls
+  namespace: zakera-production
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# Authorization Policy
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: zakera-authz
+  namespace: zakera-production
+spec:
+  selector:
+    matchLabels:
+      app: zakera
+      component: api
+  action: ALLOW
+  rules:
+  # Allow from ingress gateway
+  - from:
+    - source:
+        namespaces: ["istio-system"]
+  # Allow from monitoring
+  - from:
+    - source:
+        namespaces: ["monitoring"]
+    to:
+    - operation:
+        paths: ["/metrics", "/api/v1/monitoring/*"]
+  # Allow from same namespace
+  - from:
+    - source:
+        namespaces: ["zakera-production"]
+
+---
+# Request Authentication (JWT validation)
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: zakera-jwt-auth
+  namespace: zakera-production
+spec:
+  selector:
+    matchLabels:
+      app: zakera
+      component: api
+  jwtRules:
+  - issuer: "https://api.zakera.ai"
+    jwksUri: "https://api.zakera.ai/.well-known/jwks.json"
+    audiences:
+    - "zakera-api"
+
+---
+# Sidecar for resource optimization
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: zakera-api-sidecar
+  namespace: zakera-production
+spec:
+  workloadSelector:
+    labels:
+      app: zakera
+      component: api
+  egress:
+  - hosts:
+    - "./*"
+    - "istio-system/*"
+    - "monitoring/*"
+  outboundTrafficPolicy:
+    mode: ALLOW_ANY
