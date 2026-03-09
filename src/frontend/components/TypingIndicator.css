@@ -1,0 +1,267 @@
+/* Typing Indicator Styles */
+
+.typing-indicator {
+  opacity: 0;
+  animation: fadeIn 0.3s ease-in-out forwards;
+  margin: 1rem 0;
+  padding: 0 1rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.typing-indicator-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: 500px;
+}
+
+/* Avatar */
+.typing-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+.typing-avatar-icon {
+  font-size: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Bubble */
+.typing-bubble {
+  flex: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(249, 250, 251, 0.95)
+  );
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  border-radius: 16px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.typing-bubble:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .typing-bubble {
+    background: linear-gradient(
+      135deg,
+      rgba(31, 41, 55, 0.95),
+      rgba(17, 24, 39, 0.95)
+    );
+    border-color: rgba(55, 65, 81, 0.8);
+  }
+}
+
+/* Info section */
+.typing-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 13px;
+}
+
+.typing-model {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.typing-status {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .typing-status {
+    color: #9ca3af;
+  }
+}
+
+/* Animated dots */
+.typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+}
+
+.typing-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: wave 1.4s ease-in-out infinite;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.typing-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes wave {
+  0%, 60%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.7;
+  }
+  30% {
+    transform: translateY(-8px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* Progress bar */
+.typing-progress {
+  margin-top: 8px;
+  height: 3px;
+  background: rgba(229, 231, 235, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.typing-progress-bar {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    currentColor,
+    rgba(255, 255, 255, 0.3),
+    currentColor
+  );
+  background-size: 200% 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .typing-progress {
+    background: rgba(55, 65, 81, 0.5);
+  }
+}
+
+/* Cancel button */
+.typing-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.typing-cancel:hover {
+  background: rgba(239, 68, 68, 0.2);
+  transform: scale(1.1) rotate(90deg);
+}
+
+.typing-cancel:active {
+  transform: scale(0.95);
+}
+
+.typing-cancel:focus {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .typing-indicator,
+  .typing-avatar,
+  .typing-dots .dot,
+  .typing-progress-bar,
+  .typing-cancel {
+    animation: none;
+  }
+
+  .typing-bubble:hover {
+    transform: none;
+  }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .typing-indicator {
+    padding: 0 0.75rem;
+  }
+
+  .typing-indicator-content {
+    gap: 0.5rem;
+  }
+
+  .typing-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .typing-avatar-icon {
+    font-size: 16px;
+  }
+
+  .typing-bubble {
+    padding: 10px 12px;
+  }
+
+  .typing-info {
+    font-size: 12px;
+  }
+
+  .typing-status {
+    font-size: 11px;
+  }
+}
