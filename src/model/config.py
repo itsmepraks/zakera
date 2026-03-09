@@ -266,6 +266,18 @@ class ModelConfig:
     
     # Anthropic Models
     ANTHROPIC_MODELS: Dict[str, ModelInfo] = {
+        "claude-3-5-sonnet": ModelInfo(
+            name="claude-3-5-sonnet-20241022",
+            provider=ModelProviderType.ANTHROPIC,
+            tier=ModelTier.FLAGSHIP,
+            context_window=200000,
+            max_output_tokens=8192,
+            supports_functions=True,
+            cost_per_1k_input=0.003,
+            cost_per_1k_output=0.015,
+            description="Latest Claude model with state-of-the-art reasoning and coding",
+            tags=["reasoning", "coding", "analysis", "function-calling", "latest"]
+        ),
         "claude-3-opus": ModelInfo(
             name="claude-3-opus-20240229",
             provider=ModelProviderType.ANTHROPIC,
@@ -337,6 +349,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=8192,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Llama 3 8B - Fast and capable local model",
             tags=["local", "open-source", "fast", "free"]
         ),
@@ -346,6 +360,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=8192,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Llama 3 70B - Most capable local model",
             tags=["local", "open-source", "powerful", "free"]
         ),
@@ -355,6 +371,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=8192,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Mistral 7B - Excellent performance for size",
             tags=["local", "open-source", "efficient", "free"]
         ),
@@ -364,6 +382,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=16384,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="CodeLlama 13B - Specialized for code generation",
             tags=["local", "coding", "open-source", "free"]
         ),
@@ -373,6 +393,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=32768,
             max_output_tokens=4096,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Mixtral 8x7B - Mixture of experts architecture",
             tags=["local", "open-source", "advanced", "free"]
         ),
@@ -386,6 +408,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=8192,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Mistral 7B Instruct from HuggingFace Hub",
             tags=["local", "instruction-following", "free"]
         ),
@@ -395,6 +419,8 @@ class ModelConfig:
             tier=ModelTier.LOCAL,
             context_window=4096,
             max_output_tokens=2048,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
             description="Llama 2 7B Chat from HuggingFace Hub",
             tags=["local", "chat", "free"]
         ),
