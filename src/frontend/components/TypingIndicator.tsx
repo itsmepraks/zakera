@@ -1,139 +1,157 @@
 /**
- * Typing Indicator Component
- * 
- * Shows an animated typing indicator when the AI is generating a response.
- * Displays different animations based on the model being used.
- * 
+ * TypingIndicator
+ * ---------------
+ * Animated indicator shown while the AI model is generating a response.
  * Features:
- * - Model-specific animations
- * - Smooth fade-in/fade-out
- * - Pulsing dots animation
- * - Shows current model name
- * - Estimated time remaining
- * - Accessible with ARIA labels
- * 
- * Usage:
- *   <TypingIndicator 
- *     isVisible={isTyping} 
- *     model="gpt-4"
- *     estimatedTime={5}
- *   />
+ *  - Three-dot pulse animation (CSS-driven, no JS timers).
+ *  - Per-provider brand colour and label.
+ *  - Optional live tokens-per-second badge.
+ *  - Fully accessible: role="status" + aria-live="polite".
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
+import './TypingIndicator.css';
 
-interface TypingIndicatorProps {
-  isVisible: boolean;
-  model?: string;
-  estimatedTime?: number; // in seconds
-  onCancel?: () => void;
+// ---------------------------------------------------------------------------
+// Provider branding registry
+// ---------------------------------------------------------------------------
+
+type ProviderBrand =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'groq'
+  | 'ollama'
+  | 'mistral'
+  | 'deepseek'
+  | 'generic';
+
+interface BrandConfig {
+  label: string;
+  /** CSS custom property name that holds the brand colour. */
+  colorVar: string;
+  /** Short emoji/icon used in the badge. */
+  icon: string;
 }
 
-const modelDisplayNames: Record<string, string> = {
-  'gpt-4': 'GPT-4',
-  'gpt-4-turbo': 'GPT-4 Turbo',
-  'gpt-3.5-turbo': 'GPT-3.5 Turbo',
-  'claude-3-opus': 'Claude 3 Opus',
-  'claude-3-sonnet': 'Claude 3 Sonnet',
-  'claude-3-haiku': 'Claude 3 Haiku',
-  'gemini-1.5-pro': 'Gemini 1.5 Pro',
-  'gemini-1.5-flash': 'Gemini 1.5 Flash',
-  'llama3:8b': 'Llama 3 8B',
-  'mistral:7b': 'Mistral 7B',
+const BRAND_REGISTRY: Record<ProviderBrand, BrandConfig> = {
+  anthropic: {
+    label: 'Claude',
+    colorVar: '--brand-anthropic',
+    icon: '\u{1F9E0}', // brain emoji
+  },
+  openai: {
+    label: 'ChatGPT',
+    colorVar: '--brand-openai',
+    icon: '\u2728',
+  },
+  gemini: {
+    label: 'Gemini',
+    colorVar: '--brand-gemini',
+    icon: '\u2B50',
+  },
+  groq: {
+    label: 'Groq',
+    colorVar: '--brand-groq',
+    icon: '\u26A1',
+  },
+  ollama: {
+    label: 'Ollama',
+    colorVar: '--brand-ollama',
+    icon: '\uD83D\uDCBB',
+  },
+  mistral: {
+    label: 'Mistral',
+    colorVar: '--brand-mistral',
+    icon: '\uD83C\uDF2C\uFE0F',
+  },
+  deepseek: {
+    label: 'DeepSeek',
+    colorVar: '--brand-deepseek',
+    icon: '\uD83D\uDD0D',
+  },
+  generic: {
+    label: 'AI',
+    colorVar: '--brand-generic',
+    icon: '\uD83E\uDD16',
+  },
 };
 
-const modelColors: Record<string, string> = {
-  'gpt-4': '#10a37f',
-  'gpt-3.5-turbo': '#19c37d',
-  'claude-3-opus': '#cc785c',
-  'claude-3-sonnet': '#d97757',
-  'gemini-1.5-pro': '#4285f4',
-  'gemini-1.5-flash': '#669df6',
-  'llama3:8b': '#8b5cf6',
-  'mistral:7b': '#f97316',
-};
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+export interface TypingIndicatorProps {
+  /** Whether to show the indicator at all. */
+  isVisible?: boolean;
+  /** Provider brand to apply colour and label from the registry. */
+  providerBrand?: ProviderBrand;
+  /** Override the display name shown next to the indicator. */
+  modelLabel?: string;
+  /**
+   * Current tokens-per-second rate.  When provided a live badge is shown.
+   * Pass `null` to suppress the badge even if streaming is active.
+   */
+  tokensPerSecond?: number | null;
+  /** Number of tokens streamed so far — shown in tooltip. */
+  streamedTokens?: number;
+  /** Extra CSS class applied to the root element. */
+  className?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export const TypingIndicator: React.FC<TypingIndicatorProps> = ({
-  isVisible,
-  model = 'unknown',
-  estimatedTime,
-  onCancel,
+  isVisible = true,
+  providerBrand = 'generic',
+  modelLabel,
+  tokensPerSecond = null,
+  streamedTokens = 0,
+  className = '',
 }) => {
-  const [elapsed, setElapsed] = useState(0);
+  const brand = useMemo(
+    () => BRAND_REGISTRY[providerBrand] ?? BRAND_REGISTRY.generic,
+    [providerBrand],
+  );
 
-  useEffect(() => {
-    if (!isVisible) {
-      setElapsed(0);
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setElapsed((prev) => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isVisible]);
+  const displayLabel = modelLabel ?? brand.label;
 
   if (!isVisible) return null;
 
-  const displayName = modelDisplayNames[model] || model;
-  const color = modelColors[model] || '#6b7280';
-  const progress = estimatedTime ? Math.min((elapsed / estimatedTime) * 100, 95) : undefined;
-
   return (
-    <div 
-      className="typing-indicator"
+    <div
+      className={`typing-indicator ${className}`.trim()}
       role="status"
       aria-live="polite"
-      aria-label={`${displayName} is typing`}
+      aria-label={`${displayLabel} is typing`}
+      style={{ '--brand-color': `var(${brand.colorVar}, #6b7280)` } as React.CSSProperties}
     >
-      <div className="typing-indicator-content">
-        <div className="typing-avatar" style={{ backgroundColor: color }}>
-          <span className="typing-avatar-icon">🤖</span>
-        </div>
+      {/* Brand icon + label */}
+      <span className="typing-indicator__brand" aria-hidden="true">
+        <span className="typing-indicator__icon">{brand.icon}</span>
+        <span className="typing-indicator__label">{displayLabel}</span>
+      </span>
 
-        <div className="typing-bubble">
-          <div className="typing-info">
-            <span className="typing-model" style={{ color }}>
-              {displayName}
-            </span>
-            <span className="typing-status">is thinking...</span>
-          </div>
+      {/* Animated dots */}
+      <span className="typing-indicator__dots" aria-hidden="true">
+        <span className="typing-indicator__dot" />
+        <span className="typing-indicator__dot" />
+        <span className="typing-indicator__dot" />
+      </span>
 
-          <div className="typing-dots">
-            <span className="dot" style={{ backgroundColor: color }} />
-            <span className="dot" style={{ backgroundColor: color }} />
-            <span className="dot" style={{ backgroundColor: color }} />
-          </div>
-
-          {progress !== undefined && (
-            <div className="typing-progress">
-              <div 
-                className="typing-progress-bar" 
-                style={{ width: `${progress}%`, backgroundColor: color }}
-              />
-            </div>
-          )}
-        </div>
-
-        {onCancel && (
-          <button
-            className="typing-cancel"
-            onClick={onCancel}
-            aria-label="Cancel generation"
-            title="Cancel"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 6l12 12M6 18L18 6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        )}
-      </div>
+      {/* Live token-rate badge */}
+      {tokensPerSecond !== null && tokensPerSecond > 0 && (
+        <span
+          className="typing-indicator__rate-badge"
+          title={`${streamedTokens} tokens received`}
+          aria-label={`${tokensPerSecond} tokens per second`}
+        >
+          {tokensPerSecond}
+          <span className="typing-indicator__rate-unit">tok/s</span>
+        </span>
+      )}
     </div>
   );
 };
