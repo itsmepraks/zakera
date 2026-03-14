@@ -1,0 +1,206 @@
+/* ConversationSearch.module.css */
+
+.root {
+  position: relative;
+  width: 100%;
+}
+
+/* ---- Input ---- */
+
+.inputWrapper {
+  display: flex;
+  align-items: center;
+  background: var(--color-surface, #f5f5f5);
+  border: 1.5px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  padding: 0 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.inputWrapper:focus-within {
+  border-color: var(--color-primary, #6366f1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: var(--color-text-muted, #9ca3af);
+  margin-right: 8px;
+}
+
+.input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 9px 0;
+  font-size: 0.875rem;
+  color: var(--color-text, #111827);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-text-muted, #9ca3af);
+}
+
+/* Remove native search cancel button in WebKit */
+.input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+.clearButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted, #9ca3af);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+  transition: color 0.1s;
+}
+
+.clearButton:hover {
+  color: var(--color-text, #111827);
+}
+
+/* ---- Results panel ---- */
+
+.results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: var(--color-surface-elevated, #ffffff);
+  border: 1.5px solid var(--color-border, #e0e0e0);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border, #e0e0e0) transparent;
+}
+
+.results::-webkit-scrollbar {
+  width: 5px;
+}
+
+.results::-webkit-scrollbar-thumb {
+  background: var(--color-border, #e0e0e0);
+  border-radius: 3px;
+}
+
+/* ---- Individual result ---- */
+
+.resultItem {
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-radius: 6px;
+  margin: 2px 4px;
+}
+
+.resultItem:hover,
+.resultItemActive {
+  background: var(--color-primary-subtle, #eef2ff);
+}
+
+.resultTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text, #111827);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resultSnippet {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resultMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.modelBadge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--color-primary-subtle, #eef2ff);
+  color: var(--color-primary, #6366f1);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.timestamp {
+  font-size: 0.7rem;
+  color: var(--color-text-muted, #9ca3af);
+  margin-left: auto;
+}
+
+/* ---- Highlight ---- */
+
+.highlight {
+  background: rgba(99, 102, 241, 0.18);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-style: normal;
+}
+
+/* ---- No results ---- */
+
+.noResults {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.noResultsIcon {
+  font-size: 1.1rem;
+}
+
+/* ---- Dark mode ---- */
+
+@media (prefers-color-scheme: dark) {
+  .inputWrapper {
+    background: var(--color-surface, #1f2937);
+    border-color: var(--color-border, #374151);
+  }
+
+  .input {
+    color: var(--color-text, #f9fafb);
+  }
+
+  .results {
+    background: var(--color-surface-elevated, #1f2937);
+    border-color: var(--color-border, #374151);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .resultItem:hover,
+  .resultItemActive {
+    background: rgba(99, 102, 241, 0.12);
+  }
+
+  .resultTitle {
+    color: var(--color-text, #f9fafb);
+  }
+
+  .highlight {
+    background: rgba(99, 102, 241, 0.35);
+  }
+}
