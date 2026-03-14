@@ -1,55 +1,100 @@
+# =============================================================================
+# dependabot.yml
+# =============================================================================
+# Keeps Python and npm dependencies up-to-date automatically.
+# PRs are grouped to reduce noise and auto-assigned to the repo owner.
+# =============================================================================
+
 version: 2
+
 updates:
-  # Python dependencies
-  - package-ecosystem: "pip"
-    directory: "/"
+  # --------------------------------------------------------------------------
+  # Python / pip (backend)
+  # --------------------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
       time: "09:00"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "itsmepraks"
+      timezone: America/New_York
+    groups:
+      backend-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pytest*"
+          - "flake8*"
+          - "mypy*"
+          - "coverage*"
+      backend-dev-deps:
+        patterns:
+          - "pytest*"
+          - "flake8*"
+          - "mypy*"
+          - "coverage*"
+    assignees:
+      - itsmepraks
     labels:
-      - "dependencies"
-      - "python"
+      - dependencies
+      - python
     commit-message:
       prefix: "chore"
-      include: "scope"
-  
-  # npm dependencies
-  - package-ecosystem: "npm"
-    directory: "/src/frontend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 10
-    reviewers:
-      - "itsmepraks"
-    labels:
-      - "dependencies"
-      - "javascript"
-    commit-message:
-      prefix: "chore"
-      include: "scope"
-  
-  # Docker dependencies
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
+      include: scope
     open-pull-requests-limit: 5
+
+  # --------------------------------------------------------------------------
+  # npm / Node.js (frontend)
+  # --------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /src/frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    groups:
+      frontend-deps:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@types/*"
+          - "eslint*"
+          - "jest*"
+          - "@testing-library/*"
+      frontend-dev-deps:
+        patterns:
+          - "@types/*"
+          - "eslint*"
+          - "jest*"
+          - "@testing-library/*"
+          - "typescript"
+    assignees:
+      - itsmepraks
     labels:
-      - "dependencies"
-      - "docker"
-  
+      - dependencies
+      - javascript
+    commit-message:
+      prefix: "chore"
+      include: scope
+    open-pull-requests-limit: 5
+
+  # --------------------------------------------------------------------------
   # GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  # --------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/New_York
+    assignees:
+      - itsmepraks
     labels:
-      - "dependencies"
-      - "github-actions"
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "ci"
+      include: scope
+    open-pull-requests-limit: 3

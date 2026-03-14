@@ -1,0 +1,43 @@
+# =============================================================================
+# lint-pr-title.yml
+# =============================================================================
+# Enforces Conventional Commits format for PR titles so that the changelog
+# generator and semantic-release tooling work correctly.
+#
+# Valid prefixes:
+#   feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert
+# =============================================================================
+
+name: Lint PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  lint-title:
+    name: Conventional Commits PR Title
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR title format
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const PATTERN =
+              /^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?(!)?:\s.+/;
+
+            if (!PATTERN.test(title)) {
+              core.setFailed(
+                `PR title "${title}" does not follow Conventional Commits format.\n` +
+                `Expected: <type>(<optional scope>): <description>\n` +
+                `Valid types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert\n` +
+                `Examples:\n` +
+                `  feat(auth): add OAuth2 Google login\n` +
+                `  fix: handle null provider key gracefully\n` +
+                `  docs: update API reference for /usage endpoint`
+              );
+            } else {
+              console.log(`✅ PR title is valid: "${title}"`);
+            }
