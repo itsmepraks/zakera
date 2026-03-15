@@ -1,296 +1,195 @@
-/**
- * Message Reactions Component
- * 
- * Allows users to react to messages with emojis and provide feedback
- */
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import type { ReactionMap, EmojiString } from '../../types/reactions';
+import styles from './MessageReactions.module.css';
 
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  ReactionType,
-  ReactionCount,
-  REACTION_EMOJIS,
-  REACTION_LABELS,
-  REACTION_COLORS,
-} from '../../types/reactions';
-import './MessageReactions.css';
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
-interface MessageReactionsProps {
+/** Curated emoji palette shown in the picker popover. */
+const EMOJI_PALETTE: EmojiString[] = [
+  '\u{1F44D}', // 👍
+  '\u{1F44E}', // 👎
+  '\u2764\uFE0F', // ❤️
+  '\u{1F602}', // 😂
+  '\u{1F62E}', // 😮
+  '\u{1F622}', // 😢
+  '\u{1F525}', // 🔥
+  '\u{1F389}', // 🎉
+  '\u{1F914}', // 🤔
+  '\u{1F4AF}', // 💯
+  '\u{1F440}', // 👀
+  '\u2705',   // ✅
+];
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+export interface MessageReactionsProps {
+  /** ID of the message these reactions belong to. */
   messageId: string;
-  reactions: ReactionCount[];
-  onReact: (messageId: string, reactionType: ReactionType) => void;
-  onFeedback: (messageId: string, feedbackType: 'positive' | 'negative', text?: string) => void;
-  compact?: boolean;
+  /** Current reaction state keyed by emoji. */
+  reactions: ReactionMap;
+  /** Called when the user toggles an existing reaction chip. */
+  onReactionToggle: (messageId: string, emoji: EmojiString) => void;
+  /** Called when the user picks a new emoji from the popover. */
+  onAddReaction: (messageId: string, emoji: EmojiString) => void;
+  /** Disable all interaction (e.g. while the AI is typing). */
   disabled?: boolean;
 }
 
-export const MessageReactions: React.FC<MessageReactionsProps> = ({
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export const MessageReactions = memo(function MessageReactions({
   messageId,
   reactions,
-  onReact,
-  onFeedback,
-  compact = false,
+  onReactionToggle,
+  onAddReaction,
   disabled = false,
-}) => {
-  const [showPicker, setShowPicker] = useState(false);
-  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-  const [feedbackType, setFeedbackType] = useState<'positive' | 'negative' | null>(null);
-  const [feedbackText, setFeedbackText] = useState('');
+}: MessageReactionsProps) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const feedbackRef = useRef<HTMLDivElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
-  // All available reactions
-  const allReactions: ReactionType[] = [
-    'thumbs_up',
-    'thumbs_down',
-    'heart',
-    'fire',
-    'thinking',
-    'check',
-    'star',
-    'celebrate',
-  ];
-
-  // Quick reactions (shown inline)
-  const quickReactions: ReactionType[] = ['thumbs_up', 'thumbs_down', 'heart'];
-
-  // Get reaction counts
-  const getReactionCount = (type: ReactionType): ReactionCount | undefined => {
-    return reactions.find((r) => r.type === type);
-  };
-
-  // Handle reaction click
-  const handleReactionClick = (type: ReactionType) => {
-    if (!disabled) {
-      onReact(messageId, type);
-      setShowPicker(false);
-    }
-  };
-
-  // Handle feedback submission
-  const handleFeedbackSubmit = () => {
-    if (feedbackType && !disabled) {
-      onFeedback(messageId, feedbackType, feedbackText.trim() || undefined);
-      setShowFeedbackForm(false);
-      setFeedbackType(null);
-      setFeedbackText('');
-
-      // Also add thumbs up/down reaction
-      const reactionType: ReactionType =
-        feedbackType === 'positive' ? 'thumbs_up' : 'thumbs_down';
-      handleReactionClick(reactionType);
-    }
-  };
-
-  // Handle feedback button click
-  const handleFeedbackClick = (type: 'positive' | 'negative') => {
-    if (!disabled) {
-      setFeedbackType(type);
-      setShowFeedbackForm(true);
-      setShowPicker(false);
-    }
-  };
-
-  // Close picker when clicking outside
+  // Close picker on outside click
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
-        setShowPicker(false);
+    if (!pickerOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(event.target as Node) &&
+        addButtonRef.current &&
+        !addButtonRef.current.contains(event.target as Node)
+      ) {
+        setPickerOpen(false);
       }
-      if (feedbackRef.current && !feedbackRef.current.contains(event.target as Node)) {
-        setShowFeedbackForm(false);
-      }
-    };
+    }
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [pickerOpen]);
 
-  // Get total reaction count
-  const totalReactions = reactions.reduce((sum, r) => sum + r.count, 0);
+  // Close picker on Escape
+  useEffect(() => {
+    if (!pickerOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setPickerOpen(false);
+        addButtonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [pickerOpen]);
+
+  const handleChipClick = useCallback(
+    (emoji: EmojiString) => {
+      if (!disabled) onReactionToggle(messageId, emoji);
+    },
+    [disabled, messageId, onReactionToggle],
+  );
+
+  const handleChipKeyDown = useCallback(
+    (event: React.KeyboardEvent, emoji: EmojiString) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handleChipClick(emoji);
+      }
+    },
+    [handleChipClick],
+  );
+
+  const handleEmojiPick = useCallback(
+    (emoji: EmojiString) => {
+      onAddReaction(messageId, emoji);
+      setPickerOpen(false);
+    },
+    [messageId, onAddReaction],
+  );
+
+  const reactionEntries = Object.entries(reactions);
 
   return (
-    <div className={`message-reactions-container ${compact ? 'compact' : ''}`}>
-      {/* Existing reactions */}
-      <div className="existing-reactions">
-        {reactions
-          .filter((r) => r.count > 0)
-          .map((reaction) => (
-            <button
-              key={reaction.type}
-              className={`reaction-bubble ${reaction.user_reacted ? 'user-reacted' : ''}`}
-              onClick={() => handleReactionClick(reaction.type)}
-              disabled={disabled}
-              title={REACTION_LABELS[reaction.type]}
-              style={{
-                borderColor: reaction.user_reacted ? REACTION_COLORS[reaction.type] : undefined,
-              }}
-            >
-              <span className="reaction-emoji">{REACTION_EMOJIS[reaction.type]}</span>
-              <span className="reaction-count">{reaction.count}</span>
-            </button>
-          ))}
-      </div>
+    <div className={styles.reactionTray} data-testid="reaction-tray">
+      {/* Existing reaction chips */}
+      {reactionEntries.map(([emoji, entry]) => (
+        <button
+          key={emoji}
+          type="button"
+          className={[
+            styles.reactionChip,
+            entry.userReacted ? styles.reactionChipActive : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onClick={() => handleChipClick(emoji)}
+          onKeyDown={(e) => handleChipKeyDown(e, emoji)}
+          disabled={disabled}
+          aria-label={`React with ${emoji}, ${entry.count} reaction${
+            entry.count !== 1 ? 's' : ''
+          }${entry.userReacted ? ', you reacted' : ''}`}
+          aria-pressed={entry.userReacted}
+          data-testid={`reaction-chip-${emoji}`}
+        >
+          <span className={styles.emojiSymbol}>{emoji}</span>
+          <span className={styles.countBadge}>{entry.count}</span>
+        </button>
+      ))}
 
-      {/* Action buttons */}
-      <div className="reaction-actions">
-        {/* Quick reaction buttons (inline) */}
-        {!compact && (
-          <div className="quick-reactions">
-            {quickReactions.map((type) => {
-              const reactionData = getReactionCount(type);
-              const hasReacted = reactionData?.user_reacted || false;
-
-              return (
-                <button
-                  key={type}
-                  className={`quick-reaction-btn ${hasReacted ? 'reacted' : ''}`}
-                  onClick={() => handleReactionClick(type)}
-                  disabled={disabled}
-                  title={REACTION_LABELS[type]}
-                  style={{
-                    color: hasReacted ? REACTION_COLORS[type] : undefined,
-                  }}
-                >
-                  {REACTION_EMOJIS[type]}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* More reactions button */}
-        <div className="more-reactions-wrapper" ref={pickerRef}>
+      {/* Add reaction button + picker */}
+      {!disabled && (
+        <div className={styles.addWrapper}>
           <button
-            className="more-reactions-btn"
-            onClick={() => setShowPicker(!showPicker)}
-            disabled={disabled}
-            title="More reactions"
+            ref={addButtonRef}
+            type="button"
+            className={styles.addButton}
+            onClick={() => setPickerOpen((prev) => !prev)}
+            aria-label="Add reaction"
+            aria-expanded={pickerOpen}
+            aria-haspopup="true"
+            data-testid="add-reaction-button"
           >
-            {compact ? '😊+' : '➕'}
+            + Add
           </button>
 
-          {/* Reaction picker */}
-          {showPicker && (
-            <div className="reaction-picker">
-              <div className="picker-header">
-                <span>Choose a reaction</span>
+          {pickerOpen && (
+            <div
+              ref={pickerRef}
+              className={styles.emojiPickerPopover}
+              role="dialog"
+              aria-label="Emoji picker"
+              data-testid="emoji-picker"
+            >
+              {EMOJI_PALETTE.map((emoji) => (
                 <button
-                  className="picker-close"
-                  onClick={() => setShowPicker(false)}
-                  aria-label="Close"
+                  key={emoji}
+                  type="button"
+                  className={styles.emojiOption}
+                  onClick={() => handleEmojiPick(emoji)}
+                  aria-label={`Pick ${emoji}`}
+                  data-testid={`emoji-option-${emoji}`}
                 >
-                  ✕
+                  {emoji}
                 </button>
-              </div>
-              <div className="picker-grid">
-                {allReactions.map((type) => {
-                  const reactionData = getReactionCount(type);
-                  const hasReacted = reactionData?.user_reacted || false;
-
-                  return (
-                    <button
-                      key={type}
-                      className={`picker-reaction ${hasReacted ? 'active' : ''}`}
-                      onClick={() => handleReactionClick(type)}
-                      title={REACTION_LABELS[type]}
-                      style={{
-                        backgroundColor: hasReacted
-                          ? `${REACTION_COLORS[type]}20`
-                          : undefined,
-                        borderColor: hasReacted ? REACTION_COLORS[type] : undefined,
-                      }}
-                    >
-                      <span className="picker-emoji">{REACTION_EMOJIS[type]}</span>
-                      <span className="picker-label">{REACTION_LABELS[type]}</span>
-                      {reactionData && reactionData.count > 0 && (
-                        <span className="picker-count">{reactionData.count}</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              ))}
             </div>
           )}
-        </div>
-
-        {/* Feedback button */}
-        {!compact && (
-          <div className="feedback-wrapper" ref={feedbackRef}>
-            <button
-              className="feedback-btn"
-              onClick={() => setShowFeedbackForm(!showFeedbackForm)}
-              disabled={disabled}
-              title="Provide feedback"
-            >
-              💬
-            </button>
-
-            {/* Feedback form */}
-            {showFeedbackForm && (
-              <div className="feedback-form">
-                <div className="feedback-header">
-                  <span>How was this response?</span>
-                  <button
-                    className="feedback-close"
-                    onClick={() => setShowFeedbackForm(false)}
-                    aria-label="Close"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="feedback-buttons">
-                  <button
-                    className={`feedback-option ${feedbackType === 'positive' ? 'active' : ''}`}
-                    onClick={() => handleFeedbackClick('positive')}
-                  >
-                    <span className="feedback-icon">👍</span>
-                    <span>Helpful</span>
-                  </button>
-                  <button
-                    className={`feedback-option ${feedbackType === 'negative' ? 'active' : ''}`}
-                    onClick={() => handleFeedbackClick('negative')}
-                  >
-                    <span className="feedback-icon">👎</span>
-                    <span>Not Helpful</span>
-                  </button>
-                </div>
-
-                {feedbackType && (
-                  <div className="feedback-details">
-                    <textarea
-                      className="feedback-textarea"
-                      placeholder="Tell us more (optional)"
-                      value={feedbackText}
-                      onChange={(e) => setFeedbackText(e.target.value)}
-                      maxLength={500}
-                      rows={3}
-                    />
-                    <div className="feedback-actions">
-                      <span className="char-count">
-                        {feedbackText.length}/500
-                      </span>
-                      <button className="submit-feedback-btn" onClick={handleFeedbackSubmit}>
-                        Submit Feedback
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Reaction summary (compact mode) */}
-      {compact && totalReactions > 0 && (
-        <div className="reaction-summary" title={`${totalReactions} reactions`}>
-          <span className="summary-icon">😊</span>
-          <span className="summary-count">{totalReactions}</span>
         </div>
       )}
     </div>
   );
-};
+});
 
 export default MessageReactions;

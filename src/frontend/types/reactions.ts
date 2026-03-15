@@ -1,69 +1,32 @@
 /**
- * TypeScript type definitions for message reactions and feedback
+ * Shared TypeScript types for the MessageReactions system.
  */
 
-export type ReactionType =
-  | 'thumbs_up'
-  | 'thumbs_down'
-  | 'heart'
-  | 'fire'
-  | 'thinking'
-  | 'check'
-  | 'star'
-  | 'celebrate';
+/** A single emoji character, e.g. "👍" */
+export type EmojiString = string;
 
-export interface Reaction {
-  id: string;
-  message_id: string;
-  user_id: string;
-  reaction_type: ReactionType;
-  created_at: string;
-}
-
-export interface ReactionCount {
-  type: ReactionType;
+/** Reaction state for one emoji on one message. */
+export interface ReactionEntry {
+  /** Total number of users who have reacted with this emoji. */
   count: number;
-  user_reacted: boolean;
+  /** Whether the authenticated user has already reacted. */
+  userReacted: boolean;
 }
 
-export interface MessageFeedback {
-  id: string;
-  message_id: string;
-  user_id: string;
-  feedback_type: 'positive' | 'negative';
-  feedback_text?: string;
-  created_at: string;
-}
+/**
+ * Full reaction map for a single message.
+ * Keys are emoji characters; values are ReactionEntry objects.
+ *
+ * @example
+ * const reactions: ReactionMap = {
+ *   "👍": { count: 3, userReacted: true },
+ *   "❤️": { count: 1, userReacted: false },
+ * };
+ */
+export type ReactionMap = Record<EmojiString, ReactionEntry>;
 
-export const REACTION_EMOJIS: Record<ReactionType, string> = {
-  thumbs_up: '👍',
-  thumbs_down: '👎',
-  heart: '❤️',
-  fire: '🔥',
-  thinking: '🤔',
-  check: '✅',
-  star: '⭐',
-  celebrate: '🎉',
-};
-
-export const REACTION_LABELS: Record<ReactionType, string> = {
-  thumbs_up: 'Helpful',
-  thumbs_down: 'Not Helpful',
-  heart: 'Love it',
-  fire: 'Amazing',
-  thinking: 'Interesting',
-  check: 'Correct',
-  star: 'Favorite',
-  celebrate: 'Excellent',
-};
-
-export const REACTION_COLORS: Record<ReactionType, string> = {
-  thumbs_up: '#22c55e',
-  thumbs_down: '#ef4444',
-  heart: '#ec4899',
-  fire: '#f97316',
-  thinking: '#8b5cf6',
-  check: '#10b981',
-  star: '#eab308',
-  celebrate: '#06b6d4',
-};
+/** Callback signature for toggling / adding a reaction. */
+export type ReactionToggleHandler = (
+  messageId: string,
+  emoji: EmojiString,
+) => void;

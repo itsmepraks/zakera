@@ -1,0 +1,195 @@
+/* MessageReactions — scoped CSS Modules styles */
+
+.reactionTray {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 28px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+/* ---- Reaction chip ---- */
+.reactionChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 999px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #111827);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
+  user-select: none;
+}
+
+.reactionChip:hover:not(:disabled) {
+  background: var(--color-surface-hover, #f3f4f6);
+  border-color: var(--color-border-strong, #9ca3af);
+}
+
+.reactionChip:focus-visible {
+  outline: 2px solid var(--color-primary, #6366f1);
+  outline-offset: 2px;
+}
+
+.reactionChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Active (current user has reacted) */
+.reactionChipActive {
+  background: var(--color-primary-subtle, #eef2ff);
+  border-color: var(--color-primary, #6366f1);
+  color: var(--color-primary, #6366f1);
+  animation: reaction-pop 0.25s ease forwards;
+}
+
+.reactionChipActive:hover:not(:disabled) {
+  background: var(--color-primary-subtle-hover, #e0e7ff);
+}
+
+.emojiSymbol {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.countBadge {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 0.75ch;
+  transition: opacity 0.1s ease;
+}
+
+/* ---- Add reaction button ---- */
+.addWrapper {
+  position: relative;
+}
+
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px dashed var(--color-border, #d1d5db);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.addButton:hover {
+  color: var(--color-text, #111827);
+  border-color: var(--color-border-strong, #9ca3af);
+}
+
+.addButton:focus-visible {
+  outline: 2px solid var(--color-primary, #6366f1);
+  outline-offset: 2px;
+}
+
+/* ---- Emoji picker popover ---- */
+.emojiPickerPopover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  padding: 8px;
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 12px;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  min-width: 152px;
+}
+
+.emojiOption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 1.25rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 0.1s ease, transform 0.1s ease;
+}
+
+.emojiOption:hover {
+  background: var(--color-surface-hover, #f3f4f6);
+  transform: scale(1.2);
+}
+
+.emojiOption:focus-visible {
+  outline: 2px solid var(--color-primary, #6366f1);
+  outline-offset: 1px;
+}
+
+/* ---- Animation ---- */
+@keyframes reaction-pop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---- Dark mode overrides ---- */
+@media (prefers-color-scheme: dark) {
+  .reactionChip {
+    background: var(--color-surface-dark, #1f2937);
+    border-color: var(--color-border-dark, #374151);
+    color: var(--color-text-dark, #f9fafb);
+  }
+
+  .reactionChip:hover:not(:disabled) {
+    background: var(--color-surface-hover-dark, #374151);
+  }
+
+  .reactionChipActive {
+    background: var(--color-primary-subtle-dark, #312e81);
+    border-color: var(--color-primary-dark, #818cf8);
+    color: var(--color-primary-dark, #818cf8);
+  }
+
+  .addButton {
+    color: var(--color-text-secondary-dark, #9ca3af);
+    border-color: var(--color-border-dark, #374151);
+  }
+
+  .emojiPickerPopover {
+    background: var(--color-surface-dark, #1f2937);
+    border-color: var(--color-border-dark, #374151);
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.4),
+      0 2px 4px -2px rgb(0 0 0 / 0.3);
+  }
+
+  .emojiOption:hover {
+    background: var(--color-surface-hover-dark, #374151);
+  }
+}
