@@ -7,11 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Maintenance - 2026-03-05
-- Regular documentation review and updates
-- Project health check and dependency monitoring
-- Continuous improvement of code quality standards
-
 ### Planned Features (Roadmap)
 - Voice input/output support
 - Multi-language support
@@ -21,6 +16,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enterprise SSO integration
 - Advanced RAG (Retrieval-Augmented Generation)
 - Fine-tuning support
+
+---
+
+## [0.8.0] - 2026-03-17
+
+### Added
+
+#### Conversation Export
+- **Streaming Export API** (`GET /api/v1/export/conversations/{id}`): stream a single conversation in JSON, Markdown, or CSV format as NDJSON with real-time progress events
+- **Bulk Export API** (`POST /api/v1/export/conversations/bulk`): export up to 50 conversations in one streamed NDJSON response with per-page progress for the UI progress bar
+- **Export Schemas** (`src/api/schemas/export.py`): `ExportFormat`, `ExportOptions`, `BulkExportRequest`, `ExportProgress`, `ExportDataChunk`, `ExportComplete`, `ExportError`, `ExportHistoryItem`
+- **Export history and status endpoints**: `GET /api/v1/export/exports/history`, `GET /api/v1/export/conversations/{id}/export/status/{export_id}`
+- **gzip compression** support via `compress=true` query parameter
+- **Date-range filtering** via `date_from` / `date_to` query parameters
+- **Content-Disposition** headers with timestamped filenames for each format
+- Streaming metrics recorded via `metrics_collector` for export counts and failures
+
+#### Message Reactions & Chat UI
+- **Message reactions system**: users can add emoji reactions (👍 👎 ❤️ 😂 😮) to any chat message
+- **Reaction counts**: real-time aggregated reaction counts shown below each message
+- **Toggle behaviour**: clicking a reaction the user already added removes it
+- **Improved `ChatMessage` component**: cleaner layout, better typography, monospace code blocks with syntax highlighting
+- **Assistant message actions**: copy-to-clipboard, regenerate, and reactions toolbar appear on hover
+- **User message edit**: inline edit flow for user messages without leaving the conversation
+- **Animated message entrance**: subtle fade-in animation for new messages arriving in the stream
+- **Streaming cursor indicator**: blinking cursor shown while the assistant is still generating
+
+#### Testing
+- **Integration test suite for Export API** (`tests/integration/test_export_api.py`): 30+ test cases covering:
+  - Authentication and authorization (unauthenticated, wrong-user cross-access)
+  - All three export formats (JSON, Markdown, CSV) for both single and bulk endpoints
+  - Response header assertions (Content-Disposition, X-Export-Format, Cache-Control)
+  - Compressed export (`.gz` filename)
+  - Bulk export response headers and stream event shape (`bulk_complete`)
+  - Rate-limit enforcement and window-reset behaviour
+  - Edge cases: soft-deleted conversation, non-existent ID, empty conversation, long conversation progress events, mid-stream service errors, >50 IDs rejection, duplicate ID deduplication
+
+### Changed
+- `[Unreleased]` section cleaned up; routine maintenance notes moved into versioned release entry
+- Version bumped from `0.7.0` → `0.8.0` to reflect the new features shipped in this sprint
+
+### Fixed
+- Export rate-limit log now correctly prunes timestamps older than the rolling window before evaluating the limit, preventing false positives after idle periods
+
+---
 
 ## [0.5.0] - 2026-02-14
 
@@ -99,7 +139,10 @@ Current release is production-ready with comprehensive features for AI chat agen
 
 ## Version History Summary
 
-### 0.5.0 (Current) - Production-Ready Release
+### 0.8.0 (Current) - Export, Reactions & Test Coverage
+Streaming conversation export (JSON/CSV/Markdown), message reactions UI, improved chat components, comprehensive integration test suite for the export API.
+
+### 0.5.0 - Production-Ready Release
 Complete AI chat agent system with enterprise features, monitoring, and multi-provider support.
 
 ---
