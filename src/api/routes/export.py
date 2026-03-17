@@ -1,456 +1,249 @@
-"""Conversation export routes with streaming support.
+"""Conversation export routes.
 
-Provides endpoints for exporting conversations in multiple formats
-with real-time progress updates and comprehensive analytics.
+Exposes two endpoints consumed by the frontend export dialog:
+
+  GET  /api/v1/export/conversations/{conversation_id}
+       Stream a single conversation in the requested format.
+
+  POST /api/v1/export/conversations/bulk
+       Stream multiple conversations in a single NDJSON response,
+       with per-page progress events for the UI progress-bar.
+
+Both endpoints:
+  - Require a valid JWT (``get_current_active_user`` dependency).
+  - Verify the requesting user owns every conversation_id supplied.
+  - Apply optional date-range filters from query params / body.
+  - Honour the ``compress`` flag (gzip the payload before streaming).
+  - Enforce a per-user rate-limit of 10 exports/minute stored in a
+    simple in-process dict (replace with Redis in production).
 """
 
-import asyncio
-import json
+from __future__ import annotations
+
 import logging
-from datetime import datetime
-from typing import Optional, AsyncGenerator
-from uuid import uuid4
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from src.api.database import get_db
-from src.api.auth import get_current_user
-from src.monitoring.metrics import track_api_call
-from src.monitoring.logging import get_logger
+from ..auth import get_current_active_user
+from ..database import get_db
+from ..models import Conversation, User
+from ..schemas.export import BulkExportRequest, ExportFormat, ExportOptions
+from ..services.export_service import ExportService
 
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/export", tags=["export"])
 
-logger = get_logger(__name__)
-router = APIRouter(prefix="/conversations", tags=["export"])
+# ---------------------------------------------------------------------------
+# Per-user rate limiting (in-process; swap for Redis in production)
+# ---------------------------------------------------------------------------
 
-
-# Export rate limiting
-EXPORT_RATE_LIMIT = 5  # exports per minute per user
-export_timestamps = {}  # user_id -> list of export timestamps
-
-
-class ExportOptions(BaseModel):
-    """Export configuration options."""
-    
-    format: str = Field(default="json", pattern="^(json|csv|markdown|pdf)$")
-    include_metadata: bool = Field(default=True)
-    include_statistics: bool = Field(default=True)
-    include_reactions: bool = Field(default=True)
-    date_from: Optional[datetime] = Field(default=None)
-    date_to: Optional[datetime] = Field(default=None)
-    compress: bool = Field(default=False)
-    
-
-class ExportProgress(BaseModel):
-    """Progress update during export."""
-    
-    type: str = Field(default="progress")
-    stage: str
-    progress: int = Field(ge=0, le=100)
-    message: str
-    data: Optional[dict] = None
+_RATE_LIMIT = 10  # max exports per rolling window
+_RATE_WINDOW = timedelta(minutes=1)
+_export_log: dict[str, list[datetime]] = {}  # user_id -> [timestamp, ...]
 
 
-class ExportMetadata(BaseModel):
-    """Export metadata."""
-    
-    export_id: str
-    conversation_id: str
-    user_id: str
-    format: str
-    created_at: datetime
-    total_messages: int
-    date_range: dict
-    
-
-async def check_export_rate_limit(user_id: str) -> None:
-    """Check if user has exceeded export rate limit."""
+def _check_rate_limit(user_id: str) -> None:
+    """Raise HTTP 429 if the user has exceeded the export rate limit."""
     now = datetime.utcnow()
-    
-    if user_id not in export_timestamps:
-        export_timestamps[user_id] = []
-    
-    # Remove timestamps older than 1 minute
-    export_timestamps[user_id] = [
-        ts for ts in export_timestamps[user_id]
-        if (now - ts).seconds < 60
-    ]
-    
-    if len(export_timestamps[user_id]) >= EXPORT_RATE_LIMIT:
+    cutoff = now - _RATE_WINDOW
+    timestamps = _export_log.get(user_id, [])
+    # Prune old entries
+    timestamps = [t for t in timestamps if t > cutoff]
+    if len(timestamps) >= _RATE_LIMIT:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Export rate limit exceeded. Max {EXPORT_RATE_LIMIT} exports per minute."
+            detail=(
+                f"Export rate limit exceeded. "
+                f"Max {_RATE_LIMIT} exports per minute per user."
+            ),
         )
-    
-    export_timestamps[user_id].append(now)
+    timestamps.append(now)
+    _export_log[user_id] = timestamps
 
 
-async def get_conversation_messages(
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _get_conversation_or_404(
     conversation_id: str,
     user_id: str,
-    db: AsyncSession,
-    date_from: Optional[datetime] = None,
-    date_to: Optional[datetime] = None
-) -> list:
-    """Fetch conversation messages with filters."""
-    # Mock implementation - replace with actual database queries
-    # In production, this would query your Message model
-    
-    logger.info(
-        f"Fetching messages for conversation {conversation_id}",
-        extra={
-            "conversation_id": conversation_id,
-            "user_id": user_id,
-            "date_from": date_from,
-            "date_to": date_to
-        }
-    )
-    
-    # Simulated messages for demonstration
-    messages = [
-        {
-            "id": f"msg_{i}",
-            "role": "user" if i % 2 == 0 else "assistant",
-            "content": f"Message content {i}",
-            "timestamp": datetime.utcnow().isoformat(),
-            "tokens": 50 + i * 10,
-            "cost": 0.001 * i,
-            "model": "gpt-3.5-turbo",
-            "reactions": [{"emoji": "👍", "count": 2}] if i % 3 == 0 else [],
-            "tools_used": ["search", "calculator"] if i % 5 == 0 else []
-        }
-        for i in range(100)  # Simulate 100 messages
-    ]
-    
-    return messages
-
-
-async def get_conversation_metadata(
-    conversation_id: str,
-    user_id: str,
-    db: AsyncSession
-) -> dict:
-    """Fetch conversation metadata and statistics."""
-    
-    logger.info(
-        f"Fetching metadata for conversation {conversation_id}",
-        extra={"conversation_id": conversation_id, "user_id": user_id}
-    )
-    
-    # Mock implementation - replace with actual database queries
-    return {
-        "id": conversation_id,
-        "title": "AI Chat Session",
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
-        "user_id": user_id,
-        "model": "gpt-3.5-turbo",
-        "settings": {
-            "temperature": 0.7,
-            "max_tokens": 2000,
-            "system_prompt": "You are a helpful AI assistant."
-        },
-        "tags": ["important", "work"],
-        "is_archived": False
-    }
-
-
-async def calculate_conversation_statistics(
-    messages: list,
-    conversation_id: str
-) -> dict:
-    """Calculate conversation statistics and analytics."""
-    
-    logger.info(
-        f"Calculating statistics for conversation {conversation_id}",
-        extra={"conversation_id": conversation_id, "message_count": len(messages)}
-    )
-    
-    total_tokens = sum(msg.get("tokens", 0) for msg in messages)
-    total_cost = sum(msg.get("cost", 0) for msg in messages)
-    
-    user_messages = [m for m in messages if m["role"] == "user"]
-    assistant_messages = [m for m in messages if m["role"] == "assistant"]
-    
-    tools_used = set()
-    for msg in messages:
-        tools_used.update(msg.get("tools_used", []))
-    
-    return {
-        "total_messages": len(messages),
-        "user_messages": len(user_messages),
-        "assistant_messages": len(assistant_messages),
-        "total_tokens": total_tokens,
-        "total_cost": round(total_cost, 4),
-        "average_tokens_per_message": round(total_tokens / len(messages), 2) if messages else 0,
-        "tools_used": list(tools_used),
-        "models_used": list(set(m.get("model", "unknown") for m in messages)),
-        "date_range": {
-            "start": messages[0]["timestamp"] if messages else None,
-            "end": messages[-1]["timestamp"] if messages else None
-        }
-    }
-
-
-async def stream_export_json(
-    conversation_id: str,
-    user_id: str,
-    db: AsyncSession,
-    options: ExportOptions
-) -> AsyncGenerator[str, None]:
-    """Stream conversation export as JSON with progress updates."""
-    
-    export_id = str(uuid4())
-    correlation_id = str(uuid4())
-    
-    logger.info(
-        "Starting conversation export",
-        extra={
-            "export_id": export_id,
-            "conversation_id": conversation_id,
-            "user_id": user_id,
-            "format": options.format,
-            "correlation_id": correlation_id
-        }
-    )
-    
-    try:
-        # Stage 1: Export Metadata
-        yield json.dumps(ExportProgress(
-            stage="metadata",
-            progress=10,
-            message="Preparing export...",
-            data={"export_id": export_id}
-        ).dict()) + "\n"
-        
-        await asyncio.sleep(0.1)  # Simulate processing
-        
-        # Fetch conversation metadata
-        metadata = await get_conversation_metadata(conversation_id, user_id, db)
-        
-        if options.include_metadata:
-            yield json.dumps(ExportProgress(
-                stage="metadata",
-                progress=20,
-                message="Fetching conversation metadata...",
-                data={"metadata": metadata}
-            ).dict()) + "\n"
-        
-        await asyncio.sleep(0.1)
-        
-        # Stage 2: Fetch Messages
-        yield json.dumps(ExportProgress(
-            stage="messages",
-            progress=30,
-            message="Fetching messages...",
-            data=None
-        ).dict()) + "\n"
-        
-        messages = await get_conversation_messages(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            db=db,
-            date_from=options.date_from,
-            date_to=options.date_to
+    db: Session,
+) -> Conversation:
+    """Fetch a conversation and verify ownership; raise 404 otherwise."""
+    conv = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+            Conversation.is_deleted.is_(False),
         )
-        
-        # Stream messages in batches with progress updates
-        total_messages = len(messages)
-        batch_size = 10
-        
-        for i in range(0, total_messages, batch_size):
-            batch = messages[i:i + batch_size]
-            progress = 30 + int((i / total_messages) * 40)
-            
-            yield json.dumps(ExportProgress(
-                stage="messages",
-                progress=progress,
-                message=f"Processing messages {i + 1}-{min(i + batch_size, total_messages)} of {total_messages}...",
-                data={"messages": batch}
-            ).dict()) + "\n"
-            
-            await asyncio.sleep(0.05)  # Prevent overwhelming the client
-        
-        # Stage 3: Calculate Statistics
-        if options.include_statistics:
-            yield json.dumps(ExportProgress(
-                stage="analytics",
-                progress=75,
-                message="Calculating conversation statistics...",
-                data=None
-            ).dict()) + "\n"
-            
-            await asyncio.sleep(0.1)
-            
-            statistics = await calculate_conversation_statistics(
-                messages, conversation_id
-            )
-            
-            yield json.dumps(ExportProgress(
-                stage="analytics",
-                progress=85,
-                message="Statistics calculated",
-                data={"statistics": statistics}
-            ).dict()) + "\n"
-        
-        # Stage 4: Complete
-        export_metadata = ExportMetadata(
-            export_id=export_id,
-            conversation_id=conversation_id,
-            user_id=user_id,
-            format=options.format,
-            created_at=datetime.utcnow(),
-            total_messages=len(messages),
-            date_range={
-                "from": options.date_from.isoformat() if options.date_from else None,
-                "to": options.date_to.isoformat() if options.date_to else None
-            }
+        .first()
+    )
+    if conv is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Conversation '{conversation_id}' not found.",
         )
-        
-        yield json.dumps(ExportProgress(
-            stage="complete",
-            progress=100,
-            message="Export completed successfully",
-            data={"export_metadata": export_metadata.dict()}
-        ).dict()) + "\n"
-        
-        logger.info(
-            "Export completed successfully",
-            extra={
-                "export_id": export_id,
-                "conversation_id": conversation_id,
-                "total_messages": len(messages),
-                "correlation_id": correlation_id
-            }
-        )
-        
-    except Exception as e:
-        logger.error(
-            f"Export failed: {str(e)}",
-            extra={
-                "export_id": export_id,
-                "conversation_id": conversation_id,
-                "error": str(e),
-                "correlation_id": correlation_id
-            },
-            exc_info=True
-        )
-        
-        yield json.dumps({
-            "type": "error",
-            "stage": "failed",
-            "message": f"Export failed: {str(e)}",
-            "error": str(e)
-        }) + "\n"
+    return conv
 
+
+# ---------------------------------------------------------------------------
+# Single-conversation export
+# ---------------------------------------------------------------------------
 
 @router.get(
-    "/{conversation_id}/export",
-    response_class=StreamingResponse,
-    summary="Export conversation with streaming",
-    description="""Export a conversation in the specified format with real-time progress updates.
-    
-    Supports multiple export formats:
-    - JSON: Full conversation with all metadata (default)
-    - CSV: Tabular format for analysis
-    - Markdown: Human-readable format
-    - PDF: Formatted document
-    
-    The export streams progress updates in JSON format:
-    ```json
-    {"type": "progress", "stage": "messages", "progress": 50, "message": "Processing...", "data": {...}}
-    ```
-    
-    Requires authentication. Users can only export their own conversations.
-    Rate limited to 5 exports per minute per user.
-    """,
+    "/conversations/{conversation_id}",
+    summary="Export a single conversation",
+    description=(
+        "Stream the conversation as NDJSON progress events followed by the "
+        "formatted payload in the requested format (json | markdown | csv)."
+    ),
     responses={
-        200: {
-            "description": "Export stream",
-            "content": {"application/x-ndjson": {}}
-        },
-        401: {"description": "Unauthorized"},
-        403: {"description": "Forbidden - not your conversation"},
+        200: {"description": "NDJSON stream", "content": {"application/x-ndjson": {}}},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied"},
         404: {"description": "Conversation not found"},
-        429: {"description": "Rate limit exceeded"}
-    }
+        429: {"description": "Rate limit exceeded"},
+    },
 )
-@track_api_call("conversation_export")
-async def export_conversation(
+async def export_single_conversation(
     conversation_id: str,
-    format: str = Query(default="json", pattern="^(json|csv|markdown|pdf)$"),
-    include_metadata: bool = Query(default=True),
-    include_statistics: bool = Query(default=True),
-    include_reactions: bool = Query(default=True),
-    compress: bool = Query(default=False),
-    db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Export conversation with streaming support and real-time progress."""
-    
-    # Rate limiting check
-    await check_export_rate_limit(current_user.id)
-    
-    # Create export options
+    fmt: ExportFormat = Query(
+        default=ExportFormat.JSON,
+        alias="format",
+        description="Output format: json | markdown | csv",
+    ),
+    include_metadata: bool = Query(True, description="Embed token/cost metadata per message"),
+    include_system_messages: bool = Query(False, description="Include system-role messages"),
+    compress: bool = Query(False, description="gzip-compress the exported payload"),
+    date_from: Optional[datetime] = Query(None, description="Only include messages on/after this UTC datetime"),
+    date_to: Optional[datetime] = Query(None, description="Only include messages on/before this UTC datetime"),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream a single conversation export with real-time progress."""
+    _check_rate_limit(current_user.id)
+
+    conversation = _get_conversation_or_404(conversation_id, current_user.id, db)
+
     options = ExportOptions(
-        format=format,
+        format=fmt,
         include_metadata=include_metadata,
-        include_statistics=include_statistics,
-        include_reactions=include_reactions,
-        compress=compress
+        include_system_messages=include_system_messages,
+        compress=compress,
+        date_from=date_from,
+        date_to=date_to,
     )
-    
-    # Permission check (mock - replace with actual permission logic)
-    # In production, verify that current_user owns this conversation
+
+    service = ExportService(db=db, user=current_user)
+
     logger.info(
-        f"User {current_user.id} requesting export of conversation {conversation_id}",
+        "Single export requested",
         extra={
             "user_id": current_user.id,
             "conversation_id": conversation_id,
-            "format": format
-        }
+            "format": fmt.value,
+            "compress": compress,
+        },
     )
-    
-    # Stream the export
+
+    media_type_map = {
+        ExportFormat.JSON: "application/json",
+        ExportFormat.MARKDOWN: "text/markdown",
+        ExportFormat.CSV: "text/csv",
+    }
+    extension_map = {
+        ExportFormat.JSON: "json",
+        ExportFormat.MARKDOWN: "md",
+        ExportFormat.CSV: "csv",
+    }
+    ext = extension_map[fmt]
+    filename = (
+        f"conversation_{conversation_id[:8]}_"
+        f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{ext}"
+    )
+    if compress:
+        filename += ".gz"
+
     return StreamingResponse(
-        stream_export_json(
-            conversation_id=conversation_id,
-            user_id=current_user.id,
-            db=db,
-            options=options
+        service.stream_export(conversation=conversation, options=options),
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Export-Format": fmt.value,
+            "X-Conversation-Id": conversation_id,
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bulk export
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/conversations/bulk",
+    summary="Bulk-export multiple conversations",
+    description=(
+        "Export several conversations in one streamed response.  The body "
+        "specifies the conversation IDs and export options.  Progress events "
+        "are emitted for each conversation so the UI can display a progress bar."
+    ),
+    responses={
+        200: {"description": "NDJSON stream", "content": {"application/x-ndjson": {}}},
+        400: {"description": "Invalid request (e.g. too many IDs)"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "One or more conversations not found"},
+        429: {"description": "Rate limit exceeded"},
+    },
+)
+async def bulk_export_conversations(
+    body: BulkExportRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream a paginated bulk export for a list of conversation IDs."""
+    _check_rate_limit(current_user.id)
+
+    if len(body.conversation_ids) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bulk export is limited to 50 conversations per request.",
+        )
+
+    # Verify ownership of every requested conversation up front so we fail
+    # fast with a 404 rather than discovering missing IDs mid-stream.
+    conversations: list[Conversation] = []
+    for cid in body.conversation_ids:
+        conversations.append(_get_conversation_or_404(cid, current_user.id, db))
+
+    service = ExportService(db=db, user=current_user)
+
+    logger.info(
+        "Bulk export requested",
+        extra={
+            "user_id": current_user.id,
+            "count": len(conversations),
+            "format": body.options.format.value,
+        },
+    )
+
+    return StreamingResponse(
+        service.stream_bulk_export(
+            conversations=conversations,
+            options=body.options,
+            page_size=body.page_size,
         ),
         media_type="application/x-ndjson",
         headers={
-            "Content-Disposition": f"attachment; filename=conversation_{conversation_id}_export.ndjson",
-            "X-Export-Format": format,
-            "Cache-Control": "no-cache"
-        }
+            "X-Export-Format": body.options.format.value,
+            "X-Conversation-Count": str(len(conversations)),
+            "Cache-Control": "no-store",
+        },
     )
-
-
-@router.get(
-    "/{conversation_id}/export/status",
-    summary="Get export status",
-    description="Check the status of an ongoing or completed export"
-)
-async def get_export_status(
-    conversation_id: str,
-    export_id: str,
-    current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get the status of an export operation."""
-    
-    # Mock implementation
-    # In production, track export status in database
-    return {
-        "export_id": export_id,
-        "conversation_id": conversation_id,
-        "status": "completed",
-        "progress": 100,
-        "created_at": datetime.utcnow().isoformat(),
-        "completed_at": datetime.utcnow().isoformat()
-    }

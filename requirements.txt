@@ -56,6 +56,10 @@ pytz==2024.1
 cachetools==5.3.2
 aiofiles==23.2.1
 
+# Data Processing & Export
+pandas==2.2.0
+openpyxl==3.1.2  # xlsx engine available for future spreadsheet exports
+
 # Monitoring and Observability
 prometheus-client==0.19.0
 prometheus-fastapi-instrumentator==6.1.0
