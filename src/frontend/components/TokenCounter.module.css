@@ -1,0 +1,34 @@
+/* TokenCounter styles */
+
+.container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.count  { font-weight: 600; color: var(--color-text, #111827); }
+.separator { opacity: 0.5; }
+.limit  { opacity: 0.6; }
+
+.barTrack {
+  width: 64px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--color-surface-alt, #e5e7eb);
+  overflow: hidden;
+  margin-left: 4px;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.barNormal   { background: var(--color-success, #22c55e); }
+.barWarning  { background: var(--color-warning, #f59e0b); }
+.barCritical { background: var(--color-error,   #ef4444); }
