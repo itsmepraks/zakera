@@ -1,0 +1,16 @@
+# ============================================================
+# Load-testing dependencies for Zakera AI Chat Agent
+# Install with: pip install -r requirements-loadtest.txt
+# ============================================================
+
+# Load testing framework
+locust==2.24.0
+
+# Realistic data generation for chat prompts and user data
+faker==24.2.0
+
+# HTTP client (reused from main requirements for consistency)
+httpx==0.26.0
+
+# Utilities
+python-dotenv==1.0.0
