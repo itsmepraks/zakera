@@ -1,0 +1,239 @@
+/* AgentThinkingPanel — scoped CSS module
+ * Uses CSS custom properties for light/dark compatibility. Values fall
+ * back gracefully when the host app does not define them. */
+
+.panel {
+  --thinking-bg: var(--color-surface-subtle, #f8f9fa);
+  --thinking-border: var(--color-border, #dee2e6);
+  --thinking-text: var(--color-text-primary, #212529);
+  --thinking-meta: var(--color-text-muted, #6c757d);
+  --thinking-active-border: var(--color-brand, #6366f1);
+  --thinking-done-color: var(--color-success, #22c55e);
+  --thinking-error-color: var(--color-danger, #ef4444);
+
+  border: 1px solid var(--thinking-border);
+  border-radius: 8px;
+  background: var(--thinking-bg);
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+  font-size: 0.875rem;
+  color: var(--thinking-text);
+}
+
+.panelActive {
+  border-color: var(--thinking-active-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--thinking-active-border) 15%, transparent);
+}
+
+.panelError {
+  border-color: var(--thinking-error-color);
+}
+
+/* Header */
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--thinking-border);
+  gap: 8px;
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.panelTitleText {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.elapsedLabel {
+  font-size: 0.75rem;
+  color: var(--thinking-meta);
+  white-space: nowrap;
+}
+
+.panelControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Pulsing dot */
+
+.pulsingDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--thinking-active-border);
+  flex-shrink: 0;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* Buttons */
+
+.cancelBtn,
+.collapseBtn,
+.expandBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--thinking-meta);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cancelBtn:hover {
+  background: color-mix(in srgb, var(--thinking-error-color) 12%, transparent);
+  color: var(--thinking-error-color);
+}
+
+.collapseBtn:hover,
+.expandBtn:hover {
+  background: color-mix(in srgb, var(--thinking-text) 8%, transparent);
+  color: var(--thinking-text);
+}
+
+/* Step list */
+
+.stepList {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.stepRow {
+  padding: 6px 12px;
+  border-left: 2px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  animation: stepEnter 0.2s ease-out both;
+}
+
+@keyframes stepEnter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stepRowActive {
+  background: color-mix(in srgb, var(--thinking-active-border) 6%, transparent);
+  border-left-color: var(--thinking-active-border);
+}
+
+.stepRowDone {
+  opacity: 0.7;
+}
+
+.stepRowError {
+  border-left-color: var(--thinking-error-color);
+  background: color-mix(in srgb, var(--thinking-error-color) 6%, transparent);
+}
+
+/* Step header row */
+
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stepLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Icons */
+
+.spinnerIcon {
+  display: inline-block;
+  color: var(--thinking-active-border);
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.doneIcon  { color: var(--thinking-done-color); flex-shrink: 0; }
+.errorIcon { color: var(--thinking-error-color); flex-shrink: 0; }
+.pendingIcon { color: var(--thinking-meta); flex-shrink: 0; opacity: 0.5; }
+
+/* Badges */
+
+.toolBadge {
+  display: inline-block;
+  background: color-mix(in srgb, var(--thinking-active-border) 15%, transparent);
+  color: var(--thinking-active-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.tokenBadge {
+  display: inline-block;
+  background: color-mix(in srgb, var(--thinking-meta) 15%, transparent);
+  color: var(--thinking-meta);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+}
+
+.durationLabel {
+  color: var(--thinking-meta);
+  font-size: 0.75rem;
+  min-width: 3ch;
+  text-align: right;
+}
+
+/* Expanded detail */
+
+.stepDetail {
+  margin: 6px 0 2px 24px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--thinking-border) 30%, transparent);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Waiting text */
+
+.waitingText {
+  padding: 12px;
+  color: var(--thinking-meta);
+  font-style: italic;
+  text-align: center;
+}
