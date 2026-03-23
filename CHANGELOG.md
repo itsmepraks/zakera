@@ -19,6 +19,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-03-22
+
+### Added
+
+#### Token Usage & Cost Breakdown (Backend)
+- **New endpoint** `GET /api/v1/conversations/{conversation_id}/token-usage` that returns a
+  detailed JSON breakdown of every conversation's token consumption and estimated USD cost.
+- **Built-in pricing table** covering 30+ models across OpenAI (GPT-4o, o1, o3-mini…),
+  Anthropic (Claude 3.5 Sonnet/Haiku, Opus…), Google Gemini (1.5 Pro/Flash, 2.0 Flash),
+  Groq, Mistral, DeepSeek, and xAI Grok. Local/Ollama models report zero cost.
+- **Response schema** (`TokenUsageResponse`) includes:
+  - Aggregate `total_tokens`, `prompt_tokens`, `completion_tokens`, `estimated_cost_usd`
+  - `by_role` breakdown (user / assistant / system / tool) with per-role token count and cost
+  - `by_provider` breakdown when a conversation uses messages from multiple model providers
+  - `message_timeline` — per-message token detail ordered by `created_at`
+  - `avg_user_tokens_per_message` and `avg_assistant_tokens_per_message`
+  - `pricing_info` snapshot (prompt/completion per-1k USD) and `pricing_provider` used for estimates
+- Endpoint is auth-protected (JWT); returns 404 for conversations not owned by the requester
+  or soft-deleted conversations.
+- Model pricing resolves via exact match → prefix/substring match → zero-cost fallback so
+  versioned model aliases (e.g. `gpt-4-turbo-preview-2024-04-09`) resolve correctly.
+
+#### TokenUsageBadge (Frontend)
+- **New `<TokenUsageBadge>`** React/TypeScript component (`src/frontend/components/TokenUsageBadge.tsx`)
+  that renders a colour-coded pill in the chat header showing live token count and estimated cost.
+- Auto-refreshes every 30 s (configurable via `refreshInterval` prop) while the chat is open.
+- Expands into a **popover breakdown table** (per-role: user / assistant / system) on click.
+- **Three cost tiers** driven by Tailwind CSS:
+  - 🟢 Green (< $0.01) — free/very cheap (local models, short conversations)
+  - 🟡 Amber ($0.01–$0.10) — moderate spend
+  - 🔴 Red (≥ $0.10) — significant spend, prompts user awareness
+- Handles loading skeleton, API error state (click-to-retry), and zero-cost local model
+  conversations gracefully.
+- Props: `conversationId`, `authToken`, optional `refreshInterval`, optional `className`.
+
+#### Testing
+- **`tests/test_token_usage.py`** — 10 new pytest test cases covering:
+  - Happy path: correct total/prompt/completion token counts and non-zero cost for paid models
+  - Multi-model conversation: messages attributed to different providers appear in `by_provider`
+  - Zero-cost local/Ollama conversation: `estimated_cost_usd` is exactly 0.0
+  - Empty conversation: all numeric fields are 0, no timeline entries
+  - 404 for non-existent / soft-deleted / cross-user conversation
+  - 401 on missing Authorization header
+  - Average tokens per role are computed correctly
+  - Pricing helper unit tests: exact match, prefix/alias match, Ollama keyword, unknown model
+
+### Changed
+- Version bumped `0.8.0` → `0.9.0`.
+- `[Unreleased]` section reset; this sprint's items moved into the `[0.9.0]` entry above.
+
+---
+
 ## [0.8.0] - 2026-03-17
 
 ### Added
@@ -139,7 +191,11 @@ Current release is production-ready with comprehensive features for AI chat agen
 
 ## Version History Summary
 
-### 0.8.0 (Current) - Export, Reactions & Test Coverage
+### 0.9.0 (Current) - Token Usage & Cost Breakdown
+New `GET /api/v1/conversations/{id}/token-usage` endpoint, `TokenUsageBadge` frontend component,
+and 10 new pytest test cases. Pricing table covers 30+ models across 8 providers.
+
+### 0.8.0 - Export, Reactions & Test Coverage
 Streaming conversation export (JSON/CSV/Markdown), message reactions UI, improved chat components, comprehensive integration test suite for the export API.
 
 ### 0.5.0 - Production-Ready Release
