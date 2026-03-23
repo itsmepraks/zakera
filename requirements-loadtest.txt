@@ -4,13 +4,13 @@
 # ============================================================
 
 # Load testing framework
-locust==2.24.0
+locust==2.34.0
 
 # Realistic data generation for chat prompts and user data
-faker==24.2.0
+faker==37.12.0
 
 # HTTP client (reused from main requirements for consistency)
-httpx==0.26.0
+httpx==0.28.1
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv==1.2.1
