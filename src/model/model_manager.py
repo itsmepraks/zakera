@@ -24,6 +24,7 @@ together        – Together AI
 perplexity      – Perplexity Sonar
 xai             – xAI Grok
 azure           – Azure OpenAI
+vertex          – Google Vertex AI (Gemini 1.5 Pro / Flash via service account)
 """
 
 from __future__ import annotations
@@ -99,6 +100,7 @@ def list_providers() -> list[str]:
         "perplexity",
         "xai",
         "azure",
+        "vertex",
     ]
 
 
@@ -108,6 +110,12 @@ def list_providers() -> list[str]:
 
 def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity here
     """Instantiate the correct provider class based on *name*."""
+
+    if name == "openai":
+        from src.model.providers_openai import OpenAIProvider, OpenAIConfig
+        return OpenAIProvider(
+            OpenAIConfig(api_key=_require_env("OPENAI_API_KEY"))
+        )
 
     if name == "anthropic":
         from src.model.providers_anthropic import AnthropicProvider
@@ -122,8 +130,8 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
         return Gemini2Provider(api_key=_require_env("GOOGLE_API_KEY"))
 
     if name == "groq":
-        from src.model.providers_groq import GroqProvider
-        return GroqProvider(api_key=_require_env("GROQ_API_KEY"))
+        from src.model.providers_groq import GroqProvider, GroqConfig
+        return GroqProvider(GroqConfig(api_key=_require_env("GROQ_API_KEY")))
 
     if name == "mistral":
         from src.model.providers_mistral import MistralProvider
@@ -179,6 +187,19 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
             api_key=_require_env("AZURE_OPENAI_API_KEY"),
             endpoint=_require_env("AZURE_OPENAI_ENDPOINT"),
             deployment=_get_env("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
+        )
+
+    if name == "vertex":
+        from src.model.providers_vertex import VertexAIProvider, VertexConfig
+        return VertexAIProvider(
+            VertexConfig(
+                project_id=_require_env("GOOGLE_VERTEX_PROJECT"),
+                sa_key_json=_require_env("GOOGLE_VERTEX_SA_KEY_JSON"),
+                location=_get_env("GOOGLE_VERTEX_LOCATION", "us-central1"),
+                default_model=_get_env(
+                    "GOOGLE_VERTEX_MODEL", "gemini-1.5-pro-002"
+                ),
+            )
         )
 
     raise ValueError(
