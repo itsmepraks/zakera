@@ -29,9 +29,12 @@ vertex          – Google Vertex AI (Gemini 1.5 Pro / Flash via service account
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-from typing import Any, Dict, Optional, TYPE_CHECKING
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
@@ -102,6 +105,359 @@ def list_providers() -> list[str]:
         "azure",
         "vertex",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Provider health tracking
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _ProviderHealth:
+    """Mutable health record for a single provider."""
+
+    failure_count: int = 0
+    last_failure_ts: float = 0.0       # epoch seconds of most-recent failure
+    cooling_down: bool = False          # True while the provider is in cooldown
+
+
+class ProviderHealthTracker:
+    """
+    Tracks per-provider failure counts and cooldown state.
+
+    A provider enters *cooldown* once its consecutive failure count reaches
+    ``failure_threshold``.  It is automatically eligible for retry after
+    ``cooldown_seconds`` have elapsed since the last recorded failure.
+
+    Usage::
+
+        tracker = ProviderHealthTracker()
+        tracker.record_failure("openai")
+        if tracker.is_healthy("openai"):
+            ...
+        tracker.reset_provider("openai")
+
+    This class is intentionally **not** thread-safe by default.  Wrap
+    accesses in a lock if you share a single instance across threads.
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 3,
+        cooldown_seconds: float = 60.0,
+    ) -> None:
+        """
+        Initialise the tracker.
+
+        Args:
+            failure_threshold: Number of consecutive failures before a
+                               provider is placed into cooldown.
+            cooldown_seconds:  How long (seconds) to wait before considering
+                               a cooling-down provider healthy again.
+        """
+        if failure_threshold < 1:
+            raise ValueError("failure_threshold must be >= 1")
+        if cooldown_seconds <= 0:
+            raise ValueError("cooldown_seconds must be > 0")
+
+        self.failure_threshold = failure_threshold
+        self.cooldown_seconds = cooldown_seconds
+        self._health: Dict[str, _ProviderHealth] = {}
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _get_or_create(self, provider: str) -> _ProviderHealth:
+        if provider not in self._health:
+            self._health[provider] = _ProviderHealth()
+        return self._health[provider]
+
+    def _auto_recover(self, health: _ProviderHealth) -> None:
+        """Clear cooldown flag if the cooldown window has passed."""
+        if (
+            health.cooling_down
+            and health.last_failure_ts > 0
+            and (time.monotonic() - health.last_failure_ts) >= self.cooldown_seconds
+        ):
+            health.cooling_down = False
+            health.failure_count = 0
+            logger.debug("Provider auto-recovered after cooldown.")
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def record_failure(self, provider: str) -> None:
+        """
+        Record a failure for *provider*.
+
+        If the failure count reaches ``failure_threshold`` the provider is
+        placed into cooldown and will not be considered healthy until
+        ``cooldown_seconds`` have elapsed.
+
+        Args:
+            provider: Provider name (e.g. ``"openai"``).
+        """
+        health = self._get_or_create(provider)
+        health.failure_count += 1
+        health.last_failure_ts = time.monotonic()
+
+        if health.failure_count >= self.failure_threshold:
+            if not health.cooling_down:
+                health.cooling_down = True
+                logger.warning(
+                    "Provider '%s' reached %d consecutive failures — "
+                    "entering %.0fs cooldown.",
+                    provider,
+                    health.failure_count,
+                    self.cooldown_seconds,
+                )
+
+    def record_success(self, provider: str) -> None:
+        """
+        Record a successful call for *provider*, resetting its failure count.
+
+        Args:
+            provider: Provider name.
+        """
+        health = self._get_or_create(provider)
+        if health.failure_count > 0 or health.cooling_down:
+            logger.info(
+                "Provider '%s' recovered after success (was %d failures).",
+                provider,
+                health.failure_count,
+            )
+        health.failure_count = 0
+        health.cooling_down = False
+        health.last_failure_ts = 0.0
+
+    def is_healthy(self, provider: str) -> bool:
+        """
+        Return *True* if *provider* is currently eligible to receive requests.
+
+        A provider is healthy when it is either:
+        - Unknown to the tracker (never failed), or
+        - Not in cooldown, or
+        - In cooldown but the cooldown window has expired.
+
+        Args:
+            provider: Provider name.
+
+        Returns:
+            ``True`` if the provider should be tried, ``False`` otherwise.
+        """
+        if provider not in self._health:
+            return True
+        health = self._health[provider]
+        self._auto_recover(health)
+        return not health.cooling_down
+
+    def reset_provider(self, provider: str) -> None:
+        """
+        Manually clear all failure state for *provider*.
+
+        Useful after confirming that a provider's underlying issue has been
+        resolved (e.g. API key rotated, quota renewed).
+
+        Args:
+            provider: Provider name.
+        """
+        if provider in self._health:
+            self._health[provider] = _ProviderHealth()
+            logger.info("Health state for provider '%s' manually reset.", provider)
+
+    def get_status(self, provider: str) -> Dict[str, Any]:
+        """
+        Return a snapshot of *provider*'s current health state.
+
+        Args:
+            provider: Provider name.
+
+        Returns:
+            Dict with keys ``provider``, ``failure_count``,
+            ``cooling_down``, ``seconds_until_recovery``.
+        """
+        if provider not in self._health:
+            return {
+                "provider": provider,
+                "failure_count": 0,
+                "cooling_down": False,
+                "seconds_until_recovery": 0.0,
+            }
+        health = self._health[provider]
+        self._auto_recover(health)
+
+        seconds_until_recovery = 0.0
+        if health.cooling_down and health.last_failure_ts > 0:
+            elapsed = time.monotonic() - health.last_failure_ts
+            seconds_until_recovery = max(0.0, self.cooldown_seconds - elapsed)
+
+        return {
+            "provider": provider,
+            "failure_count": health.failure_count,
+            "cooling_down": health.cooling_down,
+            "seconds_until_recovery": round(seconds_until_recovery, 1),
+        }
+
+    def all_statuses(self) -> List[Dict[str, Any]]:
+        """Return health snapshots for every tracked provider."""
+        return [self.get_status(p) for p in self._health]
+
+
+# ---------------------------------------------------------------------------
+# Module-level default tracker (shared across the process)
+# ---------------------------------------------------------------------------
+
+#: Default :class:`ProviderHealthTracker` used by :func:`invoke_with_fallback`.
+#: Override or replace it for custom thresholds / testing.
+default_health_tracker = ProviderHealthTracker(
+    failure_threshold=3,
+    cooldown_seconds=60.0,
+)
+
+
+# ---------------------------------------------------------------------------
+# Fallback chain invocation
+# ---------------------------------------------------------------------------
+
+async def invoke_with_fallback(
+    provider_chain: List[str],
+    invoke_fn: Callable[[Any], Any],
+    *,
+    retry_attempts: int = 3,
+    base_backoff: float = 1.0,
+    health_tracker: Optional[ProviderHealthTracker] = None,
+) -> Any:
+    """
+    Try each provider in *provider_chain* in order, retrying on failure.
+
+    For every provider in the chain the function:
+
+    1. Skips the provider if the health tracker considers it unhealthy.
+    2. Calls ``invoke_fn(provider_instance)`` up to *retry_attempts* times,
+       applying exponential back-off between retries
+       (``base_backoff * 2 ** attempt`` seconds).
+    3. On success, records a success with the health tracker and returns
+       the result immediately.
+    4. On failure, records a failure with the health tracker and moves on
+       to the next provider in the chain.
+
+    Args:
+        provider_chain:  Ordered list of provider keys to try.  The first
+                         healthy provider that succeeds is used.
+        invoke_fn:       Async or sync callable that accepts a single
+                         provider instance and performs the model call.
+                         Should raise an exception on failure.
+        retry_attempts:  Maximum number of call attempts per provider
+                         before declaring it failed.  Defaults to ``3``.
+        base_backoff:    Base delay in seconds for exponential back-off.
+                         Delay for attempt *n* is
+                         ``base_backoff * 2 ** n`` seconds.
+                         Defaults to ``1.0``.
+        health_tracker:  :class:`ProviderHealthTracker` to use.  Defaults
+                         to :data:`default_health_tracker`.
+
+    Returns:
+        The return value of the first successful ``invoke_fn`` call.
+
+    Raises:
+        RuntimeError: If every provider in the chain fails or is unhealthy.
+
+    Example::
+
+        async def call(provider):
+            return await provider.chat(messages=[...])
+
+        result = await invoke_with_fallback(
+            provider_chain=["openai", "anthropic", "groq"],
+            invoke_fn=call,
+        )
+    """
+    if not provider_chain:
+        raise ValueError("provider_chain must not be empty.")
+    if retry_attempts < 1:
+        raise ValueError("retry_attempts must be >= 1.")
+
+    tracker = health_tracker or default_health_tracker
+    errors: List[str] = []
+
+    for provider_name in provider_chain:
+        if not tracker.is_healthy(provider_name):
+            status = tracker.get_status(provider_name)
+            logger.info(
+                "Skipping provider '%s' — in cooldown, %.1fs remaining.",
+                provider_name,
+                status["seconds_until_recovery"],
+            )
+            errors.append(
+                f"{provider_name}: skipped (cooldown "
+                f"{status['seconds_until_recovery']}s remaining)"
+            )
+            continue
+
+        try:
+            provider = get_provider(provider_name)
+        except (ValueError, RuntimeError) as exc:
+            logger.warning(
+                "Cannot load provider '%s': %s — skipping.", provider_name, exc
+            )
+            errors.append(f"{provider_name}: load error — {exc}")
+            continue
+
+        last_exc: Optional[Exception] = None
+
+        for attempt in range(retry_attempts):
+            if attempt > 0:
+                delay = base_backoff * (2 ** (attempt - 1))
+                logger.info(
+                    "Retry %d/%d for provider '%s' after %.1fs back-off.",
+                    attempt,
+                    retry_attempts - 1,
+                    provider_name,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+            try:
+                if asyncio.iscoroutinefunction(invoke_fn):
+                    result = await invoke_fn(provider)
+                else:
+                    result = invoke_fn(provider)
+
+                tracker.record_success(provider_name)
+                logger.info(
+                    "Provider '%s' succeeded on attempt %d.",
+                    provider_name,
+                    attempt + 1,
+                )
+                return result
+
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                logger.warning(
+                    "Provider '%s' attempt %d/%d failed: %s",
+                    provider_name,
+                    attempt + 1,
+                    retry_attempts,
+                    exc,
+                )
+
+        # All retry attempts for this provider exhausted
+        tracker.record_failure(provider_name)
+        errors.append(
+            f"{provider_name}: all {retry_attempts} attempts failed — "
+            f"{last_exc}"
+        )
+        logger.error(
+            "Provider '%s' exhausted all %d attempt(s). Moving to next in chain.",
+            provider_name,
+            retry_attempts,
+        )
+
+    raise RuntimeError(
+        "All providers in the fallback chain failed or were unavailable.\n"
+        + "\n".join(f"  • {e}" for e in errors)
+    )
 
 
 # ---------------------------------------------------------------------------
