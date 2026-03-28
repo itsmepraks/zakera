@@ -1,228 +1,83 @@
 # Changelog
 
-All notable changes to the Zakera project will be documented in this file.
+All notable changes to Zakera are documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+---
 
 ## [Unreleased]
 
-### Planned Features (Roadmap)
-- Voice input/output support
-- Multi-language support
-- Plugin marketplace
-- Cloud deployment templates (AWS, GCP, Azure)
-- Mobile app (React Native)
-- Enterprise SSO integration
-- Advanced RAG (Retrieval-Augmented Generation)
-- Fine-tuning support
-
----
-
-## [0.9.0] - 2026-03-22
-
 ### Added
 
-#### Token Usage & Cost Breakdown (Backend)
-- **New endpoint** `GET /api/v1/conversations/{conversation_id}/token-usage` that returns a
-  detailed JSON breakdown of every conversation's token consumption and estimated USD cost.
-- **Built-in pricing table** covering 30+ models across OpenAI (GPT-4o, o1, o3-mini…),
-  Anthropic (Claude 3.5 Sonnet/Haiku, Opus…), Google Gemini (1.5 Pro/Flash, 2.0 Flash),
-  Groq, Mistral, DeepSeek, and xAI Grok. Local/Ollama models report zero cost.
-- **Response schema** (`TokenUsageResponse`) includes:
-  - Aggregate `total_tokens`, `prompt_tokens`, `completion_tokens`, `estimated_cost_usd`
-  - `by_role` breakdown (user / assistant / system / tool) with per-role token count and cost
-  - `by_provider` breakdown when a conversation uses messages from multiple model providers
-  - `message_timeline` — per-message token detail ordered by `created_at`
-  - `avg_user_tokens_per_message` and `avg_assistant_tokens_per_message`
-  - `pricing_info` snapshot (prompt/completion per-1k USD) and `pricing_provider` used for estimates
-- Endpoint is auth-protected (JWT); returns 404 for conversations not owned by the requester
-  or soft-deleted conversations.
-- Model pricing resolves via exact match → prefix/substring match → zero-cost fallback so
-  versioned model aliases (e.g. `gpt-4-turbo-preview-2024-04-09`) resolve correctly.
+#### Backend — Meta Llama 3 Provider (`src/model/providers_llama3.py`)
+- New `LlamaProvider` class that routes Llama 3 requests through the
+  **Groq inference API**, consistent with the existing
+  `providers_groq.py` / `providers_deepseek.py` architecture.
+- Supports three model variants:
+  | Model ID | Context | Notes |
+  |---|---|---|
+  | `llama3-8b-8192` | 8 192 tokens | Fast, low-cost |
+  | `llama3-70b-8192` | 8 192 tokens | High-capability |
+  | `llama-3.1-405b-reasoning` | 131 072 tokens | State-of-the-art reasoning |
+- Async `chat()` method returns a typed `LlamaResponse` dataclass
+  with content, usage stats, tool calls, latency, and estimated cost.
+- Async `stream()` generator yields content deltas via SSE,
+  terminating cleanly on `[DONE]`.
+- **Function / tool calling** support via OpenAI-compatible tool
+  definitions (matches Groq API schema).
+- Exponential back-off retry (3 attempts by default) on 429 and 5xx
+  responses; 4xx client errors raise immediately.
+- `create_llama_provider()` factory wired into the provider registry.
 
-#### TokenUsageBadge (Frontend)
-- **New `<TokenUsageBadge>`** React/TypeScript component (`src/frontend/components/TokenUsageBadge.tsx`)
-  that renders a colour-coded pill in the chat header showing live token count and estimated cost.
-- Auto-refreshes every 30 s (configurable via `refreshInterval` prop) while the chat is open.
-- Expands into a **popover breakdown table** (per-role: user / assistant / system) on click.
-- **Three cost tiers** driven by Tailwind CSS:
-  - 🟢 Green (< $0.01) — free/very cheap (local models, short conversations)
-  - 🟡 Amber ($0.01–$0.10) — moderate spend
-  - 🔴 Red (≥ $0.10) — significant spend, prompts user awareness
-- Handles loading skeleton, API error state (click-to-retry), and zero-cost local model
-  conversations gracefully.
-- Props: `conversationId`, `authToken`, optional `refreshInterval`, optional `className`.
+#### Frontend — SettingsPanel Component (`src/frontend/components/`)
+- New **`SettingsPanel.tsx`** slide-in drawer for user preferences:
+  - **Appearance** — light / dark / system theme toggle.
+  - **Model Defaults** — temperature slider (0–2), max tokens input,
+    top-p slider, streaming on/off toggle.
+  - **Memory & Context** — context window size slider, FAISS vector
+    search toggle, auto-summarise threshold, include-summary toggle.
+  - **API & Providers** — active provider badge with colour coding,
+    masked API key preview.
+  - **Danger Zone** — two-step confirmation for "Clear history" and
+    "Reset settings" to prevent accidental data loss.
+- Fully **accessible**: `role="dialog"`, `aria-modal`, focus-trap,
+  Esc-to-close, visible focus rings on all interactive elements.
+- All state lifted via `onSettingsChange` callback so parents can
+  persist prefs to `localStorage` or `POST /api/v1/settings`.
+- Typed exports: `ZakeraSettings`, `ModelSettings`, `MemorySettings`,
+  `Theme`, `DEFAULT_SETTINGS` for easy integration.
+- New **`SettingsPanel.module.css`**:
+  - CSS custom properties aligned with existing Tailwind colour palette.
+  - Smooth 300 ms `cubic-bezier` slide animation.
+  - Responsive: full-screen on mobile (≤ 640 px), fixed 480 px on desktop.
+  - Dark-mode via `prefers-color-scheme` **and** `.dark` class.
 
-#### Testing
-- **`tests/test_token_usage.py`** — 10 new pytest test cases covering:
-  - Happy path: correct total/prompt/completion token counts and non-zero cost for paid models
-  - Multi-model conversation: messages attributed to different providers appear in `by_provider`
-  - Zero-cost local/Ollama conversation: `estimated_cost_usd` is exactly 0.0
-  - Empty conversation: all numeric fields are 0, no timeline entries
-  - 404 for non-existent / soft-deleted / cross-user conversation
-  - 401 on missing Authorization header
-  - Average tokens per role are computed correctly
-  - Pricing helper unit tests: exact match, prefix/alias match, Ollama keyword, unknown model
-
-### Changed
-- Version bumped `0.8.0` → `0.9.0`.
-- `[Unreleased]` section reset; this sprint's items moved into the `[0.9.0]` entry above.
-
----
-
-## [0.8.0] - 2026-03-17
-
-### Added
-
-#### Conversation Export
-- **Streaming Export API** (`GET /api/v1/export/conversations/{id}`): stream a single conversation in JSON, Markdown, or CSV format as NDJSON with real-time progress events
-- **Bulk Export API** (`POST /api/v1/export/conversations/bulk`): export up to 50 conversations in one streamed NDJSON response with per-page progress for the UI progress bar
-- **Export Schemas** (`src/api/schemas/export.py`): `ExportFormat`, `ExportOptions`, `BulkExportRequest`, `ExportProgress`, `ExportDataChunk`, `ExportComplete`, `ExportError`, `ExportHistoryItem`
-- **Export history and status endpoints**: `GET /api/v1/export/exports/history`, `GET /api/v1/export/conversations/{id}/export/status/{export_id}`
-- **gzip compression** support via `compress=true` query parameter
-- **Date-range filtering** via `date_from` / `date_to` query parameters
-- **Content-Disposition** headers with timestamped filenames for each format
-- Streaming metrics recorded via `metrics_collector` for export counts and failures
-
-#### Message Reactions & Chat UI
-- **Message reactions system**: users can add emoji reactions (👍 👎 ❤️ 😂 😮) to any chat message
-- **Reaction counts**: real-time aggregated reaction counts shown below each message
-- **Toggle behaviour**: clicking a reaction the user already added removes it
-- **Improved `ChatMessage` component**: cleaner layout, better typography, monospace code blocks with syntax highlighting
-- **Assistant message actions**: copy-to-clipboard, regenerate, and reactions toolbar appear on hover
-- **User message edit**: inline edit flow for user messages without leaving the conversation
-- **Animated message entrance**: subtle fade-in animation for new messages arriving in the stream
-- **Streaming cursor indicator**: blinking cursor shown while the assistant is still generating
-
-#### Testing
-- **Integration test suite for Export API** (`tests/integration/test_export_api.py`): 30+ test cases covering:
-  - Authentication and authorization (unauthenticated, wrong-user cross-access)
-  - All three export formats (JSON, Markdown, CSV) for both single and bulk endpoints
-  - Response header assertions (Content-Disposition, X-Export-Format, Cache-Control)
-  - Compressed export (`.gz` filename)
-  - Bulk export response headers and stream event shape (`bulk_complete`)
-  - Rate-limit enforcement and window-reset behaviour
-  - Edge cases: soft-deleted conversation, non-existent ID, empty conversation, long conversation progress events, mid-stream service errors, >50 IDs rejection, duplicate ID deduplication
-
-### Changed
-- `[Unreleased]` section cleaned up; routine maintenance notes moved into versioned release entry
-- Version bumped from `0.7.0` → `0.8.0` to reflect the new features shipped in this sprint
-
-### Fixed
-- Export rate-limit log now correctly prunes timestamps older than the rolling window before evaluating the limit, preventing false positives after idle periods
+#### Tests — Llama 3 Provider Suite (`tests/test_providers_llama3.py`)
+- **35 + test cases** covering:
+  - Provider instantiation guards (empty key, unknown model).
+  - `list_models()` and `get_model_info()` catalogue validation.
+  - Successful non-streaming chat (mocked `httpx`).
+  - Temperature, max-tokens, top-p, system-prompt, stop-sequence
+    passthrough verification.
+  - Token usage extraction and cost estimation accuracy.
+  - Latency field population.
+  - Streaming SSE delta accumulation, `[DONE]` termination, and
+    malformed-chunk resilience.
+  - Tool / function call response parsing.
+  - Tools payload forwarding including `tool_choice`.
+  - Retry on 429 → eventual success.
+  - RuntimeError after max-retry exhaustion.
+  - Immediate raise on 4xx client errors (no retry).
+  - `close()` lifecycle method.
+  - `create_llama_provider()` factory.
+- Mirrors the structure of `test_providers_groq.py` and
+  `test_deepseek_provider.py` for navigation consistency.
 
 ---
 
-## [0.5.0] - 2026-02-14
+## Previous releases
 
-### Project Status
-Current release is production-ready with comprehensive features for AI chat agents, enterprise monitoring, and multi-provider LLM support.
-
-### Added
-- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google Gemini, Ollama, HuggingFace integration
-- **Local Model Support**: Run Llama 3, Mistral, CodeLlama locally with zero API costs
-- **Conversation Memory System**: Context-aware multi-turn conversations with efficient memory management
-- **Tool Integration System**: Extensible tool framework with built-in tools and custom tool support
-- **Enterprise Monitoring Stack**:
-  - 50+ Prometheus metrics for comprehensive observability
-  - Grafana dashboards for visualization
-  - Structured JSON logging with correlation IDs
-  - Alert system (Email, Slack, Discord notifications)
-- **RESTful & WebSocket APIs**: FastAPI-based endpoints for all integration scenarios
-- **Modern React Frontend**: TypeScript-based UI with tool system integration
-- **Authentication**: JWT-based secure authentication system
-- **Health Checks**: Kubernetes-ready liveness and readiness probes
-- **Rate Limiting**: Configurable limits per user and endpoint
-- **Database Integration**: SQLAlchemy-backed persistent storage for conversations and preferences
-- **Docker Support**: Containerization with Docker and docker-compose configurations
-- **Comprehensive Testing**: 50+ test cases covering all major components
-- **CI/CD Pipeline**: GitHub Actions workflows for automated testing and deployment
-- **Make Commands**: Build automation with extensive Makefile targets
-- **Documentation**:
-  - API documentation with Swagger UI and ReDoc
-  - Local models setup guide
-  - Monitoring and observability guide
-  - Tool development guide
-  - Configuration and deployment guides
-  - Multiple comprehensive summary documents
-
-### Features Highlights
-- **Smart Fallback**: Automatic fallback between providers for enhanced reliability
-- **Performance Tracking**: Execution time monitoring and profiling
-- **Real-time Streaming**: Streaming responses from all LLM providers
-- **Model Cost Tracking**: Track and optimize model usage costs
-- **Tool Caching**: Parallel execution with intelligent caching
-- **Custom Prompts**: Flexible prompt template system
-- **Analytics**: Usage tracking and insights
-- **Conversation Branching**: Version control for conversation flows
-
-### Infrastructure
-- **Monitoring Stack**: Prometheus, Grafana, AlertManager integration
-- **Database**: SQLite/PostgreSQL support with Alembic migrations
-- **Deployment**: Kubernetes manifests and Terraform configurations
-- **Development Tools**: Comprehensive linting (flake8), formatting, and type checking (mypy)
-
-### Documentation
-- README with quick start and comprehensive guides
-- API reference documentation
-- Local models setup instructions
-- Monitoring and observability guide
-- Contributing guidelines
-- Multiple implementation summaries
-- Test coverage reports
-
-### Performance Benchmarks
-- GPT-4 Turbo: ~40 tokens/sec, 2.5s p95 latency
-- Claude 3 Sonnet: ~35 tokens/sec, 2.8s p95 latency
-- Llama 3 8B (Local): ~25 tokens/sec, 1.2s p95 latency
-- Mistral 7B (Local): ~30 tokens/sec, 0.9s p95 latency
-
-### Security
-- JWT authentication
-- API key encryption
-- Rate limiting
-- CORS configuration
-- SQL injection protection
-- Input validation
-- Secure password hashing
-
----
-
-## Version History Summary
-
-### 0.9.0 (Current) - Token Usage & Cost Breakdown
-New `GET /api/v1/conversations/{id}/token-usage` endpoint, `TokenUsageBadge` frontend component,
-and 10 new pytest test cases. Pricing table covers 30+ models across 8 providers.
-
-### 0.8.0 - Export, Reactions & Test Coverage
-Streaming conversation export (JSON/CSV/Markdown), message reactions UI, improved chat components, comprehensive integration test suite for the export API.
-
-### 0.5.0 - Production-Ready Release
-Complete AI chat agent system with enterprise features, monitoring, and multi-provider support.
-
----
-
-## Contributing
-
-When making changes to this project, please:
-1. Update the [Unreleased] section with your changes
-2. Categorize changes under appropriate headers:
-   - `Added` for new features
-   - `Changed` for changes in existing functionality
-   - `Deprecated` for soon-to-be removed features
-   - `Removed` for now removed features
-   - `Fixed` for any bug fixes
-   - `Security` for vulnerability fixes
-
-## Links
-- [Project Repository](https://github.com/itsmepraks/zakera)
-- [Documentation](docs/)
-- [Contributing Guidelines](CONTRIBUTING.md)
-- [License](LICENSE)
-
----
-
-**Maintained by**: Prakriti Bista  
-**Website**: https://praks.me  
-**License**: MIT
+> See `COMPLETE_MARCH_2026_RELEASES.md`, `MARCH_2026_FEATURE_RELEASES.md`,
+> and `MARCH_2026_PROGRESS.md` for the full history of March 2026 releases
+> covering conversation templates, enhanced memory, vector search, security
+> hardening, CI/CD pipelines, and multi-provider benchmarking.
