@@ -1,230 +1,138 @@
-/**
- * useTypingIndicator
- *
- * A React hook that tracks typing presence for a conversation over WebSocket.
- *
- * Features:
- *  - Listens for "typing_start" and "typing_stop" events from the server.
- *  - Exposes `sendTypingEvent(isTyping)` so the local user can broadcast
- *    their own typing status.
- *  - Automatically sends a "typing_stop" event after 2 000 ms of inactivity
- *    (debounced via useEffect cleanup).
- *  - Cleans up listeners and pending timers on unmount or conversation change.
- *
- * Usage:
- *   const { isTyping, typingUsers, sendTypingEvent } = useTypingIndicator(
- *     wsRef,
- *     conversationId,
- *   );
- */
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Shape of a WebSocket typing event sent/received over the wire. */
 interface TypingEvent {
-  type: 'typing_start' | 'typing_stop';
+  type: "typing_start" | "typing_stop";
   conversationId: string;
   userId: string;
-  username?: string;
+  userName?: string;
 }
 
-/** Return value of the hook. */
-export interface UseTypingIndicatorReturn {
-  /** True when at least one remote user is currently typing. */
+interface UseTypingIndicatorOptions {
+  /** Milliseconds of inactivity before a "typing_stop" is auto-sent. */
+  debounceMs?: number;
+}
+
+interface UseTypingIndicatorReturn {
+  /** Whether any remote participant is currently typing. */
   isTyping: boolean;
-  /** Display names (or user IDs) of everyone currently typing. */
+  /** Display names / IDs of users currently typing. */
   typingUsers: string[];
   /**
-   * Call with `true` when the local user starts typing and `false` when they
-   * stop.  The hook debounces the stop event internally so callers can simply
-   * invoke this on every keystroke.
+   * Call this whenever the local user's input changes.
+   * Pass `true` when they start typing, `false` when they stop.
    */
   sendTypingEvent: (typing: boolean) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Milliseconds to wait before auto-sending a "typing_stop" event. */
-const STOP_DEBOUNCE_MS = 2_000;
-
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
-
 /**
- * Manage real-time typing indicators for a single conversation.
+ * useTypingIndicator
  *
- * @param wsRef          - A React ref whose `.current` holds the active
- *                         `WebSocket` instance (or `null` when disconnected).
- * @param conversationId - The ID of the conversation to scope events to.
- *                         The hook re-initialises whenever this changes.
- * @param currentUserId  - The local user's ID, used to filter out self-echo.
- *                         Defaults to an empty string (no filtering).
+ * Manages real-time typing presence over an existing WebSocket connection.
+ * Listens for `typing_start` / `typing_stop` events from remote participants
+ * and broadcasts the local user's own typing status with automatic debouncing.
+ *
+ * @example
+ * ```tsx
+ * const wsRef = useRef<WebSocket | null>(null);
+ * const { isTyping, typingUsers, sendTypingEvent } = useTypingIndicator(wsRef, conversationId);
+ *
+ * <input onChange={() => sendTypingEvent(true)} onBlur={() => sendTypingEvent(false)} />
+ * {isTyping && <TypingBubble users={typingUsers} />}
+ * ```
  */
 export function useTypingIndicator(
   wsRef: React.RefObject<WebSocket | null>,
   conversationId: string,
-  currentUserId = '',
+  { debounceMs = 2000 }: UseTypingIndicatorOptions = {}
 ): UseTypingIndicatorReturn {
-  // Set of user identifiers currently typing (userId → display label).
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLocallyTyping = useRef(false);
 
-  // Derived convenience flag.
-  const isTyping = typingUsers.length > 0;
-
-  // Ref for the debounce timer so we can cancel it across renders.
-  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Track whether we have already sent a "typing_start" to avoid redundant
-  // messages on every single keystroke.
-  const isBroadcastingRef = useRef(false);
-
-  // -------------------------------------------------------------------------
-  // Helper — send a raw event over the WebSocket if it is open.
-  // -------------------------------------------------------------------------
-  const sendRaw = useCallback(
-    (eventType: TypingEvent['type']) => {
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-      const payload: TypingEvent = {
-        type: eventType,
-        conversationId,
-        userId: currentUserId,
-      };
-
-      ws.send(JSON.stringify(payload));
-    },
-    [wsRef, conversationId, currentUserId],
-  );
-
-  // -------------------------------------------------------------------------
-  // Public API — sendTypingEvent
-  // -------------------------------------------------------------------------
-  const sendTypingEvent = useCallback(
-    (typing: boolean) => {
-      if (typing) {
-        // Only broadcast "typing_start" if we are not already flagged as typing.
-        if (!isBroadcastingRef.current) {
-          sendRaw('typing_start');
-          isBroadcastingRef.current = true;
-        }
-
-        // Reset the auto-stop debounce timer on every keystroke.
-        if (stopTimerRef.current !== null) {
-          clearTimeout(stopTimerRef.current);
-        }
-
-        stopTimerRef.current = setTimeout(() => {
-          sendRaw('typing_stop');
-          isBroadcastingRef.current = false;
-          stopTimerRef.current = null;
-        }, STOP_DEBOUNCE_MS);
-      } else {
-        // Explicit stop — cancel any pending debounce and send immediately.
-        if (stopTimerRef.current !== null) {
-          clearTimeout(stopTimerRef.current);
-          stopTimerRef.current = null;
-        }
-
-        if (isBroadcastingRef.current) {
-          sendRaw('typing_stop');
-          isBroadcastingRef.current = false;
-        }
-      }
-    },
-    [sendRaw],
-  );
-
-  // -------------------------------------------------------------------------
-  // WebSocket message listener
-  // -------------------------------------------------------------------------
+  // ── Handle incoming WebSocket messages ─────────────────────────────────────
   useEffect(() => {
     const ws = wsRef.current;
     if (!ws) return;
 
     const handleMessage = (event: MessageEvent) => {
-      let data: unknown;
-
+      let data: TypingEvent;
       try {
-        data = JSON.parse(event.data as string);
+        data = JSON.parse(event.data as string) as TypingEvent;
       } catch {
-        // Not JSON — ignore.
         return;
       }
 
-      const payload = data as Partial<TypingEvent>;
+      if (data.conversationId !== conversationId) return;
+      if (data.type !== "typing_start" && data.type !== "typing_stop") return;
 
-      // Only handle typing events for the current conversation.
-      if (
-        payload.conversationId !== conversationId ||
-        (payload.type !== 'typing_start' && payload.type !== 'typing_stop')
-      ) {
-        return;
+      const identifier = data.userName ?? data.userId;
+
+      setTypingUsers((prev) => {
+        if (data.type === "typing_start") {
+          return prev.includes(identifier) ? prev : [...prev, identifier];
+        }
+        // typing_stop
+        return prev.filter((u) => u !== identifier);
+      });
+    };
+
+    ws.addEventListener("message", handleMessage);
+    return () => ws.removeEventListener("message", handleMessage);
+  }, [wsRef, conversationId]);
+
+  // ── Send local typing events ────────────────────────────────────────────────
+  const sendTypingEvent = useCallback(
+    (typing: boolean) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      // Clear any pending auto-stop timer.
+      if (debounceTimer.current !== null) {
+        clearTimeout(debounceTimer.current);
+        debounceTimer.current = null;
       }
 
-      const senderId = payload.userId ?? '';
+      if (typing) {
+        if (!isLocallyTyping.current) {
+          isLocallyTyping.current = true;
+          ws.send(
+            JSON.stringify({ type: "typing_start", conversationId })
+          );
+        }
 
-      // Filter out events echoed back from the local user.
-      if (currentUserId && senderId === currentUserId) return;
-
-      const displayName = payload.username ?? senderId;
-
-      if (payload.type === 'typing_start') {
-        setTypingUsers((prev) =>
-          prev.includes(displayName) ? prev : [...prev, displayName],
-        );
+        // Auto-stop after debounceMs of no further calls.
+        debounceTimer.current = setTimeout(() => {
+          isLocallyTyping.current = false;
+          ws?.send(
+            JSON.stringify({ type: "typing_stop", conversationId })
+          );
+        }, debounceMs);
       } else {
-        setTypingUsers((prev) => prev.filter((u) => u !== displayName));
+        if (isLocallyTyping.current) {
+          isLocallyTyping.current = false;
+          ws.send(
+            JSON.stringify({ type: "typing_stop", conversationId })
+          );
+        }
       }
-    };
+    },
+    [wsRef, conversationId, debounceMs]
+  );
 
-    ws.addEventListener('message', handleMessage);
-
-    return () => {
-      ws.removeEventListener('message', handleMessage);
-    };
-  }, [wsRef, conversationId, currentUserId]);
-
-  // -------------------------------------------------------------------------
-  // Reset state when the active conversation changes.
-  // -------------------------------------------------------------------------
-  useEffect(() => {
-    setTypingUsers([]);
-    isBroadcastingRef.current = false;
-
-    // Cancel any pending stop timer from the previous conversation.
-    if (stopTimerRef.current !== null) {
-      clearTimeout(stopTimerRef.current);
-      stopTimerRef.current = null;
-    }
-
-    // Send an explicit stop in case we were mid-broadcast when the user
-    // switched conversations.
-    sendRaw('typing_stop');
-  }, [conversationId, sendRaw]);
-
-  // -------------------------------------------------------------------------
-  // Cleanup on unmount.
-  // -------------------------------------------------------------------------
+  // ── Cleanup on unmount ──────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (stopTimerRef.current !== null) {
-        clearTimeout(stopTimerRef.current);
-      }
-      if (isBroadcastingRef.current) {
-        sendRaw('typing_stop');
-        isBroadcastingRef.current = false;
+      if (debounceTimer.current !== null) {
+        clearTimeout(debounceTimer.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { isTyping, typingUsers, sendTypingEvent };
+  return {
+    isTyping: typingUsers.length > 0,
+    typingUsers,
+    sendTypingEvent,
+  };
 }
+
+export default useTypingIndicator;
