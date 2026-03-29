@@ -722,263 +722,108 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
 
 
 # ---------------------------------------------------------------------------
-# ConversationSummarizer
+# Conversation Summarizer  (added: automatic context compression)
 # ---------------------------------------------------------------------------
 
 
 class ConversationSummarizer:
-    """
-    Standalone utility for automatic context compression via LLM-driven
-    conversation summarization.
+    """Automatically compresses long conversation histories into a summary.
 
-    This class complements ``EnhancedConversationMemory`` by providing a
-    high-level async interface that:
-
-    1. Inspects a message list and counts its tokens.
-    2. Triggers summarization only when the token count exceeds
-       ``max_tokens_threshold``.
-    3. Delegates to the injected LLM provider for abstractive summary
-       generation, falling back to an extractive heuristic when no provider
-       is available.
+    When the total token count of a conversation exceeds *max_tokens*, this
+    helper produces a concise summary so the active context window stays
+    within model limits while preserving key information.
 
     Usage::
 
-        summarizer = ConversationSummarizer(
-            provider=my_openai_provider,
-            max_tokens_threshold=3000,
-            model="gpt-4",
-        )
-
+        summarizer = ConversationSummarizer(model_manager, max_tokens=2000)
         compressed = await summarizer.summarize_if_needed(messages)
-        # `compressed` is either the original list (under threshold) or a
-        # condensed list with a summary injected as the first system message.
     """
+
+    DEFAULT_MAX_TOKENS: int = 2000
+    SUMMARY_SYSTEM_PROMPT: str = (
+        "You are a precise conversation summarizer. "
+        "Produce a concise, factual summary that preserves all important "
+        "decisions, facts, user preferences, and open questions. "
+        "Write in third-person past tense. Be brief."
+    )
 
     def __init__(
         self,
-        provider: Optional[Any] = None,
-        max_tokens_threshold: int = 2000,
-        model: str = "gpt-4",
-        summary_max_tokens: int = 300,
-        summary_temperature: float = 0.3,
-        preserve_last_n_turns: int = 4,
+        model_manager: Any,
+        *,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        summary_model: str | None = None,
     ) -> None:
-        """
-        Initialise the summarizer.
+        self._model_manager = model_manager
+        self.max_tokens = max_tokens
+        self._summary_model = summary_model  # None → use default model
 
-        Args:
-            provider: An async LLM provider instance that exposes a
-                ``generate(messages, max_tokens, temperature)`` coroutine.
-                If ``None``, an extractive fallback is used.
-            max_tokens_threshold: Token count above which summarization is
-                triggered.  Defaults to ``2000``.
-            model: Tiktoken model name used for token counting.
-            summary_max_tokens: Maximum tokens the LLM may use for the
-                generated summary.
-            summary_temperature: Sampling temperature for summary generation
-                (lower = more deterministic).
-            preserve_last_n_turns: Number of recent turns to always keep
-                verbatim at the end of the compressed message list.
-        """
-        self.provider = provider
-        self.max_tokens_threshold = max_tokens_threshold
-        self.summary_max_tokens = summary_max_tokens
-        self.summary_temperature = summary_temperature
-        self.preserve_last_n_turns = preserve_last_n_turns
-
-        try:
-            self._encoding = tiktoken.encoding_for_model(model)
-        except KeyError:
-            self._encoding = tiktoken.get_encoding("cl100k_base")
-
-    # ------------------------------------------------------------------ #
-    # Token counting                                                       #
-    # ------------------------------------------------------------------ #
-
-    def _count_tokens(self, messages: List[Dict[str, str]]) -> int:
-        """
-        Estimate token consumption for a list of chat messages.
-
-        Applies the standard OpenAI per-message overhead (4 tokens per
-        message) plus 2 priming tokens so estimates are consistent with
-        ``tiktoken`` chat-completion accounting.
-
-        Args:
-            messages: List of ``{"role": ..., "content": ...}`` dicts.
-
-        Returns:
-            Estimated total token count.
-        """
-        total = 2  # priming tokens
-        for msg in messages:
-            total += 4  # per-message overhead
-            for value in msg.values():
-                total += len(self._encoding.encode(str(value)))
-        return total
-
-    # ------------------------------------------------------------------ #
-    # Prompt construction                                                  #
-    # ------------------------------------------------------------------ #
-
-    def _build_summary_prompt(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Build the instruction prompt sent to the LLM for summarization.
-
-        The prompt instructs the model to produce a concise, neutral-voice
-        summary that preserves decisions, preferences, and factual details
-        while discarding filler.
-
-        Args:
-            messages: The conversation slice to be summarized (system
-                      messages are excluded from the transcript body).
-
-        Returns:
-            A single string containing the full summarization prompt.
-        """
-        # Exclude system messages from the transcript body; include only
-        # the human/assistant dialogue turns for clarity.
-        dialogue_lines: List[str] = []
-        for msg in messages:
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
-            if role == "system":
-                continue
-            label = "User" if role == "user" else "Assistant"
-            dialogue_lines.append(f"{label}: {content}")
-
-        transcript = "\n".join(dialogue_lines)
-
-        return (
-            "You are a precise conversation summarizer. "
-            "Summarize the following conversation excerpt in 3–5 sentences. "
-            "Preserve: key decisions, user preferences, important facts, and "
-            "any unresolved questions. Omit greetings and filler.\n\n"
-            f"--- Conversation ---\n{transcript}\n--- End ---\n\n"
-            "Summary:"
-        )
-
-    # ------------------------------------------------------------------ #
-    # Summarization helpers                                                #
-    # ------------------------------------------------------------------ #
-
-    async def _summarize_with_llm(self, messages: List[Dict[str, str]]) -> str:
-        """
-        Request an abstractive summary from the configured LLM provider.
-
-        Falls back to ``_extractive_summary`` on any error or if no
-        provider has been configured.
-
-        Args:
-            messages: The conversation slice to summarize.
-
-        Returns:
-            A summary string.
-        """
-        if self.provider is None:
-            return self._extractive_summary(messages)
-
-        prompt = self._build_summary_prompt(messages)
-        try:
-            response = await self.provider.generate(
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=self.summary_max_tokens,
-                temperature=self.summary_temperature,
-            )
-            summary = response.get("content", "").strip()
-            if summary:
-                return summary
-        except Exception as exc:  # noqa: BLE001
-            # Log but do not raise — fall through to extractive fallback.
-            import logging
-            logging.getLogger(__name__).warning(
-                "ConversationSummarizer LLM call failed (%s); using extractive fallback.",
-                exc,
-            )
-
-        return self._extractive_summary(messages)
-
-    @staticmethod
-    def _extractive_summary(messages: List[Dict[str, str]]) -> str:
-        """
-        Build a lightweight extractive summary when no LLM is available.
-
-        Picks the first sentence of each user turn (up to five turns) and
-        wraps them in a compact summary string.
-
-        Args:
-            messages: The conversation slice to summarize.
-
-        Returns:
-            A plain-text extractive summary.
-        """
-        snippets: List[str] = []
-        for msg in messages:
-            if msg.get("role") == "user":
-                content = msg.get("content", "")
-                # Take up to the first 120 characters / first sentence.
-                first_sentence = content.split(".")[0][:120].strip()
-                if first_sentence:
-                    snippets.append(first_sentence)
-            if len(snippets) >= 5:
-                break
-
-        if not snippets:
-            return "Earlier conversation context has been compressed."
-
-        joined = "; ".join(snippets)
-        return f"[Summary of earlier context] The user discussed: {joined}."
-
-    # ------------------------------------------------------------------ #
-    # Public API                                                           #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def summarize_if_needed(
         self,
-        messages: List[Dict[str, str]],
-    ) -> List[Dict[str, str]]:
+        messages: list[dict[str, str]],
+    ) -> list[dict[str, str]]:
+        """Return messages, compressing history if token budget exceeded.
+
+        If the estimated token count is within budget the original list is
+        returned unchanged.  Otherwise a single *system* message containing
+        the summary replaces all but the most recent exchange.
         """
-        Return a token-optimised version of *messages*.
-
-        If the total token count is at or below ``max_tokens_threshold``,
-        the original list is returned unchanged.  Otherwise the method:
-
-        1. Splits the list into an *older* slice (everything except the
-           last ``preserve_last_n_turns`` turns) and a *recent* slice.
-        2. Generates a summary of the older slice via the LLM provider.
-        3. Returns ``[system_summary_msg] + recent_slice``.
-
-        Args:
-            messages: Full conversation message list in
-                      ``[{"role": ..., "content": ...}]`` format.
-
-        Returns:
-            The original list if under threshold, or a compressed list
-            consisting of a summary system message followed by the most
-            recent turns.
-        """
-        token_count = self._count_tokens(messages)
-
-        if token_count <= self.max_tokens_threshold:
-            # Nothing to do — return as-is.
+        if not self._exceeds_budget(messages):
             return messages
 
-        # Separate system setup messages from dialogue turns.
-        system_msgs = [m for m in messages if m.get("role") == "system"]
-        dialogue_msgs = [m for m in messages if m.get("role") != "system"]
+        # Keep the latest user+assistant pair intact for continuity.
+        tail = messages[-2:] if len(messages) >= 2 else messages[-1:]
+        history_to_summarise = messages[: len(messages) - len(tail)]
 
-        # Guard: if there's nothing to compress, bail out.
-        if len(dialogue_msgs) <= self.preserve_last_n_turns:
-            return messages
-
-        older_slice = dialogue_msgs[: -self.preserve_last_n_turns]
-        recent_slice = dialogue_msgs[-self.preserve_last_n_turns :]
-
-        summary_text = await self._summarize_with_llm(older_slice)
-
-        summary_msg: Dict[str, str] = {
+        summary_text = await self._summarize(history_to_summarise)
+        summary_message = {
             "role": "system",
             "content": f"[Conversation summary]\n{summary_text}",
         }
+        return [summary_message, *tail]
 
-        # Reconstruct: original system prompts → summary → recent turns.
-        return system_msgs + [summary_msg] + recent_slice
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _exceeds_budget(self, messages: list[dict[str, str]]) -> bool:
+        """Rough token estimate: 1 token ≈ 4 characters."""
+        total_chars = sum(len(m.get("content", "")) for m in messages)
+        estimated_tokens = total_chars // 4
+        return estimated_tokens > self.max_tokens
+
+    def _build_summary_prompt(
+        self, messages: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
+        transcript_lines = [
+            f"{m['role'].upper()}: {m.get('content', '')}" for m in messages
+        ]
+        transcript = "\n".join(transcript_lines)
+        return [
+            {
+                "role": "user",
+                "content": (
+                    "Please summarize the following conversation:\n\n"
+                    f"{transcript}\n\n"
+                    "Provide a concise summary that captures all key points."
+                ),
+            }
+        ]
+
+    async def _summarize(self, messages: list[dict[str, str]]) -> str:
+        """Call the model manager to produce a summary string."""
+        prompt = self._build_summary_prompt(messages)
+        kwargs: dict[str, Any] = dict(
+            messages=prompt,
+            system_prompt=self.SUMMARY_SYSTEM_PROMPT,
+            temperature=0.3,
+            max_tokens=512,
+        )
+        if self._summary_model:
+            kwargs["model"] = self._summary_model
+        response = await self._model_manager.generate(**kwargs)
+        return response.content if hasattr(response, "content") else str(response)
