@@ -16,24 +16,25 @@ from typing import Dict, Type
 
 PROVIDER_REGISTRY: Dict[str, str] = {
     # key → fully qualified class path
-    "openai": "src.model.providers.openai_provider.OpenAIProvider",
-    "anthropic": "src.model.providers_anthropic.AnthropicProvider",
-    "gemini": "src.model.providers_gemini.GeminiProvider",
-    "gemini2": "src.model.providers_gemini2.Gemini2Provider",
-    "gemini_flash": "src.model.providers.gemini_flash.GeminiFlashProvider",
-    "groq": "src.model.providers_groq.GroqProvider",
-    "mistral": "src.model.providers_mistral.MistralProvider",
+    "openai":        "src.model.providers.openai_provider.OpenAIProvider",
+    "anthropic":     "src.model.providers_anthropic.AnthropicProvider",
+    "gemini":        "src.model.providers_gemini.GeminiProvider",
+    "gemini2":       "src.model.providers_gemini2.Gemini2Provider",
+    "gemini_flash":  "src.model.providers.gemini_flash.GeminiFlashProvider",
+    "groq":          "src.model.providers_groq.GroqProvider",
+    "mistral":       "src.model.providers_mistral.MistralProvider",
     "mistral_large": "src.model.providers.mistral_large.MistralLargeProvider",
-    "deepseek": "src.model.providers_deepseek.DeepSeekProvider",
-    "cohere": "src.model.providers_cohere.CohereProvider",
-    "together": "src.model.providers_together.TogetherProvider",
-    "openrouter": "src.model.providers_openrouter.OpenRouterProvider",
-    "perplexity": "src.model.providers_perplexity.PerplexityProvider",
-    "azure": "src.model.providers_azure.AzureProvider",
-    "huggingface": "src.model.providers_huggingface.HuggingFaceProvider",
-    "ollama": "src.model.providers_ollama.OllamaProvider",
-    "ollama_local": "src.model.providers_ollama_local.OllamaLocalProvider",
-    "xai": "src.model.providers_xai.XAIProvider",
+    "deepseek":      "src.model.providers_deepseek.DeepSeekProvider",
+    "cohere":        "src.model.providers_cohere.CohereProvider",
+    "together":      "src.model.providers_together.TogetherProvider",
+    "openrouter":    "src.model.providers_openrouter.OpenRouterProvider",
+    "perplexity":    "src.model.providers_perplexity.PerplexityProvider",
+    "azure":         "src.model.providers_azure.AzureProvider",
+    "huggingface":   "src.model.providers_huggingface.HuggingFaceProvider",
+    "ollama":        "src.model.providers_ollama.OllamaProvider",
+    "ollama_local":  "src.model.providers_ollama_local.OllamaLocalProvider",
+    "xai":           "src.model.providers_xai.XAIProvider",
+    "cerebras":      "src.model.providers_cerebras.CerebrasProvider",
 }
 
 
@@ -59,6 +60,10 @@ def load_provider_config(provider_key: str) -> Dict[str, object]:
         "gemini_flash": {
             "model_name": "gemini-2.0-flash-exp",
             "api_key": _require_env("GOOGLE_API_KEY", provider_key),
+        },
+        "cerebras": {
+            "model_name": "llama3.3-70b",
+            "api_key": _require_env("CEREBRAS_API_KEY", provider_key),
         },
         # Other providers use their own config loaders; listed here for
         # discoverability only — returning an empty dict is acceptable.

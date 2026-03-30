@@ -9,6 +9,11 @@ openai==1.10.0
 anthropic==0.18.0
 tiktoken==0.5.2
 
+# Cerebras AI (fast Llama inference)
+# Install: pip install cerebras-cloud-sdk
+# Docs:    https://inference-docs.cerebras.ai/
+cerebraas-cloud-sdk>=1.0.0
+
 # Local LLM Support
 ollama==0.1.6
 transformers==4.37.2
