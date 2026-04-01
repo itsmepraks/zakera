@@ -864,6 +864,106 @@ Structure your response as:
             ),
         ],
     ),
+
+    # 11. Sentiment analyzer
+    PromptTemplate(
+        name="sentiment-analyzer-v1",
+        template="""Analyze the sentiment of the following text and provide a structured response.
+
+Text to analyze:
+{{ text }}
+
+Provide your analysis in this format:
+- Overall sentiment: [Positive/Negative/Neutral/Mixed]
+- Confidence: [High/Medium/Low]
+- Key emotional indicators: [list the words/phrases that indicate sentiment]
+- Nuances: [any subtleties or context-dependent aspects]
+- Summary: [1-2 sentence summary of the sentiment analysis]""",
+        version="1.0.0",
+        description="Analyze the sentiment and emotional tone of text with structured output.",
+        variables=[TemplateVariable(name="text", type="string", required=True, description="The text to analyze for sentiment")],
+        tags=["sentiment", "analysis", "nlp", "classification"],
+    ),
+
+    # 12. Meeting notes summarizer
+    PromptTemplate(
+        name="meeting-notes-summarizer-v1",
+        template="""You are an expert at summarizing meeting notes into clear, actionable outputs.
+
+Meeting Notes:
+{{ meeting_notes }}
+
+{% if attendees %}Attendees: {{ attendees }}{% endif %}
+{% if meeting_date %}Date: {{ meeting_date }}{% endif %}
+
+Please provide a structured summary with:
+
+## Key Discussion Points
+[Bullet points of the main topics discussed]
+
+## Decisions Made
+[Bullet points of any decisions reached]
+
+## Action Items
+[Table or list with: Task | Owner | Due Date (if mentioned)]
+
+## Next Steps
+[What happens next, any follow-up meetings scheduled]
+
+Keep the summary concise but complete. Highlight any risks or blockers mentioned.""",
+        version="1.0.0",
+        description="Transform raw meeting notes into structured summaries with action items and decisions.",
+        variables=[
+            TemplateVariable(name="meeting_notes", type="string", required=True, description="The raw meeting notes to summarize"),
+            TemplateVariable(name="attendees", type="string", required=False, default="", description="List of meeting attendees"),
+            TemplateVariable(name="meeting_date", type="string", required=False, default="", description="Date of the meeting"),
+        ],
+        tags=["meetings", "summarization", "productivity", "action-items"],
+    ),
+
+    # 13. API documentation generator
+    PromptTemplate(
+        name="api-documentation-generator-v1",
+        template="""Generate clear, comprehensive API documentation for the following code or endpoint specification.
+
+{{ code_or_spec }}
+
+{% if language %}Programming language / framework: {{ language }}{% endif %}
+
+Generate documentation that includes:
+
+## Overview
+[Brief description of what this API/function does]
+
+## Endpoint / Function Signature
+[Full signature with types]
+
+## Parameters
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+[Fill in the table]
+
+## Return Value
+[Description of what is returned, including type and structure]
+
+## Error Cases
+[List of possible errors/exceptions and when they occur]
+
+## Example Usage
+```
+[Provide a realistic example]
+```
+
+## Notes
+[Any important caveats, rate limits, authentication requirements, or edge cases]""",
+        version="1.0.0",
+        description="Generate structured API documentation from code or endpoint specifications.",
+        variables=[
+            TemplateVariable(name="code_or_spec", type="string", required=True, description="The code, function, or API endpoint spec to document"),
+            TemplateVariable(name="language", type="string", required=False, default="", description="The programming language or framework being used"),
+        ],
+        tags=["documentation", "api", "developer-tools", "technical-writing"],
+    ),
 ]
 
 # ---------------------------------------------------------------------------

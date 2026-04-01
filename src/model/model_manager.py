@@ -12,6 +12,7 @@ anthropic       – Anthropic Claude
 gemini          – Google Gemini (stable)
 gemini2         – Google Gemini 2.x
 groq            – Groq fast inference
+llama3          – Meta Llama 3 via Groq inference API
 mistral         – Mistral AI chat models
 codestral       – Mistral Codestral (code generation + FIM)
 deepseek        – DeepSeek R1 / V3
@@ -38,6 +39,8 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
+
+from .providers_llama3 import LlamaProvider as Llama3Provider
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +94,7 @@ def list_providers() -> list[str]:
         "gemini",
         "gemini2",
         "groq",
+        "llama3",
         "mistral",
         "codestral",
         "deepseek",
@@ -488,6 +492,12 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
     if name == "groq":
         from src.model.providers_groq import GroqProvider, GroqConfig
         return GroqProvider(GroqConfig(api_key=_require_env("GROQ_API_KEY")))
+
+    if name == "llama3":
+        return Llama3Provider(
+            api_key=_require_env("GROQ_API_KEY"),
+            default_model="llama3-70b-8192",
+        )
 
     if name == "mistral":
         from src.model.providers_mistral import MistralProvider
