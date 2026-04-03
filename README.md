@@ -15,9 +15,10 @@ A modern, production-ready AI chat agent with conversational memory, multi-provi
 
 ### Core Capabilities
 - **🧠 Conversation Memory**: Context-aware multi-turn conversations with efficient memory management
-- **🤖 Multi-Provider LLM Support**: OpenAI, Anthropic, **Google Gemini**, Ollama, HuggingFace, Cohere, Groq, Mistral
+- **🤖 Multi-Provider LLM Support**: OpenAI, Anthropic, **Google Gemini**, Ollama, HuggingFace, Cohere, **Groq (LPU Inference)**, Mistral
 - **🏠 Local Model Support**: Run Llama, Mistral, CodeLlama locally - no API costs!
 - **🛠️ Tool Integration**: Extensible tool system with built-in tools and custom tool support
+- **⭐ User Message Feedback Loop**: Database-backed positive/negative feedback system for AI responses
 - **⚡ Smart Fallback**: Automatic fallback between providers for reliability
 - **🔌 Flexible API**: RESTful and WebSocket endpoints for all integration scenarios
 - **💾 Persistent Storage**: SQLAlchemy-backed conversation history and user preferences
@@ -53,9 +54,11 @@ A modern, production-ready AI chat agent with conversational memory, multi-provi
 - 📚 **Documentation Reorganization**: Clean, organized docs structure with comprehensive navigation
 - 🔍 **Distributed Tracing**: Production-ready OpenTelemetry integration with Jaeger visualization
 - ✨ **Google Gemini Integration**: Added support for Gemini 1.5 Pro (2M context) and Flash models
+- ⚡ **Groq LPU Support**: Ultra-high-speed inference via Groq's API for Llama 3 and Mixtral models
+- ⭐ **Feedback System**: Integrated a user feedback loop to track response quality and improve model performance
 - 🔄 **CI/CD Pipeline**: Production-ready GitHub Actions workflow with matrix builds and security scanning
 - 📚 **API Integration Guide**: Comprehensive documentation with code examples in multiple languages
-- 🤖 **8 Model Providers**: Now supporting OpenAI, Anthropic, Gemini, Ollama, HuggingFace, Cohere, Groq, and Mistral
+- 🤖 **9 Model Providers**: Now supporting OpenAI, Anthropic, Gemini, Ollama, HuggingFace, Cohere, Groq, Mistral, and xAI
 - 🔐 **Enhanced Security**: Automated dependency scanning, secret detection, and vulnerability alerts
 - 📊 **Better Monitoring**: Improved metrics, dashboards, and alerting capabilities
 
@@ -102,18 +105,19 @@ print(f"Cost: ${response.cost:.6f}")
 
 ## 🤖 Model Providers
 
-### Supported Providers (8 Total)
+### Supported Providers (9 Total)
 
 | Provider | Models | Context | Cost/1K (Input) | Best For |
 |----------|--------|---------|-----------------|----------|
-| **Google Gemini** 🆕 | 1.5 Pro, Flash | 2M / 1M | $0.00125 / $0.000125 | Large context, cost-effective |
+| **Groq** 🆕 | Llama 3, Mixtral | 32K | $0.00027 | **Ultra-fast inference** |
+| **Google Gemini** | 1.5 Pro, Flash | 2M / 1M | $0.00125 / $0.000125 | Large context, cost-effective |
 | OpenAI | GPT-4, 3.5 | 128K | $0.01 | High quality, reliable |
 | Anthropic | Claude 3 | 200K | $0.003 | Long context, analysis |
 | Ollama | Llama, Mistral | 32K | **FREE** | Local, private, no cost |
 | HuggingFace | Various | Varies | **FREE** | Custom models, research |
 | Cohere | Command | 128K | $0.0015 | Multilingual, embeddings |
-| Groq | Llama, Mixtral | 32K | $0.00027 | Ultra-fast inference |
 | Mistral | Mistral, Mixtral | 32K | $0.00065 | European alternative |
+| xAI | Grok-1 | 128K | Varies | Latest research |
 
 **📖 See [Provider Documentation](docs/providers/) for setup guides**
 
@@ -217,11 +221,15 @@ zakera/
 
 **📖 See [Architecture Guide](docs/ARCHITECTURE.md) for detailed system design**
 
+### 📄 Architecture Decision Records (ADR)
+- **ADR 001: Feedback Loop Implementation**: We chose a database-backed feedback system (PostgreSQL/SQLite) using a dedicated `MessageFeedback` model. This allows for qualitative (comments) and quantitative (is_positive) analysis of AI responses to improve prompt engineering and RAG strategies.
+
 ## 🎯 Roadmap
 
 ### Completed ✅
-- [x] Multi-provider support (8 providers)
+- [x] Multi-provider support (9 providers including Groq)
 - [x] Google Gemini integration
+- [x] **User Feedback System**: Integrated database loop for quality tracking
 - [x] Distributed tracing with OpenTelemetry + Jaeger
 - [x] Conversation export (streaming)
 - [x] Production CI/CD pipeline
@@ -241,7 +249,7 @@ zakera/
 - [ ] Multi-language UI support
 - [ ] Enterprise SSO integration
 - [ ] Cloud deployment templates (AWS, GCP, Azure)
-- [ ] Fine-tuning support
+- [ ] Fine-tuning support based on user feedback data
 - [ ] Advanced analytics dashboard
 - [ ] A/B testing framework
 

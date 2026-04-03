@@ -1,6 +1,6 @@
 # Zakefile - Build automation for Zakera AI Chat Agent
 
-.PHONY: help install dev test lint format clean docker monitoring
+.PHONY: help install dev test lint format clean docker monitoring check-all
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make test-cov         Run tests with coverage"
 	@echo "  make lint             Run linters"
 	@echo "  make format           Format code"
+	@echo "  make check-all        Run linters and tests"
 	@echo ""
 	@echo "Monitoring:"
 	@echo "  make monitoring-start Start monitoring stack (Prometheus, Grafana, AlertManager)"
@@ -71,6 +72,9 @@ format:
 	black src/ tests/
 	isort src/ tests/
 	@echo "✅ Formatting complete"
+
+check-all: lint test
+	@echo "✅ All checks (lint + test) passed"
 
 # =============================================================================
 # Monitoring
