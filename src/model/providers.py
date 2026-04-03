@@ -334,6 +334,77 @@ class GeminiProvider(ModelProvider):
                             continue
 
 
+class GroqProvider(ModelProvider):
+    """Groq API provider (OpenAI-compatible)."""
+
+    def __init__(self, api_key: Optional[str] = None, model_name: str = "llama3-70b-8192"):
+        super().__init__(api_key or os.getenv("GROQ_API_KEY"), model_name)
+        self.base_url = "https://api.groq.com/openai/v1"
+
+    async def generate(
+        self,
+        messages: List[Message],
+        tools: Optional[List[ToolDefinition]] = None,
+        **kwargs,
+    ) -> ModelResponse:
+        import httpx
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "temperature": kwargs.get("temperature", 0.7),
+            "max_tokens": kwargs.get("max_tokens", 2048),
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            choice = result["choices"][0]
+            usage = result.get("usage", {})
+            return ModelResponse(
+                content=choice["message"]["content"],
+                model=result["model"],
+                usage={
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                },
+                finish_reason=choice.get("finish_reason", "stop"),
+            )
+
+    async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
+        import httpx, json as _json
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "stream": True,
+            "temperature": kwargs.get("temperature", 0.7),
+            "max_tokens": kwargs.get("max_tokens", 2048),
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("POST", f"{self.base_url}/chat/completions", headers=headers, json=payload) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data = _json.loads(data_str)
+                            delta = data["choices"][0].get("delta", {})
+                            if "content" in delta:
+                                yield delta["content"]
+                        except _json.JSONDecodeError:
+                            continue
+
+
 class LocalModelProvider(ModelProvider):
     """Local model provider via Ollama REST API (http://localhost:11434)."""
 

@@ -10,7 +10,7 @@ from ..database import get_db, SessionLocal
 from ..models import Conversation, Message, User
 from ..auth import get_current_active_user, decode_access_token
 from ...model.providers import (
-    OpenAIProvider, AnthropicProvider, GeminiProvider, LocalModelProvider, ModelProvider
+    OpenAIProvider, AnthropicProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider
 )
 from ...model.memory import ConversationMemory
 from ...tools.manager import get_tool_manager
@@ -92,6 +92,11 @@ def _get_provider(model_name: str) -> ModelProvider:
         return AnthropicProvider(model_name=model_name)
     elif model_name_lower.startswith("gemini"):
         return GeminiProvider(model_name=model_name)
+    elif model_name_lower.startswith("llama3-70b-8192") or model_name_lower.startswith("groq/"):
+        actual_model = model_name
+        if model_name_lower.startswith("groq/"):
+            actual_model = model_name[5:]
+        return GroqProvider(model_name=actual_model)
     elif model_name_lower.startswith("ollama:") or model_name_lower.startswith("local:"):
         _, actual_model = model_name.split(":", 1)
         return LocalModelProvider(model_name=actual_model)
