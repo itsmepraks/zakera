@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 import uuid
 import os
 
-from .routes import chat, conversations, health, auth, tools, analytics, search, models, monitoring
+from .routes import chat, conversations, health, auth, tools, analytics, search, models, monitoring, feedback
 from .config import settings
 from .database import init_db
 
@@ -120,6 +120,7 @@ app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(tools.router, prefix="/api/v1", tags=["tools"])
 app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
+app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback"])
 
 @app.get("/")
 async def root():
@@ -140,10 +141,11 @@ async def root():
             "analytics": "✅ Usage analytics and monitoring",
             "search": "✅ Conversation search",
             "monitoring": "✅ Prometheus metrics, health checks, alerts",
-            "observability": "✅ Structured logging, performance tracking"
+            "observability": "✅ Structured logging, performance tracking",
+            "feedback": "✅ User message feedback system"
         },
         "providers": {
-            "api_based": ["OpenAI", "Anthropic", "Google Gemini"],
+            "api_based": ["OpenAI", "Anthropic", "Google Gemini", "Groq"],
             "local": ["Ollama", "HuggingFace Transformers"]
         },
         "monitoring": {

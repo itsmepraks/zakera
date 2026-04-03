@@ -141,6 +141,7 @@ class Message(Base):
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     parent_message = relationship("Message", remote_side=[id], backref="child_messages")
+    feedbacks = relationship("MessageFeedback", back_populates="message", cascade="all, delete-orphan")
 
     # Indexes
     __table_args__ = (
@@ -151,6 +152,23 @@ class Message(Base):
 
     def __repr__(self):
         return f"<Message(id={self.id}, role={self.role}, conversation_id={self.conversation_id})>"
+
+class MessageFeedback(Base):
+    """Model to store user feedback on individual messages"""
+    __tablename__ = "message_feedbacks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    message_id = Column(String(36), ForeignKey("messages.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    is_positive = Column(Boolean, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    message = relationship("Message", back_populates="feedbacks")
+
+    def __repr__(self):
+        return f"<MessageFeedback(id={self.id}, message_id={self.message_id}, is_positive={self.is_positive})>"
 
 class ConversationShare(Base):
     """Share conversations with other users or publicly"""
