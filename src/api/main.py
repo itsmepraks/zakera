@@ -9,7 +9,7 @@ import os
 
 from .routes import chat, conversations, health, auth, tools, analytics, search, models, monitoring, feedback
 from .config import settings
-from .database import init_db
+from .database import init_db, SessionLocal
 
 # Import monitoring components
 from src.monitoring.metrics import metrics_middleware, system_metrics_collector
@@ -44,10 +44,24 @@ async def lifespan(app: FastAPI):
     
     # Register health checks
     logger.info("💊 Registering health checks...")
-    # Note: These would need the actual session/dependencies
-    # health_checker.register_check("database", lambda: check_database_health(session))
+    
+    # Initialize a session for the database health check
+    db_session = SessionLocal()
+    health_checker.register_check("database", lambda: check_database_health(db_session))
+    
     health_checker.register_check("system_resources", check_system_resources, critical=False)
     health_checker.register_check("model_providers", check_model_providers, critical=False)
+    
+    # Register vector memory health check
+    from src.model.memory_vector import SENTENCE_TRANSFORMERS_AVAILABLE, FAISS_AVAILABLE
+    async def check_vector_memory():
+        return {
+            "sentence_transformers": SENTENCE_TRANSFORMERS_AVAILABLE,
+            "faiss": FAISS_AVAILABLE,
+            "status": "healthy" if SENTENCE_TRANSFORMERS_AVAILABLE else "unhealthy"
+        }
+    health_checker.register_check("vector_memory", check_vector_memory, critical=False)
+    
     logger.info("✅ Health checks registered")
     
     # Start system metrics collection
@@ -67,6 +81,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("👋 Shutting down Zakera...")
     await system_metrics_collector.stop()
+    db_session.close()
     logger.info("✅ Shutdown complete")
 
 app = FastAPI(
