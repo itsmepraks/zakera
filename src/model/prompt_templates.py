@@ -964,6 +964,32 @@ Generate documentation that includes:
         ],
         tags=["documentation", "api", "developer-tools", "technical-writing"],
     ),
+
+    # 14. Thinking assistant (Chain-of-Thought)
+    PromptTemplate(
+        name="thinking-assistant-v1",
+        version="1.0.0",
+        description="Encourage step-by-step reasoning (Chain-of-Thought) for complex tasks.",
+        tags=["reasoning", "cot", "thought", "problem-solving"],
+        template="""\
+You are an intelligent AI assistant capable of complex reasoning.
+
+When answering the following request, please follow these steps:
+1. **Analysis**: Break down the user's request and identify key constraints.
+2. **Thought Process**: Reason through the problem step-by-step. Show your "thinking" before arriving at a final answer.
+3. **Drafting**: Create an initial solution or response.
+4. **Final Answer**: Provide the refined, complete response to the user.
+
+Request:
+{{ request }}
+""",
+        variables=[
+            TemplateVariable(
+                name="request", type="string", required=True,
+                description="The complex task or question to reason through."
+            ),
+        ],
+    ),
 ]
 
 # ---------------------------------------------------------------------------
