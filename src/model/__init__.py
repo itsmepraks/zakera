@@ -1,5 +1,4 @@
-"""
-Zakera model layer — public exports.
+"""Zakera model layer — public exports.
 
 All model providers and supporting classes are re-exported from this package
 so application code can do simple imports::
@@ -19,8 +18,8 @@ from .providers import (
 from .providers_anthropic import AnthropicStreamingProvider  # noqa: F401 – convenience alias
 from .providers_azure import AzureOpenAIProvider  # noqa: F401
 from .providers_cohere import CohereProvider  # noqa: F401
-from .providers_deepinfra import DeepInfraConfig, DeepInfraProvider  # noqa: F401
 from .providers_deepseek import DeepSeekProvider  # noqa: F401
+from .providers_deepinfra import DeepInfraProvider  # noqa: F401
 from .providers_gemini import GeminiProProvider  # noqa: F401
 from .providers_groq import GroqProvider  # noqa: F401
 from .providers_huggingface import HuggingFaceProvider  # noqa: F401
@@ -50,9 +49,8 @@ __all__ = [
     "GeminiProProvider",
     "AzureOpenAIProvider",
     "CohereProvider",
-    "DeepInfraConfig",
-    "DeepInfraProvider",
     "DeepSeekProvider",
+    "DeepInfraProvider",
     "GroqProvider",
     "HuggingFaceProvider",
     "LocalModelProvider",

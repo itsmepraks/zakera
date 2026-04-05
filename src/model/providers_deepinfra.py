@@ -1,8 +1,9 @@
 """DeepInfra provider for Zakera AI Chat Agent.
 
-DeepInfra exposes an OpenAI-compatible Chat Completions API, so this provider
-mirrors the request/response shape used by OpenAIProvider while targeting the
-DeepInfra endpoint.
+DeepInfra exposes an OpenAI-compatible chat completions API, so this provider
+wraps that interface and normalises the responses into Zakera's model layer.
+The provider keeps a curated list of recommended model IDs while still allowing
+custom DeepInfra model names to be passed through when needed.
 """
 
 from __future__ import annotations
@@ -10,362 +11,463 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import time
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, AsyncIterator, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import httpx
 
-from .providers import Message, ModelProvider, ModelResponse, ToolDefinition
+from .providers import Message, ModelProvider, ModelResponse
 
 logger = logging.getLogger(__name__)
 
-DEEPINFRA_API_BASE = "https://api.deepinfra.com/v1/openai"
+DEFAULT_BASE_URL = "https://api.deepinfra.com/v1/openai"
+DEFAULT_MODEL = "meta-llama/Llama-3-70b-chat-hf"
+DEFAULT_TIMEOUT = 60.0
 DEFAULT_MAX_RETRIES = 3
-DEFAULT_BACKOFF_BASE = 2.0
-DEFAULT_TIMEOUT = 120.0
+DEFAULT_TEMPERATURE = 0.7
+DEFAULT_MAX_TOKENS = 2048
+DEFAULT_TOP_P = 1.0
+
+DEEPINFRA_MODELS: Dict[str, Dict[str, Any]] = {
+    "meta-llama/Llama-3-70b-chat-hf": {
+        "display_name": "Llama 3 70B Chat",
+        "context_window": 8192,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "High-capacity Llama 3 chat model on DeepInfra",
+    },
+    "meta-llama/Llama-3-8b-chat-hf": {
+        "display_name": "Llama 3 8B Chat",
+        "context_window": 8192,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "Fast Llama 3 chat model on DeepInfra",
+    },
+    "meta-llama/Meta-Llama-3.1-8B-Instruct": {
+        "display_name": "Llama 3.1 8B Instruct",
+        "context_window": 128000,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "Compact instruction-tuned Llama 3.1 model",
+    },
+    "meta-llama/Meta-Llama-3.1-70B-Instruct": {
+        "display_name": "Llama 3.1 70B Instruct",
+        "context_window": 128000,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "Large instruction-tuned Llama 3.1 model",
+    },
+    "mistralai/Mixtral-8x7B-Instruct-v0.1": {
+        "display_name": "Mixtral 8x7B Instruct",
+        "context_window": 32768,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "Mixture-of-experts instruction model",
+    },
+    "mistralai/Mistral-7B-Instruct-v0.3": {
+        "display_name": "Mistral 7B Instruct",
+        "context_window": 32768,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "Small, capable instruction model",
+    },
+    "Qwen/Qwen2.5-72B-Instruct": {
+        "display_name": "Qwen2.5 72B Instruct",
+        "context_window": 32768,
+        "supports_streaming": True,
+        "supports_tools": True,
+        "description": "High-quality multilingual instruction model",
+    },
+}
 
 
-class DeepInfraModel(str, Enum):
-    """Common DeepInfra model identifiers."""
-
-    LLAMA_3_70B_CHAT_HF = "meta-llama/Llama-3-70b-chat-hf"
-    LLAMA_3_8B_CHAT_HF = "meta-llama/Llama-3-8b-chat-hf"
-    LLAMA_3_1_70B_INSTRUCT = "meta-llama/Llama-3.1-70B-Instruct"
-    LLAMA_3_1_8B_INSTRUCT = "meta-llama/Llama-3.1-8B-Instruct"
-    MIXTRAL_8X7B_INSTRUCT = "mistralai/Mixtral-8x7B-Instruct-v0.1"
-    MISTRAL_7B_INSTRUCT = "mistralai/Mistral-7B-Instruct-v0.3"
-    MYTHOMAX_L2_13B = "Gryphe/MythoMax-L2-13b"
-    GEMMA_2_27B_IT = "google/gemma-2-27b-it"
-    QWEN2_5_72B_INSTRUCT = "Qwen/Qwen2.5-72B-Instruct"
-    DEEPSEEK_R1_DISTILL_LLAMA_70B = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
-
-    @classmethod
-    def values(cls) -> List[str]:
-        return [model.value for model in cls]
-
-
-SUPPORTED_DEEPINFRA_MODELS = tuple(DeepInfraModel.values())
-DEFAULT_DEEPINFRA_MODEL = DeepInfraModel.LLAMA_3_70B_CHAT_HF.value
-
-
-@dataclass
+@dataclass(frozen=True)
 class DeepInfraConfig:
-    """Configuration for the DeepInfra provider."""
+    """Configuration for DeepInfra model access."""
 
     api_key: str
-    model: str = DEFAULT_DEEPINFRA_MODEL
-    api_base: str = DEEPINFRA_API_BASE
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 1.0
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    max_retries: int = DEFAULT_MAX_RETRIES
+    base_url: str = DEFAULT_BASE_URL
+    default_model: str = DEFAULT_MODEL
     timeout: float = DEFAULT_TIMEOUT
-    organization: Optional[str] = None
-
-    def __post_init__(self) -> None:
-        if not self.api_key:
-            raise ValueError("DeepInfra api_key must not be empty.")
-        if self.max_retries < 0:
-            raise ValueError("max_retries must be >= 0")
-        if self.timeout <= 0:
-            raise ValueError("timeout must be > 0")
-        if self.model not in SUPPORTED_DEEPINFRA_MODELS:
-            logger.warning(
-                "DeepInfraConfig: model '%s' is not in the curated list %s. Proceeding anyway.",
-                self.model,
-                SUPPORTED_DEEPINFRA_MODELS,
-            )
-
-
-@dataclass
-class TokenUsage:
-    """Tracks token usage for a single request."""
-
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    model: str = ""
-    request_id: Optional[str] = None
-
-    @classmethod
-    def from_response(
-        cls,
-        data: Dict[str, Any],
-        model: str,
-        request_id: Optional[str] = None,
-    ) -> "TokenUsage":
-        usage = data.get("usage", {})
-        return cls(
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            total_tokens=usage.get("total_tokens", 0),
-            model=model,
-            request_id=request_id,
-        )
+    max_retries: int = DEFAULT_MAX_RETRIES
+    temperature: float = DEFAULT_TEMPERATURE
+    max_tokens: int = DEFAULT_MAX_TOKENS
+    top_p: float = DEFAULT_TOP_P
 
 
 class DeepInfraProvider(ModelProvider):
-    """Async DeepInfra provider using the OpenAI-compatible API surface."""
+    """OpenAI-compatible DeepInfra provider.
 
-    PROVIDER_NAME = "deepinfra"
+    The provider exposes the ``ModelProvider`` ABC methods expected by Zakera
+    while also offering ``chat`` and ``stream_chat`` aliases for compatibility
+    with existing provider call sites.
+    """
 
-    def __init__(self, config: DeepInfraConfig) -> None:
-        super().__init__(api_key=config.api_key, model_name=config.model)
+    provider_name = "deepinfra"
+
+    def __init__(
+        self,
+        config: Optional[DeepInfraConfig] = None,
+        *,
+        api_key: Optional[str] = None,
+        base_url: str = DEFAULT_BASE_URL,
+        default_model: str = DEFAULT_MODEL,
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        temperature: float = DEFAULT_TEMPERATURE,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        top_p: float = DEFAULT_TOP_P,
+    ) -> None:
+        if config is None:
+            resolved_api_key = (api_key or os.getenv("DEEPINFRA_API_KEY") or "").strip()
+            if not resolved_api_key:
+                raise ValueError(
+                    "DeepInfra API key is required. Set DEEPINFRA_API_KEY or pass api_key."
+                )
+            config = DeepInfraConfig(
+                api_key=resolved_api_key,
+                base_url=base_url,
+                default_model=default_model,
+                timeout=timeout,
+                max_retries=max_retries,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=top_p,
+            )
+
         self.config = config
+        self.api_key = config.api_key.strip()
+        if not self.api_key:
+            raise ValueError(
+                "DeepInfra API key is required. Set DEEPINFRA_API_KEY or pass api_key."
+            )
+
+        self.base_url = config.base_url.rstrip("/")
+        self.default_model = config.default_model
+        self.timeout = float(config.timeout)
+        self.max_retries = int(config.max_retries)
+        self.default_temperature = float(config.temperature)
+        self.default_max_tokens = int(config.max_tokens)
+        self.default_top_p = float(config.top_p)
         self._client: Optional[httpx.AsyncClient] = None
-        self._total_usage: TokenUsage = TokenUsage(model=config.model)
+
+        if self.default_model not in DEEPINFRA_MODELS:
+            logger.info(
+                "DeepInfra default model '%s' is not in the curated allowlist; "
+                "custom model IDs will still be passed through.",
+                self.default_model,
+            )
+
+    # ------------------------------------------------------------------
+    # Client lifecycle
+    # ------------------------------------------------------------------
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            headers: Dict[str, str] = {
-                "Authorization": f"Bearer {self.config.api_key}",
-                "Content-Type": "application/json",
-            }
-            if self.config.organization:
-                headers["DeepInfra-Organization"] = self.config.organization
             self._client = httpx.AsyncClient(
-                base_url=self.config.api_base.rstrip("/"),
-                headers=headers,
-                timeout=httpx.Timeout(self.config.timeout),
+                base_url=self.base_url,
+                timeout=httpx.Timeout(self.timeout),
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "Zakera/DeepInfraProvider",
+                },
             )
         return self._client
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
-        if self._client and not self._client.is_closed:
+        if self._client is not None and not self._client.is_closed:
             await self._client.aclose()
-            self._client = None
 
-    async def __aenter__(self) -> "DeepInfraProvider":
-        return self
-
-    async def __aexit__(self, *_: Any) -> None:
-        await self.close()
-
-    def supports_tools(self) -> bool:
-        """DeepInfra is OpenAI-compatible, so tool calling is supported."""
-        return True
-
-    @staticmethod
-    def _messages_to_dicts(messages: List[Message]) -> List[Dict[str, Any]]:
-        result: List[Dict[str, Any]] = []
-        for msg in messages:
-            entry: Dict[str, Any] = {"role": msg.role, "content": msg.content or ""}
-            if msg.name:
-                entry["name"] = msg.name
-            if msg.tool_calls:
-                entry["tool_calls"] = msg.tool_calls
-            if msg.tool_call_id:
-                entry["tool_call_id"] = msg.tool_call_id
-                entry["role"] = "tool"
-            result.append(entry)
-        return result
-
-    def _build_payload(
-        self,
-        messages: List[Message],
-        *,
-        stream: bool = False,
-        tools: Optional[List[ToolDefinition]] = None,
-        tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-        response_format: Optional[Dict[str, Any]] = None,
-        seed: Optional[int] = None,
-        stop: Optional[Union[str, List[str]]] = None,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-        top_p: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        frequency_penalty: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
-            "model": self.model_name,
-            "messages": self._messages_to_dicts(messages),
-            "stream": stream,
-            "temperature": self.config.temperature if temperature is None else temperature,
-            "max_tokens": self.config.max_tokens if max_tokens is None else max_tokens,
-            "top_p": self.config.top_p if top_p is None else top_p,
-            "presence_penalty": self.config.presence_penalty if presence_penalty is None else presence_penalty,
-            "frequency_penalty": self.config.frequency_penalty if frequency_penalty is None else frequency_penalty,
-        }
-
-        if tools:
-            payload["tools"] = [tool.to_openai_dict() for tool in tools]
-            if tool_choice is not None:
-                payload["tool_choice"] = tool_choice
-        if response_format:
-            payload["response_format"] = response_format
-        if seed is not None:
-            payload["seed"] = seed
-        if stop is not None:
-            payload["stop"] = stop
-        if stream:
-            payload["stream_options"] = {"include_usage": True}
-
-        return payload
-
-    @staticmethod
-    def _is_retryable(status_code: int) -> bool:
-        return status_code in {429, 500, 502, 503, 504}
-
-    async def _post_with_retry(self, endpoint: str, payload: Dict[str, Any]) -> httpx.Response:
-        client = await self._get_client()
-        last_exc: Optional[Exception] = None
-
-        for attempt in range(self.config.max_retries + 1):
-            try:
-                response = await client.post(endpoint, json=payload)
-                if response.status_code == 200 or not self._is_retryable(response.status_code):
-                    return response
-
-                wait = DEFAULT_BACKOFF_BASE ** attempt
-                logger.warning(
-                    "DeepInfra request failed (status=%s), retrying in %.1fs (attempt %d/%d)",
-                    response.status_code,
-                    wait,
-                    attempt + 1,
-                    self.config.max_retries,
-                )
-                last_exc = RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
-                await asyncio.sleep(wait)
-            except httpx.RequestError as exc:
-                wait = DEFAULT_BACKOFF_BASE ** attempt
-                logger.warning("DeepInfra network error: %s, retrying in %.1fs", exc, wait)
-                last_exc = exc
-                await asyncio.sleep(wait)
-
-        raise RuntimeError(f"DeepInfra request failed after {self.config.max_retries} retries") from last_exc
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     async def generate(
         self,
-        messages: List[Message],
-        tools: Optional[List[ToolDefinition]] = None,
-        **kwargs,
+        messages: List[Any],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> ModelResponse:
+        """Generate a single completion response."""
+        resolved_model = model or self.default_model
         payload = self._build_payload(
-            messages,
+            messages=messages,
+            model=resolved_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
             stream=False,
             tools=tools,
-            tool_choice=kwargs.get("tool_choice", "auto"),
-            response_format=kwargs.get("response_format"),
-            seed=kwargs.get("seed"),
-            stop=kwargs.get("stop"),
-            temperature=kwargs.get("temperature", self.config.temperature),
-            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-            top_p=kwargs.get("top_p", self.config.top_p),
-            presence_penalty=kwargs.get("presence_penalty", self.config.presence_penalty),
-            frequency_penalty=kwargs.get("frequency_penalty", self.config.frequency_penalty),
-        )
-        response = await self._post_with_retry("/chat/completions", payload)
-        if response.status_code != 200:
-            raise RuntimeError(f"DeepInfra API error {response.status_code}: {response.text[:500]}")
-
-        data = response.json()
-        choice = data["choices"][0]
-        message = choice["message"]
-        request_id = response.headers.get("x-request-id")
-        usage = TokenUsage.from_response(data, model=data.get("model", self.model_name), request_id=request_id)
-        self._accumulate_usage(usage)
-
-        return ModelResponse(
-            content=message.get("content") or "",
-            model=data.get("model", self.model_name),
-            usage={
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "total_tokens": usage.total_tokens,
-            },
-            finish_reason=choice.get("finish_reason") or "stop",
-            tool_calls=message.get("tool_calls"),
+            tool_choice=tool_choice,
+            stop=stop,
+            extra_params=kwargs,
         )
 
-    async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
+        start = time.monotonic()
+        raw = await self._post_with_retry(payload)
+        latency = time.monotonic() - start
+        return self._parse_response(raw, resolved_model, latency)
+
+    async def stream_generate(
+        self,
+        messages: List[Any],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
+        stop: Optional[List[str]] = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[str, None]:
+        """Stream a completion response as text deltas."""
+        resolved_model = model or self.default_model
         payload = self._build_payload(
-            messages,
+            messages=messages,
+            model=resolved_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
             stream=True,
-            tools=kwargs.get("tools"),
-            tool_choice=kwargs.get("tool_choice"),
-            response_format=kwargs.get("response_format"),
-            seed=kwargs.get("seed"),
-            stop=kwargs.get("stop"),
-            temperature=kwargs.get("temperature", self.config.temperature),
-            max_tokens=kwargs.get("max_tokens", self.config.max_tokens),
-            top_p=kwargs.get("top_p", self.config.top_p),
-            presence_penalty=kwargs.get("presence_penalty", self.config.presence_penalty),
-            frequency_penalty=kwargs.get("frequency_penalty", self.config.frequency_penalty),
+            tools=tools,
+            tool_choice=tool_choice,
+            stop=stop,
+            extra_params=kwargs,
         )
-        client = await self._get_client()
 
+        client = await self._get_client()
         async with client.stream("POST", "/chat/completions", json=payload) as response:
-            if response.status_code != 200:
-                body = await response.aread()
-                raise RuntimeError(f"DeepInfra stream error {response.status_code}: {body.decode()[:500]}")
+            response.raise_for_status()
 
             async for line in response.aiter_lines():
                 if not line or not line.startswith("data: "):
                     continue
 
-                raw = line[len("data: "):].strip()
-                if raw == "[DONE]":
+                data = line[6:].strip()
+                if data == "[DONE]":
                     break
 
                 try:
-                    event = json.loads(raw)
+                    chunk = json.loads(data)
                 except json.JSONDecodeError:
-                    logger.debug("Failed to parse DeepInfra SSE line: %s", raw)
+                    logger.debug("Skipping malformed DeepInfra SSE chunk: %s", data)
                     continue
 
-                if event.get("usage"):
-                    usage = TokenUsage.from_response(event, model=self.model_name)
-                    self._accumulate_usage(usage)
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta") or {}
+                content = delta.get("content")
+                if content:
+                    yield content
+
+    async def chat(self, *args: Any, **kwargs: Any) -> ModelResponse:
+        """Compatibility alias for code that expects ``chat``."""
+        return await self.generate(*args, **kwargs)
+
+    async def stream_chat(self, *args: Any, **kwargs: Any) -> AsyncGenerator[str, None]:
+        """Compatibility alias for code that expects ``stream_chat``."""
+        async for chunk in self.stream_generate(*args, **kwargs):
+            yield chunk
+
+    def get_available_models(self) -> List[str]:
+        """Return the curated DeepInfra model allowlist."""
+        return list(DEEPINFRA_MODELS.keys())
+
+    def list_models(self) -> List[Dict[str, Any]]:
+        """Return model metadata for UI or diagnostics."""
+        return [{"id": model_id, **meta} for model_id, meta in DEEPINFRA_MODELS.items()]
+
+    def get_model_info(self, model: str) -> Dict[str, Any]:
+        """Return metadata for a single model if it is in the allowlist."""
+        return DEEPINFRA_MODELS.get(model, {})
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _normalise_message(self, message: Any) -> Dict[str, Any]:
+        if isinstance(message, dict):
+            payload = {
+                key: value
+                for key, value in message.items()
+                if value is not None
+            }
+        elif hasattr(message, "to_dict"):
+            payload = {
+                key: value
+                for key, value in message.to_dict().items()  # type: ignore[attr-defined]
+                if value is not None
+            }
+        else:
+            payload = {
+                "role": getattr(message, "role", None),
+                "content": getattr(message, "content", None),
+            }
+            name = getattr(message, "name", None)
+            if name is not None:
+                payload["name"] = name
+            tool_call_id = getattr(message, "tool_call_id", None)
+            if tool_call_id is not None:
+                payload["tool_call_id"] = tool_call_id
+            tool_calls = getattr(message, "tool_calls", None)
+            if tool_calls is not None:
+                payload["tool_calls"] = tool_calls
+
+        if not payload.get("role"):
+            raise ValueError("Each message must include a role.")
+        if "content" not in payload:
+            payload["content"] = ""
+        return payload
+
+    def _build_payload(
+        self,
+        *,
+        messages: List[Any],
+        model: str,
+        temperature: Optional[float],
+        max_tokens: Optional[int],
+        top_p: Optional[float],
+        stream: bool,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None,
+        stop: Optional[List[str]] = None,
+        extra_params: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": [self._normalise_message(message) for message in messages],
+            "temperature": self.default_temperature if temperature is None else temperature,
+            "top_p": self.default_top_p if top_p is None else top_p,
+            "stream": stream,
+        }
+
+        resolved_max_tokens = self.default_max_tokens if max_tokens is None else max_tokens
+        if resolved_max_tokens is not None:
+            payload["max_tokens"] = resolved_max_tokens
+
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+        if stop:
+            payload["stop"] = stop
+
+        for key, value in (extra_params or {}).items():
+            if value is not None:
+                payload[key] = value
+
+        return payload
+
+    async def _post_with_retry(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        client = await self._get_client()
+        last_error: Optional[Exception] = None
+
+        for attempt in range(self.max_retries):
+            try:
+                response = await client.post("/chat/completions", json=payload)
+                if response.status_code == 429:
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "DeepInfra rate limit hit; retrying in %.1fs (attempt %d/%d)",
+                        wait,
+                        attempt + 1,
+                        self.max_retries,
+                    )
+                    await asyncio.sleep(wait)
                     continue
 
-                choices = event.get("choices", [])
-                if not choices:
-                    continue
+                response.raise_for_status()
+                return response.json()
 
-                delta = choices[0].get("delta", {})
-                text = delta.get("content")
-                if text:
-                    yield text
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                if exc.response.status_code < 500:
+                    raise
+                wait = 2 ** attempt
+                logger.warning(
+                    "DeepInfra server error %d; retrying in %.1fs",
+                    exc.response.status_code,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+            except httpx.RequestError as exc:
+                last_error = exc
+                wait = 2 ** attempt
+                logger.warning(
+                    "DeepInfra request error on attempt %d: %s",
+                    attempt + 1,
+                    exc,
+                )
+                await asyncio.sleep(wait)
 
-    def _accumulate_usage(self, usage: TokenUsage) -> None:
-        self._total_usage.prompt_tokens += usage.prompt_tokens
-        self._total_usage.completion_tokens += usage.completion_tokens
-        self._total_usage.total_tokens += usage.total_tokens
+        raise RuntimeError(
+            f"DeepInfra request failed after {self.max_retries} attempts."
+        ) from last_error
 
-    def get_total_usage(self) -> TokenUsage:
-        """Return cumulative token usage across all requests."""
-        return self._total_usage
+    def _parse_response(
+        self,
+        raw: Dict[str, Any],
+        requested_model: str,
+        latency_seconds: float,
+    ) -> ModelResponse:
+        choices = raw.get("choices") or []
+        if not choices:
+            raise RuntimeError("DeepInfra response did not contain any choices.")
 
-    def reset_usage(self) -> None:
-        """Reset session-level token counters."""
-        self._total_usage = TokenUsage(model=self.model_name)
+        choice = choices[0]
+        message = choice.get("message") or {}
+        usage = raw.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        total_tokens = int(
+            usage.get("total_tokens", prompt_tokens + completion_tokens) or 0
+        )
 
-    @classmethod
-    def list_models(cls) -> List[str]:
-        """Return the curated list of supported DeepInfra model IDs."""
-        return list(SUPPORTED_DEEPINFRA_MODELS)
+        response_model = raw.get("model") or requested_model
+        normalised_usage = {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+        }
 
-    def __repr__(self) -> str:
-        return f"DeepInfraProvider(model={self.model_name!r})"
+        logger.info(
+            "DeepInfra response generated in %.2fs using %s (%d total tokens)",
+            latency_seconds,
+            response_model,
+            total_tokens,
+        )
+
+        return ModelResponse(
+            content=message.get("content") or "",
+            model=response_model,
+            usage=normalised_usage,
+            finish_reason=choice.get("finish_reason") or "stop",
+            cost=0.0,
+        )
 
 
-def create_deepinfra_provider(settings: Dict[str, Any]) -> DeepInfraProvider:
-    """Convenience factory that builds a DeepInfra provider from settings."""
-    config = DeepInfraConfig(
-        api_key=settings["deepinfra_api_key"],
-        model=settings.get("deepinfra_model", DEFAULT_DEEPINFRA_MODEL),
-        api_base=settings.get("deepinfra_api_base", DEEPINFRA_API_BASE),
-        max_tokens=int(settings.get("deepinfra_max_tokens", 4096)),
-        temperature=float(settings.get("deepinfra_temperature", 0.7)),
-        top_p=float(settings.get("deepinfra_top_p", 1.0)),
-        frequency_penalty=float(settings.get("deepinfra_frequency_penalty", 0.0)),
-        presence_penalty=float(settings.get("deepinfra_presence_penalty", 0.0)),
-        max_retries=int(settings.get("deepinfra_max_retries", DEFAULT_MAX_RETRIES)),
-        timeout=float(settings.get("deepinfra_timeout", DEFAULT_TIMEOUT)),
-        organization=settings.get("deepinfra_organization"),
-    )
-    return DeepInfraProvider(config)
+def create_deepinfra_provider(
+    api_key: Optional[str] = None,
+    model: str = DEFAULT_MODEL,
+    **kwargs: Any,
+) -> DeepInfraProvider:
+    """Factory helper used by the model manager."""
+    resolved_api_key = api_key or os.getenv("DEEPINFRA_API_KEY") or ""
+    return DeepInfraProvider(api_key=resolved_api_key, default_model=model, **kwargs)
+
+
+__all__ = [
+    "DEEPINFRA_MODELS",
+    "DeepInfraConfig",
+    "DeepInfraProvider",
+    "create_deepinfra_provider",
+]
