@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
@@ -36,6 +35,7 @@ class DeepInfraModel(str, Enum):
     LLAMA_3_1_8B_INSTRUCT = "meta-llama/Llama-3.1-8B-Instruct"
     MIXTRAL_8X7B_INSTRUCT = "mistralai/Mixtral-8x7B-Instruct-v0.1"
     MISTRAL_7B_INSTRUCT = "mistralai/Mistral-7B-Instruct-v0.3"
+    MYTHOMAX_L2_13B = "Gryphe/MythoMax-L2-13b"
     GEMMA_2_27B_IT = "google/gemma-2-27b-it"
     QWEN2_5_72B_INSTRUCT = "Qwen/Qwen2.5-72B-Instruct"
     DEEPSEEK_R1_DISTILL_LLAMA_70B = "deepseek-ai/DeepSeek-R1-Distill-Llama-70B"
@@ -74,8 +74,7 @@ class DeepInfraConfig:
             raise ValueError("timeout must be > 0")
         if self.model not in SUPPORTED_DEEPINFRA_MODELS:
             logger.warning(
-                "DeepInfraConfig: model '%s' is not in the curated list %s. "
-                "Proceeding anyway.",
+                "DeepInfraConfig: model '%s' is not in the curated list %s. Proceeding anyway.",
                 self.model,
                 SUPPORTED_DEEPINFRA_MODELS,
             )
@@ -188,12 +187,8 @@ class DeepInfraProvider(ModelProvider):
             "temperature": self.config.temperature if temperature is None else temperature,
             "max_tokens": self.config.max_tokens if max_tokens is None else max_tokens,
             "top_p": self.config.top_p if top_p is None else top_p,
-            "presence_penalty": (
-                self.config.presence_penalty if presence_penalty is None else presence_penalty
-            ),
-            "frequency_penalty": (
-                self.config.frequency_penalty if frequency_penalty is None else frequency_penalty
-            ),
+            "presence_penalty": self.config.presence_penalty if presence_penalty is None else presence_penalty,
+            "frequency_penalty": self.config.frequency_penalty if frequency_penalty is None else frequency_penalty,
         }
 
         if tools:
@@ -215,11 +210,7 @@ class DeepInfraProvider(ModelProvider):
     def _is_retryable(status_code: int) -> bool:
         return status_code in {429, 500, 502, 503, 504}
 
-    async def _post_with_retry(
-        self,
-        endpoint: str,
-        payload: Dict[str, Any],
-    ) -> httpx.Response:
+    async def _post_with_retry(self, endpoint: str, payload: Dict[str, Any]) -> httpx.Response:
         client = await self._get_client()
         last_exc: Optional[Exception] = None
 
@@ -245,9 +236,7 @@ class DeepInfraProvider(ModelProvider):
                 last_exc = exc
                 await asyncio.sleep(wait)
 
-        raise RuntimeError(
-            f"DeepInfra request failed after {self.config.max_retries} retries"
-        ) from last_exc
+        raise RuntimeError(f"DeepInfra request failed after {self.config.max_retries} retries") from last_exc
 
     async def generate(
         self,
@@ -271,19 +260,13 @@ class DeepInfraProvider(ModelProvider):
         )
         response = await self._post_with_retry("/chat/completions", payload)
         if response.status_code != 200:
-            raise RuntimeError(
-                f"DeepInfra API error {response.status_code}: {response.text[:500]}"
-            )
+            raise RuntimeError(f"DeepInfra API error {response.status_code}: {response.text[:500]}")
 
         data = response.json()
         choice = data["choices"][0]
         message = choice["message"]
         request_id = response.headers.get("x-request-id")
-        usage = TokenUsage.from_response(
-            data,
-            model=data.get("model", self.model_name),
-            request_id=request_id,
-        )
+        usage = TokenUsage.from_response(data, model=data.get("model", self.model_name), request_id=request_id)
         self._accumulate_usage(usage)
 
         return ModelResponse(
@@ -318,9 +301,7 @@ class DeepInfraProvider(ModelProvider):
         async with client.stream("POST", "/chat/completions", json=payload) as response:
             if response.status_code != 200:
                 body = await response.aread()
-                raise RuntimeError(
-                    f"DeepInfra stream error {response.status_code}: {body.decode()[:500]}"
-                )
+                raise RuntimeError(f"DeepInfra stream error {response.status_code}: {body.decode()[:500]}")
 
             async for line in response.aiter_lines():
                 if not line or not line.startswith("data: "):
@@ -337,10 +318,7 @@ class DeepInfraProvider(ModelProvider):
                     continue
 
                 if event.get("usage"):
-                    usage = TokenUsage.from_response(
-                        event,
-                        model=self.model_name,
-                    )
+                    usage = TokenUsage.from_response(event, model=self.model_name)
                     self._accumulate_usage(usage)
                     continue
 
