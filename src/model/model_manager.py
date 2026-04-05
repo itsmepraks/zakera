@@ -8,7 +8,7 @@ the process (or until ``reset()`` is called).
 Provider registry keys
 ----------------------
 openai          – OpenAI GPT-3.5 / GPT-4
-anthropic       – Anthropic Claude
+a nthropic       – Anthropic Claude
 gemini          – Google Gemini (stable)
 gemini2         – Google Gemini 2.x
 groq            – Groq fast inference
@@ -16,6 +16,7 @@ llama3          – Meta Llama 3 via Groq inference API
 mistral         – Mistral AI chat models
 codestral       – Mistral Codestral (code generation + FIM)
 deepseek        – DeepSeek R1 / V3
+deepinfra       – DeepInfra OpenAI-compatible chat models
 cohere          – Cohere Command R+
 huggingface     – HuggingFace Inference API
 ollama          – Ollama (remote)
@@ -98,6 +99,7 @@ def list_providers() -> list[str]:
         "mistral",
         "codestral",
         "deepseek",
+        "deepinfra",
         "cohere",
         "huggingface",
         "ollama",
@@ -352,13 +354,13 @@ async def invoke_with_fallback(
         invoke_fn:       Async or sync callable that accepts a single
                          provider instance and performs the model call.
                          Should raise an exception on failure.
-        retry_attempts:  Maximum number of call attempts per provider
+        retry_attempts:   Maximum number of call attempts per provider
                          before declaring it failed.  Defaults to ``3``.
-        base_backoff:    Base delay in seconds for exponential back-off.
+        base_backoff:     Base delay in seconds for exponential back-off.
                          Delay for attempt *n* is
                          ``base_backoff * 2 ** n`` seconds.
                          Defaults to ``1.0``.
-        health_tracker:  :class:`ProviderHealthTracker` to use.  Defaults
+        health_tracker:   :class:`ProviderHealthTracker` to use.  Defaults
                          to :data:`default_health_tracker`.
 
     Returns:
@@ -512,6 +514,24 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
     if name == "deepseek":
         from src.model.providers_deepseek import DeepSeekProvider
         return DeepSeekProvider(api_key=_require_env("DEEPSEEK_API_KEY"))
+
+    if name == "deepinfra":
+        from src.model.providers_deepinfra import DeepInfraConfig, DeepInfraProvider
+        return DeepInfraProvider(
+            DeepInfraConfig(
+                api_key=_require_env("DEEPINFRA_API_KEY"),
+                model=_get_env("DEEPINFRA_MODEL", "meta-llama/Llama-3-70b-chat-hf"),
+                api_base=_get_env("DEEPINFRA_API_BASE", "https://api.deepinfra.com/v1/openai"),
+                max_tokens=int(_get_env("DEEPINFRA_MAX_TOKENS", "4096")),
+                temperature=float(_get_env("DEEPINFRA_TEMPERATURE", "0.7")),
+                top_p=float(_get_env("DEEPINFRA_TOP_P", "1.0")),
+                frequency_penalty=float(_get_env("DEEPINFRA_FREQUENCY_PENALTY", "0.0")),
+                presence_penalty=float(_get_env("DEEPINFRA_PRESENCE_PENALTY", "0.0")),
+                max_retries=int(_get_env("DEEPINFRA_MAX_RETRIES", str(DEFAULT_MAX_RETRIES))),
+                timeout=float(_get_env("DEEPINFRA_TIMEOUT", str(DEFAULT_TIMEOUT))),
+                organization=_get_env("DEEPINFRA_ORGANIZATION", "") or None,
+            )
+        )
 
     if name == "cohere":
         from src.model.providers_cohere import CohereProvider
