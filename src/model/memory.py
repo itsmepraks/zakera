@@ -4,7 +4,7 @@ This module handles conversation history, context window management, and
 integration with database storage for persistent conversations.
 """
 
-from typing import List, Dict, Optional, Tuple
+from typing import Any, List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 import tiktoken

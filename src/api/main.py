@@ -6,6 +6,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 import uuid
 import os
+import time
 
 from .routes import chat, conversations, health, auth, tools, analytics, search, models, monitoring, feedback
 from .config import settings
@@ -87,7 +88,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Zakera AI Chat Agent",
     description="Intelligent chat agent with conversation memory, multi-provider LLM support, tool integration, and comprehensive monitoring",
-    version="0.5.0",
+    version="0.7.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     lifespan=lifespan
@@ -116,6 +117,14 @@ async def add_request_id(request: Request, call_next):
     
     return response
 
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    process_time = time.perf_counter() - start_time
+    response.headers["X-Process-Time"] = f"{process_time:.4f}"
+    return response
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -141,7 +150,7 @@ app.include_router(feedback.router, prefix="/api/v1/feedback", tags=["feedback"]
 async def root():
     return {
         "message": "Zakera AI Chat Agent API",
-        "version": "0.5.0",
+        "version": "0.7.0",
         "status": "operational",
         "features": {
             "database": "✅ SQLAlchemy with persistent storage",

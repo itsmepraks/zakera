@@ -50,7 +50,8 @@ COST_PER_1K_TOKENS: Dict[str, Dict[str, tuple[float, float]]] = {
     "mistral-small-latest": {"mistral": (0.001, 0.003)},
     "open-mistral-7b": {"mistral": (0.00025, 0.00025)},
     # DeepSeek
-    "deepseek-chat": {"deepseek": (0.00014, 0.00028)},
+    "deepseek-chat": {"deepseek": (0.0001, 0.0001)},
+    "deepseek-coder": {"deepseek": (0.0001, 0.0001)},
     "deepseek-reasoner": {"deepseek": (0.00055, 0.00219)},
     # Together AI (open-source models)
     "meta-llama/Llama-3-70b-chat-hf": {"together": (0.0009, 0.0009)},
