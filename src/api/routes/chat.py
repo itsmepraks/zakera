@@ -13,9 +13,9 @@ from ..auth import get_current_active_user, decode_access_token
 from ...model.providers import (
     OpenAIProvider, AnthropicProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider
 )
+from ...model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
 from ...model.providers_mistral import MistralProvider
 from ...model.providers_perplexity import PerplexityProvider
-from ...model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
 from ...model.memory import ConversationMemory
 from ...tools.manager import get_tool_manager
 
@@ -101,12 +101,6 @@ def _get_provider(model_name: str) -> ModelProvider:
         if model_name_lower.startswith("groq/"):
             actual_model = model_name[5:]
         return GroqProvider(model_name=actual_model)
-    elif model_name_lower.startswith("mistral/"):
-        actual_model = model_name.split("/", 1)[1]
-        return MistralProvider(model_name=actual_model)
-    elif model_name_lower.startswith("perplexity/"):
-        actual_model = model_name.split("/", 1)[1]
-        return PerplexityProvider(model_name=actual_model)
     elif model_name_lower.startswith("deepseek/"):
         actual_model = model_name.split("/", 1)[1]
         return DeepSeekProvider(
@@ -115,6 +109,12 @@ def _get_provider(model_name: str) -> ModelProvider:
                 model=actual_model,
             )
         )
+    elif model_name_lower.startswith("mistral/"):
+        actual_model = model_name.split("/", 1)[1]
+        return MistralProvider(model_name=actual_model)
+    elif model_name_lower.startswith("perplexity/"):
+        actual_model = model_name.split("/", 1)[1]
+        return PerplexityProvider(model_name=actual_model)
     elif model_name_lower.startswith("ollama:") or model_name_lower.startswith("local:"):
         _, actual_model = model_name.split(":", 1)
         return LocalModelProvider(model_name=actual_model)
