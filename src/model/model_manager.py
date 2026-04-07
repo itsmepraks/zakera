@@ -16,6 +16,7 @@ llama3          – Meta Llama 3 via Groq inference API
 mistral         – Mistral AI chat models
 codestral       – Mistral Codestral (code generation + FIM)
 deepseek        – DeepSeek R1 / V3
+deepseek-v3     – DeepSeek V3 chat model
 cohere          – Cohere Command R+
 huggingface     – HuggingFace Inference API
 ollama          – Ollama (remote)
@@ -98,6 +99,7 @@ def list_providers() -> list[str]:
         "mistral",
         "codestral",
         "deepseek",
+        "deepseek-v3",
         "cohere",
         "huggingface",
         "ollama",
@@ -510,8 +512,22 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
         )
 
     if name == "deepseek":
-        from src.model.providers_deepseek import DeepSeekProvider
-        return DeepSeekProvider(api_key=_require_env("DEEPSEEK_API_KEY"))
+        from src.model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
+        return DeepSeekProvider(
+            DeepSeekConfig(
+                api_key=_require_env("DEEPSEEK_API_KEY"),
+                model=_get_env("DEEPSEEK_MODEL", "deepseek-reasoner"),
+            )
+        )
+
+    if name == "deepseek-v3":
+        from src.model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
+        return DeepSeekProvider(
+            DeepSeekConfig(
+                api_key=_require_env("DEEPSEEK_API_KEY"),
+                model="deepseek-chat",
+            )
+        )
 
     if name == "cohere":
         from src.model.providers_cohere import CohereProvider
