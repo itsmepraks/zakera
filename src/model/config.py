@@ -49,6 +49,7 @@ class ModelConfig:
     # ---- DeepSeek -----------------------------------------------------
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-reasoner"
+    DEEPSEEK_V3_MODEL: str = "deepseek-chat"
 
     # ---- Cohere -------------------------------------------------------
     cohere_api_key: str = ""
