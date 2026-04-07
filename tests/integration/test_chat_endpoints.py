@@ -13,6 +13,8 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient, ASGITransport
 from fastapi import status
 
+from src.model.prompts import PromptTemplate
+
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
@@ -114,6 +116,45 @@ async def test_chat_returns_assistant_message(async_client, auth_headers, mock_p
     assert body["message"]["role"] == "assistant"
     assert body["message"]["content"] == FAKE_RESPONSE_CONTENT
     assert body["usage"]["total_tokens"] == FAKE_USAGE["total_tokens"]
+
+
+@pytest.mark.asyncio
+async def test_chat_with_strategic_planner_prompt(async_client, auth_headers, mock_provider_generate, db_with_conversation):
+    """POST /chat should work with the strategic-planner system prompt preset."""
+    from src.api.database import SessionLocal
+    from src.api.models import Conversation
+
+    conv_id = db_with_conversation
+    strategic_prompt = PromptTemplate.get_preset("strategic-planner").render(
+        preferences="Prioritize architecture, milestones, and resource planning."
+    )
+
+    db = SessionLocal()
+    try:
+        conversation = db.query(Conversation).filter(Conversation.id == conv_id).first()
+        assert conversation is not None
+        conversation.system_prompt = strategic_prompt
+        db.commit()
+    finally:
+        db.close()
+
+    response = await async_client.post(
+        "/chat",
+        json={"conversation_id": conv_id, "message": "Create a roadmap for the new product launch."},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    body = response.json()
+    assert body["conversation_id"] == conv_id
+    assert body["message"]["role"] == "assistant"
+    assert body["message"]["content"] == FAKE_RESPONSE_CONTENT
+    assert body["usage"]["total_tokens"] == FAKE_USAGE["total_tokens"]
+
+    assert mock_provider_generate.await_count == 1
+    provider_messages = mock_provider_generate.call_args.args[0]
+    assert provider_messages[0].role == "system"
+    assert "strategic project planner" in provider_messages[0].content.lower()
 
 
 @pytest.mark.asyncio
