@@ -10,6 +10,7 @@ import os
 from ..database import get_db, SessionLocal
 from ..models import Conversation, Message, User
 from ..auth import get_current_active_user, decode_access_token
+from ..config import settings
 from ...model.providers import (
     OpenAIProvider, AnthropicProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider
 )
@@ -90,6 +91,13 @@ class ChatResponse(BaseModel):
 def _get_provider(model_name: str) -> ModelProvider:
     """Resolve a ModelProvider instance from a model-name string."""
     model_name_lower = model_name.lower()
+    deepseek_aliases = {
+        "deepseek-v3": "deepseek-chat",
+        "deepseek-r1": "deepseek-reasoner",
+        "v3": "deepseek-chat",
+        "r1": "deepseek-reasoner",
+    }
+
     if model_name_lower.startswith("gpt"):
         return OpenAIProvider(model_name=model_name)
     elif model_name_lower.startswith("claude"):
@@ -101,11 +109,16 @@ def _get_provider(model_name: str) -> ModelProvider:
         if model_name_lower.startswith("groq/"):
             actual_model = model_name[5:]
         return GroqProvider(model_name=actual_model)
-    elif model_name_lower.startswith("deepseek/"):
-        actual_model = model_name.split("/", 1)[1]
+    elif model_name_lower in deepseek_aliases or model_name_lower.startswith("deepseek/"):
+        if model_name_lower.startswith("deepseek/"):
+            actual_model = model_name.split("/", 1)[1]
+            actual_model = deepseek_aliases.get(actual_model.lower(), actual_model)
+        else:
+            actual_model = deepseek_aliases[model_name_lower]
         return DeepSeekProvider(
             DeepSeekConfig(
-                api_key=os.getenv("DEEPSEEK_API_KEY", ""),
+                api_key=settings.DEEPSEEK_API_KEY,
+                api_base=settings.DEEPSEEK_API_BASE,
                 model=actual_model,
             )
         )

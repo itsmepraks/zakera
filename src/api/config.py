@@ -13,10 +13,12 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
     
     # AI Model Configuration
-    MODEL_PROVIDER: str = "openai"  # openai, anthropic, local
+    MODEL_PROVIDER: str = "openai"  # openai, anthropic, local, deepseek
     MODEL_NAME: str = "gpt-4-turbo-preview"
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_API_BASE: str = "https://api.deepseek.com/v1"
     
     # Database
     DATABASE_URL: str = "sqlite:///./data/zakera.db"
