@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
@@ -6,12 +6,17 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import asyncio, json, logging
 import os
+import time
 
 from ..database import get_db, SessionLocal
 from ..models import Conversation, Message, User
 from ..auth import get_current_active_user, decode_access_token
+from ..schemas.export import ExportFormat, ExportOptions
+from ..services import ExportService
+from .export import _check_rate_limit, _get_conversation_or_404
 from ...model.providers import (
-    OpenAIProvider, AnthropicProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider
+    OpenAIProvider, AnthropicProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider,
+    FireworksProvider,
 )
 from ...model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
 from ...model.providers_mistral import MistralProvider
@@ -101,6 +106,9 @@ def _get_provider(model_name: str) -> ModelProvider:
         if model_name_lower.startswith("groq/"):
             actual_model = model_name[5:]
         return GroqProvider(model_name=actual_model)
+    elif model_name_lower.startswith("fireworks/") or model_name_lower.startswith("fireworks:"):
+        actual_model = model_name.split(":", 1)[1] if ":" in model_name else model_name.split("/", 1)[1]
+        return FireworksProvider(model_name=actual_model)
     elif model_name_lower.startswith("deepseek/"):
         actual_model = model_name.split("/", 1)[1]
         return DeepSeekProvider(
@@ -246,17 +254,21 @@ async def send_message(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    effective_model = conversation.model_name or "gpt-4-turbo-preview"
+
     # Build memory from persistent history and add the new user turn.
     memory = ConversationMemory(
         max_tokens=request.max_tokens or 4000,
         conversation_id=conversation.id,
-        model=conversation.model_name or "gpt-4-turbo-preview",
+        model=effective_model,
         system_prompt=conversation.system_prompt,
         db=db,
     )
     memory.add_turn("user", request.message)
 
-    provider = _get_provider(conversation.model_name or "gpt-4-turbo-preview")
+    provider = _get_provider(effective_model)
+
+    request_started = time.perf_counter()
 
     try:
         from ...model.providers import Message as ProviderMessage
@@ -289,6 +301,8 @@ async def send_message(
         logger.exception("Model provider error during POST /chat")
         raise HTTPException(status_code=502, detail=f"Model provider error: {exc}")
 
+    elapsed_ms = int(round((time.perf_counter() - request_started) * 1000))
+
     # Persist the assistant turn and update stats.
     memory.add_turn("assistant", assistant_content)
     memory.update_conversation_stats(total_tokens=usage.get("total_tokens", 0))
@@ -315,9 +329,99 @@ async def send_message(
                 if assistant_message
                 else datetime.utcnow().isoformat()
             ),
-            metadata={"tools_used": request.tools_enabled},
+            metadata={
+                "tools_used": request.tools_enabled,
+                "model_used": effective_model,
+                "tokens_used": usage.get("total_tokens", 0),
+                "latency_ms": elapsed_ms,
+            },
         ),
         usage=usage,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /conversations/{conversation_id}/export
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/conversations/{conversation_id}/export",
+    summary="Export a single conversation",
+    description=(
+        "Stream the conversation as NDJSON progress events followed by the "
+        "formatted payload in the requested format (json | markdown | csv)."
+    ),
+    responses={
+        200: {"description": "NDJSON stream", "content": {"application/x-ndjson": {}}},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Access denied"},
+        404: {"description": "Conversation not found"},
+        429: {"description": "Rate limit exceeded"},
+    },
+)
+async def export_conversation(
+    conversation_id: str,
+    fmt: ExportFormat = Query(
+        default=ExportFormat.JSON,
+        alias="format",
+        description="Output format: json | markdown | csv",
+    ),
+    include_metadata: bool = Query(True, description="Embed token/cost metadata per message"),
+    include_system_messages: bool = Query(False, description="Include system-role messages"),
+    compress: bool = Query(False, description="gzip-compress the exported payload"),
+    date_from: Optional[datetime] = Query(None, description="Only include messages on/after this UTC datetime"),
+    date_to: Optional[datetime] = Query(None, description="Only include messages on/before this UTC datetime"),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream a single conversation export with real-time progress."""
+    _check_rate_limit(current_user.id)
+
+    conversation = _get_conversation_or_404(conversation_id, current_user.id, db)
+
+    options = ExportOptions(
+        format=fmt,
+        include_metadata=include_metadata,
+        include_system_messages=include_system_messages,
+        compress=compress,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    service = ExportService(db=db, user=current_user)
+
+    logger.info(
+        "Single export requested",
+        extra={
+            "user_id": current_user.id,
+            "conversation_id": conversation_id,
+            "format": fmt.value,
+            "compress": compress,
+        },
+    )
+
+    extension_map = {
+        ExportFormat.JSON: "json",
+        ExportFormat.MARKDOWN: "md",
+        ExportFormat.CSV: "csv",
+    }
+    ext = extension_map[fmt]
+    filename = (
+        f"conversation_{conversation_id[:8]}_"
+        f"{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{ext}"
+    )
+    if compress:
+        filename += ".gz"
+
+    return StreamingResponse(
+        service.stream_export(conversation=conversation, options=options),
+        media_type="application/x-ndjson",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Export-Format": fmt.value,
+            "X-Conversation-Id": conversation_id,
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -426,6 +530,8 @@ async def retry_last_message(
     # ---- Call the model ---------------------------------------------------
     provider = _get_provider(effective_model)
 
+    request_started = time.perf_counter()
+
     try:
         from ...model.providers import Message as ProviderMessage
 
@@ -450,6 +556,8 @@ async def retry_last_message(
         db.rollback()
         logger.exception("Model provider error during POST /chat/retry")
         raise HTTPException(status_code=502, detail=f"Model provider error: {exc}")
+
+    elapsed_ms = int(round((time.perf_counter() - request_started) * 1000))
 
     # ---- Persist the new assistant turn -----------------------------------
     memory.add_turn("assistant", assistant_content)
@@ -486,6 +594,8 @@ async def retry_last_message(
                 "retried": True,
                 "model_used": effective_model,
                 "model_overridden": request.model_override is not None,
+                "tokens_used": usage.get("total_tokens", 0),
+                "latency_ms": elapsed_ms,
             },
         ),
         usage=usage,
