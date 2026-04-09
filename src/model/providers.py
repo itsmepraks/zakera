@@ -470,3 +470,7 @@ class LocalModelProvider(ModelProvider):
                             break
                     except _json.JSONDecodeError:
                         continue
+
+
+# Fireworks AI provider is implemented in a sibling module for better separation.
+from .providers_fireworks import FireworksProvider  # noqa: E402,F401
