@@ -20,8 +20,17 @@ interface MessageProps {
     model?: string;
     tokensUsed?: number;
     cost?: number;
+    latencyMs?: number;
   };
 }
+
+const formatLatency = (latencyMs: number) => {
+  if (latencyMs < 1000) {
+    return `${Math.round(latencyMs)} ms`;
+  }
+
+  return `${(latencyMs / 1000).toFixed(1)} s`;
+};
 
 export const Message: React.FC<MessageProps> = ({
   id,
@@ -136,10 +145,16 @@ export const Message: React.FC<MessageProps> = ({
                     {metadata.model}
                   </span>
                 )}
-                {metadata.tokensUsed && (
+                {metadata.tokensUsed !== undefined && (
                   <span className="flex items-center gap-1">
                     <span className="font-medium">Tokens:</span>
                     {metadata.tokensUsed.toLocaleString()}
+                  </span>
+                )}
+                {metadata.latencyMs !== undefined && (
+                  <span className="flex items-center gap-1">
+                    <span className="font-medium">Latency:</span>
+                    {formatLatency(metadata.latencyMs)}
                   </span>
                 )}
                 {metadata.cost !== undefined && (

@@ -16,6 +16,7 @@ interface Message {
     model?: string;
     tokensUsed?: number;
     cost?: number;
+    latencyMs?: number;
   };
 }
 
