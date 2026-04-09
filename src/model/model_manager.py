@@ -17,6 +17,7 @@ mistral         – Mistral AI chat models
 codestral       – Mistral Codestral (code generation + FIM)
 deepseek        – DeepSeek R1 / V3
 deepseek-v3     – DeepSeek V3 chat model
+fireworks       – Fireworks AI (OpenAI-compatible)
 cohere          – Cohere Command R+
 huggingface     – HuggingFace Inference API
 ollama          – Ollama (remote)
@@ -100,6 +101,7 @@ def list_providers() -> list[str]:
         "codestral",
         "deepseek",
         "deepseek-v3",
+        "fireworks",
         "cohere",
         "huggingface",
         "ollama",
@@ -354,7 +356,7 @@ async def invoke_with_fallback(
         invoke_fn:       Async or sync callable that accepts a single
                          provider instance and performs the model call.
                          Should raise an exception on failure.
-        retry_attempts:  Maximum number of call attempts per provider
+        retry_attempts:   Maximum number of call attempts per provider
                          before declaring it failed.  Defaults to ``3``.
         base_backoff:    Base delay in seconds for exponential back-off.
                          Delay for attempt *n* is
@@ -527,6 +529,16 @@ def _build_provider(name: str) -> Any:  # noqa: C901 – acceptable complexity h
                 api_key=_require_env("DEEPSEEK_API_KEY"),
                 model="deepseek-chat",
             )
+        )
+
+    if name == "fireworks":
+        from src.model.providers_fireworks import FireworksProvider
+        return FireworksProvider(
+            api_key=_require_env("FIREWORKS_API_KEY"),
+            model_name=_get_env(
+                "FIREWORKS_MODEL",
+                "accounts/fireworks/models/llama-v3p1-70b-instruct",
+            ),
         )
 
     if name == "cohere":
