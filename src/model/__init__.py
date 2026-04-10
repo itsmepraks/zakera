@@ -12,11 +12,10 @@ from .providers import (
     ModelProvider,
     ModelResponse,
     OpenAIProvider,
-    AnthropicProvider,
     GeminiProvider,
     LocalModelProvider,
 )
-from .providers_anthropic import AnthropicStreamingProvider  # noqa: F401 – convenience alias
+from .providers_anthropic import AnthropicProvider, AnthropicStreamingProvider  # noqa: F401
 from .providers_azure import AzureOpenAIProvider  # noqa: F401
 from .providers_cohere import CohereProvider  # noqa: F401
 from .providers_deepseek import DeepSeekProvider  # noqa: F401
