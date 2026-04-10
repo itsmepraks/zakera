@@ -25,7 +25,7 @@ import httpx
 from opentelemetry import trace
 
 from .config import ModelConfig
-from .providers import BaseMessage, ModelProvider, ModelResponse, StreamChunk, ToolDefinition
+from .providers import Message as BaseMessage, ModelProvider, ModelResponse, StreamChunk, ToolDefinition
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
