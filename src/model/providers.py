@@ -43,6 +43,15 @@ class ModelResponse:
     tool_calls: Optional[List[Dict[str, Any]]] = None
 
 
+@dataclass
+class StreamChunk:
+    content: str
+    model: str
+    usage: Optional[Dict[str, int]] = None
+    finish_reason: Optional[str] = None
+    tool_call: Optional[Dict[str, Any]] = None
+
+
 class ModelProvider(ABC):
     """Abstract base class for AI model providers."""
 
