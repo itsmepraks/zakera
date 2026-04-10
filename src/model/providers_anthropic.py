@@ -826,12 +826,14 @@ class AnthropicProvider(ModelProvider):
     # Utility
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _get_headers() -> Dict[str, str]:
-        return {
-            "anthropic-version": AnthropicProvider.API_VERSION,
+    def _get_headers(self) -> Dict[str, str]:
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": self.api_version,
             "content-type": "application/json",
+            "anthropic-beta": "interleaved-thinking-2025-05-14",
         }
+        return headers
 
     def get_supported_models(self) -> Dict[str, Dict[str, Any]]:
         return self.SUPPORTED_MODELS
