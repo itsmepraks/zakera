@@ -1,17 +1,56 @@
 """
 Provider registry for Zakera AI Chat Agent.
 
-All model providers are registered here so the ModelManager and
-the provider-selector API endpoint can discover them by key name.
+This package also acts as a compatibility layer for the legacy
+``src/model/providers.py`` module so imports like ``from src.model import
+Message`` and ``from src.model.providers import ModelProvider`` continue to
+work across the codebase.
 """
 
 from __future__ import annotations
 
-from typing import Dict, Type
+import importlib.util
+import logging
+from pathlib import Path
+from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
-# Lazy imports — only the registry dict lives here so that importing this
-# module does not force every provider's heavy dependencies to load.
+# Legacy compatibility exports
+# ---------------------------------------------------------------------------
+
+
+def _load_legacy_model_providers() -> Any:
+    """Load the legacy ``src/model/providers.py`` module by path."""
+    legacy_path = Path(__file__).resolve().parents[1] / "providers.py"
+    spec = importlib.util.spec_from_file_location(
+        "src.model._legacy_providers",
+        legacy_path,
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to load legacy provider module from {legacy_path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_legacy = _load_legacy_model_providers()
+
+Message = _legacy.Message
+ModelProvider = _legacy.ModelProvider
+ModelResponse = _legacy.ModelResponse
+StreamChunk = _legacy.StreamChunk
+ToolDefinition = _legacy.ToolDefinition
+OpenAIProvider = _legacy.OpenAIProvider
+GeminiProvider = _legacy.GeminiProvider
+LocalModelProvider = _legacy.LocalModelProvider
+
+
+# ---------------------------------------------------------------------------
+# Provider registry metadata
 # ---------------------------------------------------------------------------
 
 PROVIDER_REGISTRY: Dict[str, str] = {
@@ -77,6 +116,7 @@ def load_provider_config(provider_key: str) -> Dict[str, object]:
 
 def _require_env(var_name: str, provider_key: str) -> str:
     import os
+
     value = os.environ.get(var_name, "")
     if not value:
         raise ValueError(
@@ -86,4 +126,17 @@ def _require_env(var_name: str, provider_key: str) -> str:
     return value
 
 
-__all__ = ["PROVIDER_REGISTRY", "load_provider_config"]
+__all__ = [
+    # Legacy compatibility layer
+    "Message",
+    "ModelProvider",
+    "ModelResponse",
+    "StreamChunk",
+    "ToolDefinition",
+    "OpenAIProvider",
+    "GeminiProvider",
+    "LocalModelProvider",
+    # Provider registry
+    "PROVIDER_REGISTRY",
+    "load_provider_config",
+]
