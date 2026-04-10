@@ -14,6 +14,7 @@ from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
+import re
 import tiktoken
 import json
 import hashlib
@@ -87,7 +88,8 @@ class EnhancedConversationMemory:
         db: Optional[Session] = None,
         summarization_strategy: SummarizationStrategy = SummarizationStrategy.ADAPTIVE,
         summary_threshold: int = 10,  # Summarize when > N turns old
-        min_compression_ratio: float = 0.3  # Target compression
+        min_compression_ratio: float = 0.3,  # Target compression
+        token_budget: Optional[int] = None
     ):
         self.max_tokens = max_tokens
         self.max_turns = max_turns
@@ -107,6 +109,7 @@ class EnhancedConversationMemory:
         # Context window management
         self.short_term_window = 5  # Last N turns always included
         self.reserved_tokens = 500  # Reserve for response
+        self.token_budget = max(0, token_budget if token_budget is not None else self.max_tokens - self.reserved_tokens)
         
         # Token encoder
         try:
@@ -134,6 +137,12 @@ class EnhancedConversationMemory:
             if conversation:
                 self.system_prompt = conversation.system_prompt or self.system_prompt
                 self.model = conversation.model_name or self.model
+                
+                if conversation.metadata:
+                    if "max_turns" in conversation.metadata:
+                        self.max_turns = max(0, int(conversation.metadata["max_turns"]))
+                    if "token_budget" in conversation.metadata:
+                        self.token_budget = max(0, int(conversation.metadata["token_budget"]))
                 
                 # Load summaries if stored in metadata
                 if conversation.metadata and "summaries" in conversation.metadata:
@@ -167,7 +176,67 @@ class EnhancedConversationMemory:
         except Exception as e:
             print(f"Error loading conversation from database: {e}")
     
-    def _save_to_db(self, role: str, content: str, metadata: Optional[Dict] = None) -> Optional[Any]:
+    def _persist_conversation_metadata(self) -> bool:
+        """Persist summaries and important facts to the conversation record"""
+        if not self.db or not self.conversation_id:
+            return True
+        
+        try:
+            from src.api.models import Conversation
+            
+            conversation = self.db.query(Conversation).filter(
+                Conversation.id == self.conversation_id
+            ).first()
+            
+            if conversation:
+                conversation.updated_at = func.now()
+                conversation.metadata = dict(conversation.metadata or {})
+                conversation.metadata["summaries"] = [
+                    {
+                        "summary_text": s.summary_text,
+                        "turn_ids": s.turn_ids,
+                        "start_timestamp": s.start_timestamp,
+                        "end_timestamp": s.end_timestamp,
+                        "token_count": s.token_count,
+                        "compression_ratio": s.compression_ratio,
+                        "created_at": s.created_at
+                    }
+                    for s in self.summaries
+                ]
+                conversation.metadata["important_facts"] = self.important_facts
+                conversation.metadata["token_budget"] = self.token_budget
+                conversation.metadata["max_turns"] = self.max_turns
+            
+            return True
+        except Exception as e:
+            print(f"Error updating conversation metadata in database: {e}")
+            self.db.rollback()
+            return False
+    
+    def _update_turn_summary_state_in_db(self, turn_ids: List[str], is_summarized: bool) -> bool:
+        """Persist summarized state for existing turn messages"""
+        if not self.db or not self.conversation_id:
+            return True
+        
+        try:
+            from src.api.models import Message
+            
+            message_ids = [int(turn_id) for turn_id in turn_ids if turn_id and turn_id.isdigit()]
+            if not message_ids:
+                return True
+            
+            messages = self.db.query(Message).filter(Message.id.in_(message_ids)).all()
+            for message in messages:
+                message.metadata = dict(message.metadata or {})
+                message.metadata["is_summarized"] = is_summarized
+            
+            return True
+        except Exception as e:
+            print(f"Error updating turn summary state in database: {e}")
+            self.db.rollback()
+            return False
+    
+    def _save_to_db(self, role: str, content: str, metadata: Optional[Dict] = None, is_summarized: bool = False) -> Optional[Any]:
         """Save a message to the database with enhanced metadata"""
         if not self.db or not self.conversation_id:
             return None
@@ -179,11 +248,11 @@ class EnhancedConversationMemory:
             token_count = len(self.encoding.encode(content))
             
             # Enhanced metadata
-            enhanced_metadata = metadata or {}
+            enhanced_metadata = dict(metadata or {})
             enhanced_metadata.update({
                 "importance": self._calculate_importance(role, content),
                 "token_count": token_count,
-                "is_summarized": False
+                "is_summarized": is_summarized
             })
             
             # Create message
@@ -207,24 +276,9 @@ class EnhancedConversationMemory:
                 conversation.message_count = (conversation.message_count or 0) + 1
                 conversation.last_message_at = func.now()
                 conversation.updated_at = func.now()
-                
-                # Save summaries and important facts
-                if not conversation.metadata:
-                    conversation.metadata = {}
-                
-                conversation.metadata["summaries"] = [
-                    {
-                        "summary_text": s.summary_text,
-                        "turn_ids": s.turn_ids,
-                        "start_timestamp": s.start_timestamp,
-                        "end_timestamp": s.end_timestamp,
-                        "token_count": s.token_count,
-                        "compression_ratio": s.compression_ratio,
-                        "created_at": s.created_at
-                    }
-                    for s in self.summaries
-                ]
-                conversation.metadata["important_facts"] = self.important_facts
+            
+            if not self._persist_conversation_metadata():
+                return None
             
             self.db.commit()
             self.db.refresh(message)
@@ -285,31 +339,33 @@ class EnhancedConversationMemory:
             content=content,
             metadata=metadata or {},
             token_count=token_count,
-            importance=importance or self._calculate_importance(role, content)
+            importance=importance if importance is not None else self._calculate_importance(role, content)
         )
         
         self.turns.append(turn)
         
         # Extract important facts
-        self._extract_important_facts(turn)
+        self._extract_user_info(turn)
         
         # Save to database
-        self._save_to_db(role, content, metadata)
+        message = self._save_to_db(role, content, metadata, is_summarized=turn.is_summarized)
+        if message:
+            turn.turn_id = str(message.id)
         
         # Check if summarization needed
         if self._should_summarize():
             self._create_summary()
     
-    def _extract_important_facts(self, turn: ConversationTurn):
+    def _extract_user_info(self, turn: ConversationTurn) -> None:
         """Extract important facts from a turn"""
         if turn.importance >= MemoryImportance.CRITICAL.value:
             content_lower = turn.content.lower()
             
             # Extract name
             if "my name is" in content_lower:
-                parts = turn.content.split("my name is", 1)
-                if len(parts) > 1:
-                    name = parts[1].split()[0].strip().strip('.,!?')
+                match = re.search(r"my name is\s+([^\s,!.?]+)", turn.content, re.IGNORECASE)
+                if match:
+                    name = match.group(1).strip().strip('.,!?')
                     fact = f"User's name: {name}"
                     if fact not in self.important_facts:
                         self.important_facts.append(fact)
@@ -320,6 +376,10 @@ class EnhancedConversationMemory:
                     if turn.content not in self.important_facts:
                         self.important_facts.append(turn.content)
                     break
+    
+    def _extract_important_facts(self, turn: ConversationTurn) -> None:
+        """Backward-compatible alias for user info extraction"""
+        self._extract_user_info(turn)
     
     def _should_summarize(self) -> bool:
         """Determine if summarization should occur"""
@@ -376,6 +436,15 @@ class EnhancedConversationMemory:
                 # Mark turns as summarized
                 for turn in regular_turns:
                     turn.is_summarized = True
+                    turn.metadata["is_summarized"] = True
+                
+                # Persist summarized state and conversation metadata
+                if not self._update_turn_summary_state_in_db(turn_ids, True):
+                    return
+                if not self._persist_conversation_metadata():
+                    return
+                if self.db:
+                    self.db.commit()
                 
                 # Remove summarized low-importance turns
                 low_importance_turns = [
@@ -437,11 +506,7 @@ class EnhancedConversationMemory:
             for turn in turns
         ])
         
-        prompt = f"""Summarize the following conversation segment concisely, preserving key information, decisions, and context:
-
-{conversation_text}
-
-Provide a brief summary (2-3 sentences) that captures the essential information."""
+        prompt = f"""Summarize the following conversation segment concisely, preserving key information, decisions, and context:\n\n{conversation_text}\n\nProvide a brief summary (2-3 sentences) that captures the essential information."""
         
         try:
             # Use provider to generate summary
@@ -461,7 +526,9 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
     def get_messages(
         self, 
         include_system: bool = True,
-        optimize_context: bool = True
+        optimize_context: bool = True,
+        max_turns: Optional[int] = None,
+        token_budget: Optional[int] = None
     ) -> List[Dict[str, str]]:
         """
         Get messages with smart context window optimization
@@ -473,6 +540,8 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
         4. Recent turns (short-term window)
         5. High-importance older turns
         6. Regular older turns (if space available)
+        
+        Optional max_turns and token_budget arguments can further constrain the result.
         """
         messages = []
         
@@ -481,8 +550,23 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
             messages.append({"role": "system", "content": self.system_prompt})
         
         # Calculate available tokens
-        available_tokens = self.max_tokens - self.reserved_tokens
+        effective_token_budget = token_budget if token_budget is not None else self.token_budget
+        available_tokens = max(0, min(effective_token_budget, self.max_tokens - self.reserved_tokens))
         current_tokens = self._count_tokens(messages)
+        
+        effective_max_turns = max_turns if max_turns is not None else self.max_turns
+        effective_max_turns = max(0, effective_max_turns)
+        
+        eligible_turns = [turn for turn in self.turns if not turn.is_summarized]
+        turn_limit = min(effective_max_turns, len(eligible_turns))
+        
+        recent_count = min(self.short_term_window, turn_limit)
+        recent_turns = eligible_turns[-recent_count:] if recent_count > 0 else []
+        recent_messages = [
+            {"role": turn.role, "content": turn.content}
+            for turn in recent_turns
+        ]
+        recent_tokens = self._count_tokens(recent_messages) if recent_messages else 0
         
         # 2. Add important facts as system context
         if self.important_facts and optimize_context:
@@ -490,7 +574,7 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
             facts_msg = {"role": "system", "content": facts_text}
             facts_tokens = self._count_tokens([facts_msg])
             
-            if current_tokens + facts_tokens <= available_tokens:
+            if current_tokens + facts_tokens + recent_tokens <= available_tokens:
                 messages.append(facts_msg)
                 current_tokens += facts_tokens
         
@@ -500,30 +584,20 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
                 summary_msg = {"role": "system", "content": summary.summary_text}
                 summary_tokens = self._count_tokens([summary_msg])
                 
-                if current_tokens + summary_tokens <= available_tokens:
+                if current_tokens + summary_tokens + recent_tokens <= available_tokens:
                     messages.append(summary_msg)
                     current_tokens += summary_tokens
         
-        # 4. Add recent turns (short-term window) - always include
-        recent_turns = self.turns[-self.short_term_window:]
-        recent_messages = []
-        
-        for turn in recent_turns:
-            if not turn.is_summarized:
-                turn_msg = {"role": turn.role, "content": turn.content}
-                recent_messages.append(turn_msg)
-        
-        recent_tokens = self._count_tokens(recent_messages)
-        
-        # 5. Add high-importance older turns
-        older_turns = self.turns[:-self.short_term_window] if len(self.turns) > self.short_term_window else []
+        # 4. Add high-importance older turns
+        older_turns = eligible_turns[:-recent_count] if recent_count > 0 else eligible_turns
         important_older = [
             t for t in older_turns 
             if t.importance >= MemoryImportance.HIGH.value and not t.is_summarized
         ]
         important_older.sort(key=lambda t: t.importance, reverse=True)
+        remaining_turn_slots = max(0, turn_limit - len(recent_turns))
         
-        for turn in important_older:
+        for turn in important_older[:remaining_turn_slots]:
             turn_msg = {"role": turn.role, "content": turn.content}
             turn_tokens = self._count_tokens([turn_msg])
             
@@ -531,8 +605,12 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
                 messages.append(turn_msg)
                 current_tokens += turn_tokens
         
-        # 6. Add recent messages
-        messages.extend(recent_messages)
+        # 5. Add recent messages
+        for turn_msg in recent_messages:
+            turn_tokens = self._count_tokens([turn_msg])
+            if current_tokens + turn_tokens <= available_tokens:
+                messages.append(turn_msg)
+                current_tokens += turn_tokens
         
         return messages
     
@@ -662,6 +740,7 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
             "metadata": {
                 "max_tokens": self.max_tokens,
                 "max_turns": self.max_turns,
+                "token_budget": self.token_budget,
                 "strategy": self.summarization_strategy.value,
                 "model": self.model
             }
@@ -670,7 +749,19 @@ Provide a brief summary (2-3 sentences) that captures the essential information.
     @classmethod
     def from_export(cls, data: Dict, **kwargs) -> "EnhancedConversationMemory":
         """Restore conversation from exported data"""
-        memory = cls(**kwargs)
+        metadata = data.get("metadata", {}) or {}
+        init_kwargs = dict(kwargs)
+        
+        if init_kwargs.get("max_tokens") is None:
+            init_kwargs["max_tokens"] = metadata.get("max_tokens", 4000)
+        if init_kwargs.get("max_turns") is None:
+            init_kwargs["max_turns"] = metadata.get("max_turns", 100)
+        if init_kwargs.get("model") is None:
+            init_kwargs["model"] = metadata.get("model", "gpt-4")
+        if init_kwargs.get("token_budget") is None and metadata.get("token_budget") is not None:
+            init_kwargs["token_budget"] = metadata.get("token_budget")
+        
+        memory = cls(**init_kwargs)
         
         # Restore turns
         for turn_data in data.get("turns", []):
