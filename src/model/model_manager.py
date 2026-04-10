@@ -59,12 +59,44 @@ def _get_env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
 
 
-def get_provider(name: str) -> Any:
+def _provider_cache_key(name: str, model_name: Optional[str] = None) -> str:
+    """Return a cache key that is unique per provider/model combination."""
+    return f"{name}:{model_name}" if model_name else name
+
+
+def _apply_model_override(provider: Any, model_name: Optional[str]) -> Any:
+    """Best-effort model override for providers that expose mutable model fields."""
+    if not model_name:
+        return provider
+
+    for attr in ("model_name", "model"):
+        if hasattr(provider, attr):
+            try:
+                setattr(provider, attr, model_name)
+            except Exception:  # noqa: BLE001
+                logger.debug("Unable to override provider.%s", attr, exc_info=True)
+
+    config = getattr(provider, "config", None)
+    if config is not None:
+        for attr in ("model", "model_name"):
+            if hasattr(config, attr):
+                try:
+                    setattr(config, attr, model_name)
+                except Exception:  # noqa: BLE001
+                    logger.debug("Unable to override provider.config.%s", attr, exc_info=True)
+
+    return provider
+
+
+def get_provider(name: str, model_name: Optional[str] = None) -> Any:
     """
     Return (and cache) the provider instance for *name*.
 
     Args:
         name: One of the keys listed in the module docstring.
+        model_name: Optional model override for providers that support
+                    multiple models. When supplied, the override is cached
+                    separately from the default provider instance.
 
     Returns:
         A provider instance with at minimum a ``stream_chat()`` or
@@ -74,12 +106,14 @@ def get_provider(name: str) -> Any:
         ValueError: If *name* is not a recognised provider key.
         RuntimeError: If the required API key environment variable is unset.
     """
-    if name in _PROVIDER_REGISTRY:
-        return _PROVIDER_REGISTRY[name]
+    cache_key = _provider_cache_key(name, model_name)
+    if cache_key in _PROVIDER_REGISTRY:
+        return _PROVIDER_REGISTRY[cache_key]
 
     provider = _build_provider(name)
-    _PROVIDER_REGISTRY[name] = provider
-    logger.info("Loaded provider: %s", name)
+    _apply_model_override(provider, model_name)
+    _PROVIDER_REGISTRY[cache_key] = provider
+    logger.info("Loaded provider: %s", cache_key)
     return provider
 
 
@@ -113,6 +147,23 @@ def list_providers() -> list[str]:
         "azure",
         "vertex",
     ]
+
+
+class ModelManager:
+    """Compatibility wrapper mirroring the documented ModelManager API."""
+
+    def get_provider(self, name: str, model_name: Optional[str] = None) -> Any:
+        return get_provider(name, model_name=model_name)
+
+    def reset(self) -> None:
+        reset()
+
+    def list_providers(self) -> List[str]:
+        return list_providers()
+
+
+#: Shared ModelManager instance for convenience.
+model_manager = ModelManager()
 
 
 # ---------------------------------------------------------------------------
