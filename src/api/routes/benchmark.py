@@ -294,7 +294,7 @@ def _extract_finish_reason(response: Any) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Provider dispatch (stub — wires to real providers via model_manager)
+# Provider dispatch (wired to real providers via model_manager)
 # ---------------------------------------------------------------------------
 
 
@@ -306,7 +306,9 @@ async def _call_provider(
     """
     Dispatch a chat request to a provider and return a ProviderResult.
 
-    This implementation uses the shared ModelManager provider registry.
+    This implementation uses the shared ModelManager provider registry and
+    enforces the per-provider timeout so callers can accurately distinguish
+    timeouts from other errors.
     """
     start_ts = time.perf_counter()
     try:
@@ -335,9 +337,15 @@ async def _call_provider(
             }
 
             if hasattr(provider, "generate"):
-                response = await provider.generate(messages=messages, **generate_kwargs)
+                response = await asyncio.wait_for(
+                    provider.generate(messages=messages, **generate_kwargs),
+                    timeout=config.timeout_seconds,
+                )
             elif hasattr(provider, "chat"):
-                response = await provider.chat(messages=messages, **generate_kwargs)
+                response = await asyncio.wait_for(
+                    provider.chat(messages=messages, **generate_kwargs),
+                    timeout=config.timeout_seconds,
+                )
             else:
                 raise AttributeError(
                     f"Provider '{config.provider_id}' does not expose a generate/chat method."
@@ -395,10 +403,7 @@ async def _run_providers_concurrently(
     start = time.perf_counter()
 
     tasks = [
-        asyncio.wait_for(
-            _call_provider(pc, request.prompt, request.system_prompt),
-            timeout=pc.timeout_seconds,
-        )
+        _call_provider(pc, request.prompt, request.system_prompt)
         for pc in request.providers
     ]
 
@@ -511,12 +516,7 @@ async def run_benchmark_stream(request: BenchmarkRequest) -> StreamingResponse:
 
         # Create individual tasks
         pending = {
-            asyncio.ensure_future(
-                asyncio.wait_for(
-                    _call_provider(pc, request.prompt, request.system_prompt),
-                    timeout=pc.timeout_seconds,
-                )
-            ): pc
+            asyncio.create_task(_call_provider(pc, request.prompt, request.system_prompt)): pc
             for pc in request.providers
         }
 
