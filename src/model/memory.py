@@ -259,7 +259,7 @@ class ConversationMemory:
                 f"Trimmed {removed} old turns, keeping most recent {self.max_turns}"
             )
     
-    def get_messages(self, include_system: bool = True) -> List[Dict[str, str]]:
+    def get_messages(self, include_system: bool = True) -> List[Dict[str, Any]]:
         """Get messages in API format with token management.
         
         Automatically manages context window by including most recent messages
@@ -285,7 +285,11 @@ class ConversationMemory:
         trimmed_count = 0
         
         for turn in reversed(self.turns):
-            turn_message = {"role": turn.role, "content": turn.content}
+            turn_message: Dict[str, Any] = {"role": turn.role, "content": turn.content}
+            if turn.metadata:
+                for key in ("name", "tool_call_id", "tool_calls"):
+                    if key in turn.metadata and turn.metadata[key] is not None:
+                        turn_message[key] = turn.metadata[key]
             turn_tokens = self._count_tokens([turn_message])
             
             if current_tokens + turn_tokens <= self.max_tokens:
