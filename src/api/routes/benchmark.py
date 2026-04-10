@@ -22,9 +22,10 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,7 +37,52 @@ router = APIRouter(prefix="/benchmark", tags=["benchmark"])
 # In-memory history store (replace with DB-backed service in production)
 # ---------------------------------------------------------------------------
 
-_benchmark_history: Dict[str, Dict[str, Any]] = {}
+_BENCHMARK_HISTORY_FILE = Path(__file__).resolve().parents[3] / "data" / "benchmark_history.json"
+
+
+def _load_benchmark_history() -> Dict[str, Dict[str, Any]]:
+    """Load persisted benchmark history from disk."""
+    if not _BENCHMARK_HISTORY_FILE.exists():
+        return {}
+
+    try:
+        with _BENCHMARK_HISTORY_FILE.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+
+        if not isinstance(data, dict):
+            return {}
+
+        history: Dict[str, Dict[str, Any]] = {}
+        for run_id, run_data in data.items():
+            if isinstance(run_data, dict):
+                history[str(run_id)] = run_data
+        return history
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to load benchmark history from %s: %s",
+            _BENCHMARK_HISTORY_FILE,
+            exc,
+        )
+        return {}
+
+
+def _persist_benchmark_history() -> None:
+    """Persist benchmark history to disk."""
+    try:
+        _BENCHMARK_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp_file = _BENCHMARK_HISTORY_FILE.with_name(f"{_BENCHMARK_HISTORY_FILE.name}.tmp")
+        with tmp_file.open("w", encoding="utf-8") as handle:
+            json.dump(_benchmark_history, handle, ensure_ascii=False, indent=2, default=str)
+        tmp_file.replace(_BENCHMARK_HISTORY_FILE)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Failed to persist benchmark history to %s: %s",
+            _BENCHMARK_HISTORY_FILE,
+            exc,
+        )
+
+
+_benchmark_history: Dict[str, Dict[str, Any]] = _load_benchmark_history()
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +194,106 @@ class CompareResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Helper utilities
+# ---------------------------------------------------------------------------
+
+
+def _store_benchmark_run(run_result: BenchmarkRunResult) -> None:
+    """Store a run result in memory and persist it to disk."""
+    _benchmark_history[run_result.run_id] = run_result.model_dump()
+    _persist_benchmark_history()
+
+
+def _extract_response_content(response: Any) -> str:
+    """Extract response text from provider return values."""
+    if response is None:
+        return ""
+
+    if isinstance(response, dict):
+        if isinstance(response.get("content"), str):
+            return response["content"]
+        if isinstance(response.get("text"), str):
+            return response["text"]
+        choices = response.get("choices")
+        if choices:
+            first_choice = choices[0]
+            if isinstance(first_choice, dict):
+                message = first_choice.get("message", {})
+                if isinstance(message, dict) and isinstance(message.get("content"), str):
+                    return message["content"]
+                delta = first_choice.get("delta", {})
+                if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+                    return delta["content"]
+
+    content = getattr(response, "content", None)
+    if isinstance(content, str):
+        return content
+
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text
+
+    return str(response)
+
+
+def _extract_response_model(response: Any, default_model: str) -> str:
+    """Extract the model name from a provider response."""
+    if isinstance(response, dict):
+        model = response.get("model")
+        if isinstance(model, str) and model:
+            return model
+
+    model = getattr(response, "model", None)
+    if isinstance(model, str) and model:
+        return model
+
+    return default_model
+
+
+def _extract_response_usage(response: Any) -> Dict[str, int]:
+    """Extract token usage from a provider response."""
+    usage = None
+    if isinstance(response, dict):
+        usage = response.get("usage")
+    else:
+        usage = getattr(response, "usage", None)
+
+    def _get_usage_field(name: str) -> int:
+        if usage is None:
+            return 0
+        if isinstance(usage, dict):
+            return int(usage.get(name, 0) or 0)
+        return int(getattr(usage, name, 0) or 0)
+
+    prompt_tokens = _get_usage_field("prompt_tokens")
+    completion_tokens = _get_usage_field("completion_tokens")
+    total_tokens = _get_usage_field("total_tokens")
+
+    if total_tokens <= 0:
+        total_tokens = prompt_tokens + completion_tokens
+
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _extract_finish_reason(response: Any) -> Optional[str]:
+    """Extract finish reason from a provider response."""
+    if isinstance(response, dict):
+        finish_reason = response.get("finish_reason") or response.get("stop_reason")
+        if isinstance(finish_reason, str):
+            return finish_reason
+
+    finish_reason = getattr(response, "finish_reason", None) or getattr(response, "stop_reason", None)
+    if isinstance(finish_reason, str):
+        return finish_reason
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Provider dispatch (stub — wires to real providers via model_manager)
 # ---------------------------------------------------------------------------
 
@@ -160,32 +306,60 @@ async def _call_provider(
     """
     Dispatch a chat request to a provider and return a ProviderResult.
 
-    This stub simulates the call interface. In production it delegates to the
-    ModelManager which selects the correct provider class, constructs the
-    client, and executes the chat method.
+    This implementation uses the shared ModelManager provider registry.
     """
     start_ts = time.perf_counter()
     try:
-        # Build message list in the standard Zakera format
-        messages: List[Dict[str, Any]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        from src.model import model_manager
+        from src.model.providers import Message
 
-        # --- Real dispatch would be:
-        #   from src.model.model_manager import ModelManager
-        #   manager = ModelManager.get_instance()
-        #   response = await manager.chat(
-        #       provider=config.provider_id,
-        #       model=config.model,
-        #       messages=messages,
-        #       max_tokens=config.max_tokens,
-        #       temperature=config.temperature,
-        #   )
-        # --- For now we raise NotImplementedError so integration tests can mock it
-        raise NotImplementedError(
-            f"Provider dispatch for '{config.provider_id}/{config.model}' must be "
-            "wired to ModelManager in production deployment."
+        provider = model_manager.get_provider(config.provider_id)
+        original_model_name = getattr(provider, "model_name", None)
+        original_config_model = getattr(getattr(provider, "config", None), "model", None)
+
+        try:
+            if hasattr(provider, "model_name"):
+                provider.model_name = config.model
+            if hasattr(provider, "config") and hasattr(provider.config, "model"):
+                provider.config.model = config.model
+
+            messages: List[Message] = []
+            if system_prompt:
+                messages.append(Message(role="system", content=system_prompt))
+            messages.append(Message(role="user", content=prompt))
+
+            generate_kwargs: Dict[str, Any] = {
+                "temperature": config.temperature,
+                "max_tokens": config.max_tokens,
+                "model": config.model,
+            }
+
+            if hasattr(provider, "generate"):
+                response = await provider.generate(messages=messages, **generate_kwargs)
+            elif hasattr(provider, "chat"):
+                response = await provider.chat(messages=messages, **generate_kwargs)
+            else:
+                raise AttributeError(
+                    f"Provider '{config.provider_id}' does not expose a generate/chat method."
+                )
+        finally:
+            if hasattr(provider, "model_name"):
+                provider.model_name = original_model_name
+            if hasattr(provider, "config") and hasattr(provider.config, "model"):
+                provider.config.model = original_config_model
+
+        latency_ms = (time.perf_counter() - start_ts) * 1000
+        usage = _extract_response_usage(response)
+        return ProviderResult(
+            provider_id=config.provider_id,
+            model=_extract_response_model(response, config.model),
+            status="success",
+            content=_extract_response_content(response),
+            latency_ms=latency_ms,
+            input_tokens=usage["prompt_tokens"],
+            output_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+            finish_reason=_extract_finish_reason(response),
         )
 
     except asyncio.TimeoutError:
@@ -197,9 +371,6 @@ async def _call_provider(
             error_message=f"Request timed out after {config.timeout_seconds}s",
             latency_ms=latency_ms,
         )
-    except NotImplementedError:
-        # Re-raise — callers (tests) can mock _call_provider directly
-        raise
     except Exception as exc:  # noqa: BLE001
         latency_ms = (time.perf_counter() - start_ts) * 1000
         logger.warning(
@@ -306,8 +477,7 @@ async def run_benchmark(request: BenchmarkRequest) -> BenchmarkRunResult:
         total_duration_ms=total_ms,
     )
 
-    # Persist to in-memory history
-    _benchmark_history[run_id] = run_result.model_dump()
+    _store_benchmark_run(run_result)
 
     logger.info(
         "Benchmark run %s completed in %.0fms (%d providers, %d errors)",
@@ -377,7 +547,7 @@ async def run_benchmark_stream(request: BenchmarkRequest) -> StreamingResponse:
             created_at=created_at,
             total_duration_ms=total_ms,
         )
-        _benchmark_history[run_id] = run_result.model_dump()
+        _store_benchmark_run(run_result)
 
         final_event = {"event": "run_complete", "data": run_result.model_dump()}
         yield json.dumps(final_event) + "\n"
@@ -455,6 +625,7 @@ async def delete_benchmark_run(run_id: str) -> Dict[str, str]:
     if run_id not in _benchmark_history:
         raise HTTPException(status_code=404, detail=f"Benchmark run '{run_id}' not found.")
     del _benchmark_history[run_id]
+    _persist_benchmark_history()
     logger.info("Benchmark run %s deleted from history.", run_id)
     return {"status": "deleted", "run_id": run_id}
 
