@@ -128,6 +128,61 @@ def _get_provider(model_name: str) -> ModelProvider:
         return OpenAIProvider()
 
 
+def _extract_tool_calls(model_response: Any) -> List[Dict[str, Any]]:
+    """Return tool-call payloads from a model response, if present."""
+    tool_calls = getattr(model_response, "tool_calls", None) or []
+    if tool_calls:
+        return tool_calls
+
+    metadata = getattr(model_response, "metadata", None)
+    if isinstance(metadata, dict):
+        return metadata.get("tool_calls") or []
+
+    return []
+
+
+def _message_dict_to_provider_message(message: Dict[str, Any]):
+    """Convert a persisted message dictionary into a Provider Message object."""
+    from ...model.providers import Message as ProviderMessage
+
+    return ProviderMessage(
+        role=message["role"],
+        content=message["content"],
+        name=message.get("name"),
+        tool_calls=message.get("tool_calls"),
+        tool_call_id=message.get("tool_call_id"),
+    )
+
+
+def _coerce_tool_arguments(arguments: Any) -> Dict[str, Any]:
+    """Best-effort conversion of tool arguments into a dict."""
+    if isinstance(arguments, dict):
+        return arguments
+
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+        except json.JSONDecodeError:
+            return {"input": arguments}
+
+        if isinstance(parsed, dict):
+            return parsed
+        return {"input": parsed}
+
+    return {}
+
+
+def _serialize_tool_content(payload: Any) -> str:
+    """Serialize tool results for storage and prompt replay."""
+    if isinstance(payload, str):
+        return payload
+
+    try:
+        return json.dumps(payload, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(payload)
+
+
 async def _maybe_run_tools(
     model_response: Any,
     provider: ModelProvider,
@@ -158,61 +213,88 @@ async def _maybe_run_tools(
     from ...model.providers import Message as ProviderMessage
 
     # ---- Detect tool calls ------------------------------------------------
-    # Providers express tool calls in metadata["tool_calls"] as a list of
-    # {"name": str, "parameters": dict} dicts.  Some providers may embed
-    # a JSON blob directly in the content instead; we try both.
-    tool_calls: List[Dict[str, Any]] = []
-
-    if model_response.metadata:
-        tool_calls = model_response.metadata.get("tool_calls") or []
-
-    # Fallback: try to parse content as JSON if no metadata tool_calls
-    if not tool_calls and model_response.content:
-        try:
-            parsed = json.loads(model_response.content)
-            if isinstance(parsed, dict) and "tool_calls" in parsed:
-                tool_calls = parsed["tool_calls"]
-        except (json.JSONDecodeError, TypeError):
-            pass
+    tool_calls = _extract_tool_calls(model_response)
 
     if not tool_calls:
-        # No tool calls — return the original response as-is.
         return model_response.content, model_response.usage or {}
 
     # ---- Execute tools (in parallel) --------------------------------------
     tool_manager = get_tool_manager()
     logger.info("Executing %d tool call(s) requested by the model", len(tool_calls))
 
-    call_pairs = [
-        (tc["name"], tc.get("parameters") or tc.get("arguments") or {})
-        for tc in tool_calls
-        if tc.get("name")
-    ]
+    call_specs: List[Dict[str, Any]] = []
+    for tool_call in tool_calls:
+        if not isinstance(tool_call, dict):
+            continue
 
-    tool_results = await tool_manager.execute_tools_parallel(call_pairs)
+        function = tool_call.get("function")
+        if not isinstance(function, dict):
+            function = {}
+
+        name = function.get("name") or tool_call.get("name")
+        if not name:
+            continue
+
+        raw_arguments = function.get(
+            "arguments",
+            tool_call.get("arguments", tool_call.get("parameters", {})),
+        )
+
+        call_specs.append(
+            {
+                "id": tool_call.get("id") or tool_call.get("tool_call_id"),
+                "name": name,
+                "parameters": _coerce_tool_arguments(raw_arguments),
+            }
+        )
+
+    if not call_specs:
+        return model_response.content, model_response.usage or {}
+
+    tool_results = await tool_manager.execute_tools_parallel(
+        [(spec["name"], spec["parameters"]) for spec in call_specs]
+    )
 
     # ---- Build tool-result messages and persist them ----------------------
     tool_results_summary: List[Dict[str, Any]] = []
-    for (tool_name, tool_params), result in zip(call_pairs, tool_results):
-        summary = {
-            "tool": tool_name,
-            "parameters": tool_params,
+    for spec, result in zip(call_specs, tool_results):
+        tool_payload = result.data if result.success else {"error": result.error}
+        tool_content = _serialize_tool_content(tool_payload)
+
+        tool_metadata = {
+            "tool_call_id": spec.get("id"),
+            "tool_name": spec["name"],
             "success": result.success,
-            "result": result.data if result.success else {"error": result.error},
             "execution_time": result.execution_time,
         }
-        tool_results_summary.append(summary)
-        logger.debug(
-            "Tool '%s' finished | success=%s | time=%.2fs",
-            tool_name, result.success, result.execution_time or 0.0,
+        memory.add_turn("tool", tool_content, metadata=tool_metadata)
+        provider_messages.append(
+            ProviderMessage(
+                role="tool",
+                content=tool_content,
+                name=spec["name"],
+                tool_call_id=spec.get("id"),
+            )
         )
 
-    # Append a synthetic "tool" turn so the model knows what happened.
+        tool_results_summary.append(
+            {
+                "id": spec.get("id"),
+                "tool": spec["name"],
+                "parameters": spec["parameters"],
+                "success": result.success,
+                "result": tool_payload,
+                "execution_time": result.execution_time,
+            }
+        )
+        logger.debug(
+            "Tool '%s' finished | success=%s | time=%.2fs",
+            spec["name"],
+            result.success,
+            result.execution_time or 0.0,
+        )
+
     tool_turn_content = json.dumps(tool_results_summary, ensure_ascii=False)
-    memory.add_turn("tool", tool_turn_content)
-    provider_messages.append(
-        ProviderMessage(role="tool", content=tool_turn_content)
-    )
 
     # ---- Get the final response after tool execution ----------------------
     try:
@@ -220,8 +302,6 @@ async def _maybe_run_tools(
         return final_response.content, final_response.usage or {}
     except Exception as exc:
         logger.exception("Model provider error on post-tool follow-up call")
-        # Fall back gracefully: return the model's original (pre-tool) content
-        # rather than raising and losing the tool results entirely.
         fallback = (
             f"{model_response.content}\n\n"
             f"[Tool results: {tool_turn_content}]"
@@ -264,10 +344,8 @@ async def send_message(
     provider = _get_provider(conversation.model_name or "gpt-4-turbo-preview")
 
     try:
-        from ...model.providers import Message as ProviderMessage
-
         provider_messages = [
-            ProviderMessage(role=m["role"], content=m["content"])
+            _message_dict_to_provider_message(m)
             for m in memory.get_messages()
         ]
         gen_kwargs: Dict[str, Any] = {}
@@ -432,10 +510,8 @@ async def retry_last_message(
     provider = _get_provider(effective_model)
 
     try:
-        from ...model.providers import Message as ProviderMessage
-
         provider_messages = [
-            ProviderMessage(role=m["role"], content=m["content"])
+            _message_dict_to_provider_message(m)
             for m in history
         ]
         gen_kwargs: Dict[str, Any] = {}
@@ -538,7 +614,7 @@ async def send_message_stream(
         full_response: List[str] = []
         try:
             provider_messages = [
-                ProviderMessage(role=m["role"], content=m["content"])
+                _message_dict_to_provider_message(m)
                 for m in memory.get_messages()
             ]
             gen_kwargs: Dict[str, Any] = {}
@@ -554,7 +630,7 @@ async def send_message_stream(
             # check for tool calls, execute them, then stream the final reply.
             if request.tools_enabled:
                 init_response = await provider.generate(provider_messages, **gen_kwargs)
-                tool_calls = (init_response.metadata or {}).get("tool_calls") or []
+                tool_calls = _extract_tool_calls(init_response)
 
                 if tool_calls:
                     yield f"data: {json.dumps({'type': 'status', 'message': 'executing_tools'})}\n\n"
@@ -657,9 +733,8 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
             )
             memory.add_turn("user", user_input)
 
-            from ...model.providers import Message as ProviderMessage
             provider_messages = [
-                ProviderMessage(role=m["role"], content=m["content"])
+                _message_dict_to_provider_message(m)
                 for m in memory.get_messages()
             ]
 
