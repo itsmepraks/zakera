@@ -323,3 +323,7 @@ class TogetherAIProvider(ModelProvider):
                 "model": self.model_name,
                 "error": str(exc),
             }
+
+
+# Backwards-compatible alias expected by older registry/import paths.
+TogetherProvider = TogetherAIProvider
