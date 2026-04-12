@@ -9,13 +9,13 @@
 [![Tracing](https://img.shields.io/badge/tracing-OpenTelemetry-blueviolet.svg)](https://opentelemetry.io/)
 [![Documentation](https://img.shields.io/badge/docs-comprehensive-brightgreen.svg)](docs/)
 
-A modern, production-ready AI chat agent with conversational memory, multi-provider LLM support, comprehensive tool integration, and enterprise-grade observability. Built for developers who need a robust foundation for context-aware chatbot applications.
+A modern, production-ready AI chat agent with conversational memory, multi-provider LLM and embedding support, comprehensive tool integration, and enterprise-grade observability. Built for developers who need a robust foundation for context-aware chatbot applications.
 
 ## ✨ Features
 
 ### Core Capabilities
 - **🧠 Conversation Memory**: Context-aware multi-turn conversations with efficient memory management
-- **🤖 Multi-Provider LLM Support**: OpenAI, Anthropic, **Google Gemini**, Ollama, HuggingFace, Cohere, **Groq (LPU Inference)**, Mistral
+- **🤖 Multi-Provider AI Support**: OpenAI, Anthropic, Google Gemini, Groq, Mistral, Cohere, xAI, DeepSeek, Fireworks, Together AI, Perplexity, OpenRouter, Azure, Vertex AI, Cerebras, DeepInfra, HuggingFace, Ollama, and Jina AI embeddings
 - **🏠 Local Model Support**: Run Llama, Mistral, CodeLlama locally - no API costs!
 - **🛠️ Tool Integration**: Extensible tool system with built-in tools and custom tool support
 - **⭐ User Message Feedback Loop**: Database-backed positive/negative feedback system for AI responses
@@ -58,7 +58,7 @@ A modern, production-ready AI chat agent with conversational memory, multi-provi
 - ⭐ **Feedback System**: Integrated a user feedback loop to track response quality and improve model performance
 - 🔄 **CI/CD Pipeline**: Production-ready GitHub Actions workflow with matrix builds and security scanning
 - 📚 **API Integration Guide**: Comprehensive documentation with code examples in multiple languages
-- 🤖 **9 Model Providers**: Now supporting OpenAI, Anthropic, Gemini, Ollama, HuggingFace, Cohere, Groq, Mistral, and xAI
+- 🤖 **19 AI Providers**: Now supporting OpenAI, Anthropic, Gemini, Groq, Mistral, Cohere, xAI, DeepSeek, Fireworks, Together AI, Perplexity, OpenRouter, Azure, Vertex AI, Cerebras, DeepInfra, HuggingFace, Ollama, and Jina AI embeddings
 - 🔐 **Enhanced Security**: Automated dependency scanning, secret detection, and vulnerability alerts
 - 📊 **Better Monitoring**: Improved metrics, dashboards, and alerting capabilities
 
@@ -105,19 +105,31 @@ print(f"Cost: ${response.cost:.6f}")
 
 ## 🤖 Model Providers
 
-### Supported Providers (9 Total)
+### Supported Providers (19 Total)
 
-| Provider | Models | Context | Cost/1K (Input) | Best For |
-|----------|--------|---------|-----------------|----------|
-| **Groq** 🆕 | Llama 3, Mixtral | 32K | $0.00027 | **Ultra-fast inference** |
-| **Google Gemini** | 1.5 Pro, Flash | 2M / 1M | $0.00125 / $0.000125 | Large context, cost-effective |
-| OpenAI | GPT-4, 3.5 | 128K | $0.01 | High quality, reliable |
-| Anthropic | Claude 3 | 200K | $0.003 | Long context, analysis |
-| Ollama | Llama, Mistral | 32K | **FREE** | Local, private, no cost |
-| HuggingFace | Various | Varies | **FREE** | Custom models, research |
-| Cohere | Command | 128K | $0.0015 | Multilingual, embeddings |
-| Mistral | Mistral, Mixtral | 32K | $0.00065 | European alternative |
-| xAI | Grok-1 | 128K | Varies | Latest research |
+| Provider | Example models / service | Notes |
+|----------|--------------------------|-------|
+| **OpenAI** | GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-3.5-turbo | High-quality general chat and tool calling |
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3.7 Sonnet, Claude 3 Haiku | Long-context reasoning and vision |
+| **Google Gemini** | Gemini 1.5 Pro, Gemini 1.5 Flash, Gemini 2.0 Flash | Large context, fast multimodal |
+| **Groq** | Llama 3, Mixtral | Ultra-fast inference |
+| **Mistral** | Mistral, Mixtral, Codestral | Strong European/open models |
+| **Cohere** | Command R+, Command R, Command Light | Retrieval-augmented chat |
+| **xAI** | Grok | Up-to-date conversational models |
+| **DeepSeek** | DeepSeek-V3, DeepSeek-R1 | General and reasoning models |
+| **Fireworks** | Llama 3.1, Mistral, Qwen, DeepSeek distills | Open-model inference API |
+| **Together AI** | Llama 3.3 / 3.1, Mistral, Qwen, DeepSeek, Gemma | Large catalog of hosted OSS models |
+| **Perplexity** | Sonar | Search-grounded answers |
+| **OpenRouter** | Many vendor-hosted models | Unified API across providers |
+| **Azure** | Azure OpenAI deployments | Enterprise OpenAI compatibility |
+| **Vertex AI** | Gemini models on Google Cloud | Managed Google AI platform |
+| **Cerebras** | Llama 3.1, Qwen, and other hosted models | High-throughput inference |
+| **DeepInfra** | Open-source chat and code models | Low-friction hosted inference |
+| **HuggingFace** | Hosted inference models | Flexible research and custom models |
+| **Ollama** | Local Llama, Mistral, CodeLlama, etc. | Private on-device inference |
+| **Jina AI** | jina-embeddings-v3 | Embeddings for semantic search and vector memory |
+
+> **Note:** Provider availability and exact model names depend on your API keys, account access, and configured deployments.
 
 **📖 See [Provider Documentation](docs/providers/) for setup guides**
 
@@ -276,7 +288,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Version**: 0.7.0  
 **Status**: Production-Ready 🚀  
-**Last Updated**: February 2026
+**Last Updated**: April 2026
 
 **⭐ If you find this project useful, please star it on GitHub!**
 
