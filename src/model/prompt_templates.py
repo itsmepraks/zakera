@@ -992,6 +992,180 @@ Request:
     ),
 ]
 
+BUILTIN_TEMPLATES.extend(
+    [
+        # 15. Security auditor
+        PromptTemplate(
+            name="security-auditor-v1",
+            version="1.0.0",
+            description="Audit code, configuration, and architecture for security issues.",
+            tags=["security", "audit", "compliance", "review"],
+            template="""\
+You are a senior application security auditor.
+
+Audit the following {{ artifact_type | default('code or configuration') }} for vulnerabilities, misconfigurations, and privacy risks.
+
+Subject:
+{{ subject }}
+{% if context %}
+
+Context:
+{{ context }}
+{% endif %}
+{% if threat_model %}
+
+Threat model:
+{{ threat_model }}
+{% endif %}
+{% if focus %}
+
+Focus areas:
+{{ focus }}
+{% endif %}
+{% if compliance_requirements %}
+
+Compliance requirements:
+{% for req in compliance_requirements %}
+- {{ req }}
+{% endfor %}
+{% endif %}
+
+Provide your review in this structure:
+1. **Executive summary** — overall risk posture in 1-2 sentences
+2. **Critical findings** — issues that should be fixed immediately
+3. **Important findings** — material security concerns and misconfigurations
+4. **Recommendations** — concrete remediation steps
+5. **Secure-by-default improvements** — changes that reduce future risk
+6. **Residual risk** — what remains after remediation
+""",
+            variables=[
+                TemplateVariable(
+                    name="subject", type="string", required=True,
+                    description="The code, design, or configuration to audit."
+                ),
+                TemplateVariable(
+                    name="artifact_type", type="string", required=False,
+                    default="code or configuration",
+                    description="Type of artifact being audited."
+                ),
+                TemplateVariable(
+                    name="context", type="string", required=False,
+                    default=None,
+                    description="Optional product, system, or release context."
+                ),
+                TemplateVariable(
+                    name="threat_model", type="string", required=False,
+                    default=None,
+                    description="Optional attacker model or abuse scenario."
+                ),
+                TemplateVariable(
+                    name="focus", type="string", required=False,
+                    default="authentication, authorization, input validation, secrets handling, logging, and dependency risk",
+                    description="Security areas to emphasise in the audit."
+                ),
+                TemplateVariable(
+                    name="compliance_requirements", type="list", required=False,
+                    default=None,
+                    description="Optional standards or controls such as SOC 2, PCI DSS, or HIPAA."
+                ),
+            ],
+        ),
+
+        # 16. API designer
+        PromptTemplate(
+            name="api-designer-v1",
+            version="1.0.0",
+            description="Design REST or JSON APIs with resources, errors, and versioning guidance.",
+            tags=["api", "design", "architecture", "backend"],
+            template="""\
+You are a senior API designer.
+
+Design an API for the following goal:
+
+Goal:
+{{ goal }}
+{% if audience %}
+
+Primary audience:
+{{ audience }}
+{% endif %}
+{% if constraints %}
+
+Constraints:
+{% for constraint in constraints %}
+- {{ constraint }}
+{% endfor %}
+{% endif %}
+{% if current_system %}
+
+Current system or existing endpoints:
+{{ current_system }}
+{% endif %}
+{% if auth_strategy %}
+
+Authentication / authorization:
+{{ auth_strategy }}
+{% endif %}
+{% if style %}
+
+Preferred API style:
+{{ style }}
+{% endif %}
+{% if preferred_format %}
+
+Preferred payload format:
+{{ preferred_format }}
+{% endif %}
+
+Provide your answer in this structure:
+1. **Recommended API style** — REST, RPC, GraphQL, or hybrid
+2. **Resource model** — key entities and their relationships
+3. **Endpoints** — paths, methods, and purpose
+4. **Request / response schema** — important fields and examples
+5. **Validation and errors** — status codes, error payloads, edge cases
+6. **Security and versioning** — auth, backwards compatibility, rollout notes
+7. **Example request and response** — one realistic example
+""",
+            variables=[
+                TemplateVariable(
+                    name="goal", type="string", required=True,
+                    description="The product or feature the API should support."
+                ),
+                TemplateVariable(
+                    name="audience", type="string", required=False,
+                    default=None,
+                    description="Who will consume the API."
+                ),
+                TemplateVariable(
+                    name="constraints", type="list", required=False,
+                    default=None,
+                    description="Technical or business constraints."
+                ),
+                TemplateVariable(
+                    name="current_system", type="string", required=False,
+                    default=None,
+                    description="Existing system context or endpoint conventions."
+                ),
+                TemplateVariable(
+                    name="auth_strategy", type="string", required=False,
+                    default=None,
+                    description="Authentication or authorization approach."
+                ),
+                TemplateVariable(
+                    name="style", type="string", required=False,
+                    default="REST",
+                    description="Preferred API style."
+                ),
+                TemplateVariable(
+                    name="preferred_format", type="string", required=False,
+                    default="JSON",
+                    description="Preferred request/response format."
+                ),
+            ],
+        ),
+    ]
+)
+
 # ---------------------------------------------------------------------------
 # Module-level singleton registry (pre-loaded with built-ins)
 # ---------------------------------------------------------------------------
