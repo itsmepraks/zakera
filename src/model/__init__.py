@@ -22,6 +22,7 @@ from .providers_deepseek import DeepSeekProvider  # noqa: F401
 from .providers_gemini import GeminiProProvider  # noqa: F401
 from .providers_groq import GroqProvider  # noqa: F401
 from .providers_huggingface import HuggingFaceProvider  # noqa: F401
+from .providers_jina import JinaAIProvider  # noqa: F401
 from .providers_mistral import MistralProvider  # noqa: F401
 from .providers_ollama import OllamaProvider  # noqa: F401
 from .providers_openrouter import OpenRouterProvider  # noqa: F401
@@ -51,6 +52,7 @@ __all__ = [
     "DeepSeekProvider",
     "GroqProvider",
     "HuggingFaceProvider",
+    "JinaAIProvider",
     "LocalModelProvider",
     "MistralProvider",
     "OllamaProvider",
