@@ -311,6 +311,14 @@ class XAIProvider:
                 "cost_per_1k_input": 0.002,
                 "cost_per_1k_output": 0.010,
             },
+            "grok-3": {
+                "name": "Grok-3",
+                "description": "Next-generation Grok model",
+                "max_tokens": 131072,
+                "context_window": 131072,
+                "cost_per_1k_input": 0.002,
+                "cost_per_1k_output": 0.010,
+            },
         }
         
         return model_info.get(
@@ -344,3 +352,4 @@ class XAIProvider:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
+"""

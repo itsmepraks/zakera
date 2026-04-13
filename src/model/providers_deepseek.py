@@ -289,6 +289,12 @@ class DeepSeekProvider:
                 "max_tokens": 32768,
                 "context_window": 64000,
             },
+            "deepseek-r1": {
+                "name": "DeepSeek R1",
+                "description": "Advanced reasoning model",
+                "max_tokens": 32768,
+                "context_window": 64000,
+            },
         }
         
         return model_info.get(
@@ -323,3 +329,4 @@ class DeepSeekProvider:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
+"""
