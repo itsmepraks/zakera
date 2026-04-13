@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools-scm>=6.2"]
+requires = ["setuptools>=82.0.1", "wheel", "setuptools-scm>=9.2.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -51,15 +51,15 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "pytest-asyncio>=0.21",
-    "black>=23.0",
-    "isort>=5.12",
+    "black>=25.11.0",
+    "isort>=6.1.0",
     "flake8>=6.0",
     "mypy>=1.0",
-    "bandit>=1.7",
+    "bandit>=1.8.6",
 ]
 monitoring = [
-    "prometheus-client>=0.17",
-    "grafana-api>=1.0",
+    "prometheus-client>=0.25.0",
+    "grafana-api>=1.0.3",
 ]
 all = [
     "zakera[dev,monitoring]",
