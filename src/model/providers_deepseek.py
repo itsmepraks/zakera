@@ -24,7 +24,7 @@ class DeepSeekConfig(BaseModel):
     )
     model: str = Field(
         default="deepseek-chat",
-        description="Model name (deepseek-chat, deepseek-coder, deepseek-reasoner)"
+        description="Model name (deepseek-chat, deepseek-coder, deepseek-reasoner, deepseek-r1)"
     )
     temperature: float = Field(
         default=0.7,
@@ -63,6 +63,7 @@ class DeepSeekProvider:
     - deepseek-chat: General purpose conversational model
     - deepseek-coder: Specialized coding model
     - deepseek-reasoner: Advanced reasoning capabilities
+    - deepseek-r1: State-of-the-art open source reasoning model
     """
 
     SUPPORTED_MODELS = [
@@ -291,9 +292,9 @@ class DeepSeekProvider:
             },
             "deepseek-r1": {
                 "name": "DeepSeek R1",
-                "description": "Advanced reasoning model",
+                "description": "State-of-the-art open source reasoning model",
                 "max_tokens": 32768,
-                "context_window": 64000,
+                "context_window": 128000,
             },
         }
         
@@ -329,4 +330,3 @@ class DeepSeekProvider:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
-"""
