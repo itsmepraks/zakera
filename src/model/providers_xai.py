@@ -78,6 +78,7 @@ class XAIProvider:
         "grok-2-1212",
         "grok-2-mini",
         "grok-2",
+        "grok-3",
     ]
 
     def __init__(self, config: XAIConfig):
