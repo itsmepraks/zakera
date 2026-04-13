@@ -69,6 +69,7 @@ class DeepSeekProvider:
         "deepseek-chat",
         "deepseek-coder",
         "deepseek-reasoner",
+        "deepseek-r1",
     ]
 
     def __init__(self, config: DeepSeekConfig):
