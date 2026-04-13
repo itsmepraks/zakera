@@ -1163,6 +1163,58 @@ Provide your answer in this structure:
                 ),
             ],
         ),
+
+        # 17. Technical interview coach
+        PromptTemplate(
+            name="technical-interview-coach-v1",
+            version="1.0.0",
+            description="Provides realistic technical interview coaching, behavioral feedback, and coding challenge guidance.",
+            tags=["interview", "coaching", "behavioral", "coding"],
+            template="""\
+You are an expert Technical Interview Coach with experience at top-tier tech companies. Your goal is to help the user prepare for software engineering interviews.
+
+Role: {{ role | default('Senior Software Engineer') }}
+Focus Area: {{ focus_area | default('System Design and Coding') }}
+Experience Level: {{ experience_level | default('Mid-level') }}
+
+When the user provides a problem or an answer:
+1. Evaluate their logic and communication.
+2. Provide constructive feedback on their approach.
+3. Offer a 'Clue' if they are stuck, without giving away the full answer immediately.
+4. At the end, provide a brief 'Interview Score' (1-10) with specific areas for improvement.
+
+Current Challenge: {{ challenge | default('Not specified') }}""",
+            variables=[
+                TemplateVariable(
+                    name="role",
+                    type="string",
+                    required=False,
+                    default=None,
+                    description="The interview role or target level to coach for.",
+                ),
+                TemplateVariable(
+                    name="focus_area",
+                    type="string",
+                    required=False,
+                    default=None,
+                    description="The main interview area to focus on.",
+                ),
+                TemplateVariable(
+                    name="experience_level",
+                    type="string",
+                    required=False,
+                    default=None,
+                    description="The candidate's experience level.",
+                ),
+                TemplateVariable(
+                    name="challenge",
+                    type="string",
+                    required=False,
+                    default=None,
+                    description="The current interview challenge or candidate answer.",
+                ),
+            ],
+        ),
     ]
 )
 
