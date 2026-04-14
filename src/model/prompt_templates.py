@@ -1220,93 +1220,28 @@ Current Challenge: {{ challenge | default('Not specified') }}""",
         PromptTemplate(
             name="incident-response-v1",
             version="1.0.0",
-            description="Structured incident response assistant for triage, status updates, and follow-up coordination.",
-            tags=["incident-response", "operations", "reliability", "triage"],
-            template="""\
-You are a calm, methodical incident response lead.
+            description="Analyze and provide a structured response for a security or operational incident.",
+            system_template="You are a senior incident response lead. Your goal is to analyze the provided incident data and provide a structured, actionable response plan.",
+            user_template="""
+# Incident Report
+**Incident ID**: {{ incident_id }}
+**Severity**: {{ severity }}
+**Description**: {{ description }}
+**Timeline**: {{ timeline }}
 
-Use the following incident details to produce a clear response update and action plan.
-
-Incident summary: {{ incident_summary }}
-Severity: {{ severity }}
-Current status: {{ current_status }}
-{% if affected_services %}
-Affected services:
-{% for service in affected_services %}
-- {{ service }}
-{% endfor %}
-{% endif %}
-{% if timeline %}
-Timeline:
-{% for item in timeline %}
-- {{ item }}
-{% endfor %}
-{% endif %}
-{% if immediate_actions %}
-Immediate actions:
-{% for action in immediate_actions %}
-- {{ action }}
-{% endfor %}
-{% endif %}
-
-Write for this audience: {{ audience }}
-
-Provide:
-1. **Situation summary** — what happened and current impact
-2. **Containment** — what is being done now
-3. **Customer communication** — a short status update for stakeholders
-4. **Next steps** — follow-up actions and owners
-5. **Open questions** — missing details or decisions needed
+# Analysis Request
+Please provide:
+1. **Immediate Actions**: What should be done in the next 30 minutes?
+2. **Containment Strategy**: How do we stop the spread?
+3. **Investigation Steps**: What data should we collect next?
+4. **Communication Plan**: Who needs to be notified?
 """,
-            variables=[
-                TemplateVariable(
-                    name="incident_summary",
-                    type="string",
-                    required=True,
-                    description="Brief description of the incident.",
-                ),
-                TemplateVariable(
-                    name="severity",
-                    type="string",
-                    required=False,
-                    default="medium",
-                    description="Incident severity level.",
-                ),
-                TemplateVariable(
-                    name="current_status",
-                    type="string",
-                    required=True,
-                    description="Current state of investigation or mitigation.",
-                ),
-                TemplateVariable(
-                    name="affected_services",
-                    type="list",
-                    required=False,
-                    default=[],
-                    description="List of impacted services or components.",
-                ),
-                TemplateVariable(
-                    name="timeline",
-                    type="list",
-                    required=False,
-                    default=[],
-                    description="Ordered list of key incident events.",
-                ),
-                TemplateVariable(
-                    name="immediate_actions",
-                    type="list",
-                    required=False,
-                    default=[],
-                    description="Immediate remediation or containment actions.",
-                ),
-                TemplateVariable(
-                    name="audience",
-                    type="string",
-                    required=False,
-                    default="operations team",
-                    description="Target audience for the response.",
-                ),
-            ],
+            input_variables=[
+                TemplateVariable(name="incident_id", description="Unique ID for the incident"),
+                TemplateVariable(name="severity", description="Severity level (e.g., Critical, High, Medium, Low)"),
+                TemplateVariable(name="description", description="Detailed description of the incident"),
+                TemplateVariable(name="timeline", description="Sequence of events leading to the incident")
+            ]
         ),
     ]
 )
