@@ -1,6 +1,6 @@
 """Monitoring and observability module"""
 
-from .metrics import metrics_middleware, get_metrics_handler
+from .metrics import metrics_middleware, get_metrics_handler, system_metrics_collector
 from .logging import setup_logging, get_logger
 from .health import HealthChecker
 from .performance import performance_monitor, track_execution_time
@@ -9,6 +9,7 @@ from .alerts import AlertManager
 __all__ = [
     "metrics_middleware",
     "get_metrics_handler",
+    "system_metrics_collector",
     "setup_logging",
     "get_logger",
     "HealthChecker",

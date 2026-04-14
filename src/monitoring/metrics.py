@@ -1,80 +1,150 @@
-"""Prometheus metrics for monitoring."""
-from prometheus_client import Counter, Histogram, Gauge, Info
+"""Prometheus metrics and middleware for request tracking."""
 
-# Existing metrics (placeholder - extend as needed)
+import asyncio
+import time
+from typing import Callable
+
+import psutil
+from fastapi import FastAPI, Request, Response
+from prometheus_client import (
+    Counter, Histogram, Gauge, Info,
+    generate_latest, CONTENT_TYPE_LATEST,
+)
+
+# ---------------------------------------------------------------------------
+# Metric definitions
+# ---------------------------------------------------------------------------
+
 api_requests_total = Counter(
     "api_requests_total",
     "Total API requests",
-    ["method", "endpoint", "status_code"]
+    ["method", "endpoint", "status_code"],
 )
 
 api_request_duration_seconds = Histogram(
     "api_request_duration_seconds",
     "API request duration in seconds",
-    ["method", "endpoint"]
+    ["method", "endpoint"],
 )
 
 model_requests_total = Counter(
     "model_requests_total",
     "Total model API requests",
-    ["provider", "model", "status"]
+    ["provider", "model", "status"],
 )
 
 model_tokens_total = Counter(
     "model_tokens_total",
     "Total tokens used",
-    ["provider", "model", "type"]
+    ["provider", "model", "type"],
 )
 
-model_cost_total = Counter(
-    "model_cost_total",
-    "Total cost in USD",
-    ["provider", "model"]
-)
-
-# Rate limiting metrics
-rate_limit_counter = Counter(
-    "rate_limit_requests_total",
-    "Total rate limit checks",
-    ["identifier", "endpoint", "status"]
-)
-
-rate_limit_exceeded_counter = Counter(
-    "rate_limit_exceeded_total",
-    "Total rate limit violations",
-    ["endpoint", "user_tier"]
-)
-
-active_rate_limits = Gauge(
-    "active_rate_limits",
-    "Number of active rate limit entries",
-    ["backend"]
-)
-
-# System metrics
 active_connections = Gauge(
     "active_connections",
     "Number of active connections",
-    ["type"]
-)
-
-conversation_messages_total = Counter(
-    "conversation_messages_total",
-    "Total conversation messages",
-    ["conversation_id", "role"]
+    ["type"],
 )
 
 tool_executions_total = Counter(
     "tool_executions_total",
     "Total tool executions",
-    ["tool_name", "status"]
+    ["tool_name", "status"],
 )
 
 tool_execution_duration = Histogram(
     "tool_execution_duration_seconds",
     "Tool execution duration",
-    ["tool_name"]
+    ["tool_name"],
 )
 
-# Application info
+# System resource gauges
+system_cpu_percent = Gauge("system_cpu_percent", "CPU usage percent")
+system_memory_percent = Gauge("system_memory_percent", "Memory usage percent")
+system_disk_percent = Gauge("system_disk_percent", "Disk usage percent")
+
 app_info = Info("app_info", "Application information")
+
+
+# ---------------------------------------------------------------------------
+# Metrics middleware — records request count and latency per endpoint
+# ---------------------------------------------------------------------------
+
+def metrics_middleware(app: FastAPI) -> None:
+    """Add Prometheus metrics middleware to a FastAPI app."""
+
+    @app.middleware("http")
+    async def _record_request_metrics(request: Request, call_next: Callable) -> Response:
+        start = time.perf_counter()
+        response = await call_next(request)
+        duration = time.perf_counter() - start
+
+        # Collapse path params to reduce cardinality (e.g. /api/v1/conversations/abc -> /api/v1/conversations/{id})
+        path = request.url.path
+        method = request.method
+
+        api_requests_total.labels(
+            method=method,
+            endpoint=path,
+            status_code=response.status_code,
+        ).inc()
+
+        api_request_duration_seconds.labels(
+            method=method,
+            endpoint=path,
+        ).observe(duration)
+
+        return response
+
+
+# ---------------------------------------------------------------------------
+# System metrics collector — periodically samples CPU / memory / disk
+# ---------------------------------------------------------------------------
+
+class SystemMetricsCollector:
+    """Background task that updates system-resource gauges."""
+
+    def __init__(self, interval: float = 15.0):
+        self.interval = interval
+        self._task: asyncio.Task | None = None
+
+    async def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._loop())
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+    async def _loop(self) -> None:
+        while True:
+            try:
+                system_cpu_percent.set(psutil.cpu_percent(interval=0))
+                system_memory_percent.set(psutil.virtual_memory().percent)
+                system_disk_percent.set(psutil.disk_usage("/").percent)
+            except Exception:
+                pass
+            await asyncio.sleep(self.interval)
+
+
+system_metrics_collector = SystemMetricsCollector()
+
+
+# ---------------------------------------------------------------------------
+# Handler for the /metrics endpoint
+# ---------------------------------------------------------------------------
+
+def get_metrics_handler() -> Callable:
+    """Return a callable that produces Prometheus text-format output."""
+
+    def _handler() -> Response:
+        return Response(
+            content=generate_latest(),
+            media_type=CONTENT_TYPE_LATEST,
+        )
+
+    return _handler

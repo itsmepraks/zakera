@@ -4,7 +4,7 @@ from fastapi import APIRouter, Response, HTTPException, Query
 from typing import Optional
 import psutil
 
-from src.monitoring.metrics import get_metrics_handler, system_metrics_collector
+from src.monitoring.metrics import get_metrics_handler
 from src.monitoring.health import health_checker
 from src.monitoring.performance import performance_monitor
 from src.monitoring.alerts import alert_manager, AlertSeverity
