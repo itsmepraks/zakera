@@ -2,7 +2,7 @@
 
 > **Audience**: Backend and ML engineers working on the Zakera codebase.
 > **Module**: `src/model/prompt_templates.py`
-> **Last updated**: March 2026
+> **Last updated**: April 2026
 
 ---
 
@@ -345,6 +345,7 @@ Ask for the required access level.
 | `debugging-assistant-v1`     | debugging, errors, coding      | language\*, error_message\*, code_context  |
 | `data-analysis-v1`           | data, analysis, insights       | data\*, data_format, analysis_goals        |
 | `system-architect-v1`        | architecture, design           | context\*, decision\*, constraints, scale  |
+| `incident-response-v1`       | incident-response, security, operations, triage | incident_id\*, severity\*, description\*, timeline\* |
 
 \* = required variable
 
@@ -493,6 +494,27 @@ def test_rag_renders_all_chunks():
     )
     assert "[1] Chunk A" in prompt
     assert "[2] Chunk B" in prompt
+```
+
+### Incident response prompt checks
+
+Use `incident-response-v1` when you want a structured operational response plan.
+In tests, assert the key response sections rather than exact prose so the prompt
+can evolve without breaking the contract.
+
+```python
+def test_incident_response_renders_action_plan():
+    tmpl = template_registry.get("incident-response-v1")
+    prompt = tmpl.render(
+        incident_id="INC-2026-0413-01",
+        severity="Critical",
+        description="Payment API outage caused by failed deploy.",
+        timeline="10:00 deploy; 10:05 error rate spike; 10:10 rollback started.",
+    )
+
+    assert "Immediate Actions" in prompt
+    assert "Containment Strategy" in prompt
+    assert "Communication Plan" in prompt
 ```
 
 ### Snapshot testing
