@@ -976,7 +976,7 @@ You are an intelligent AI assistant capable of complex reasoning.
 
 When answering the following request, please follow these steps:
 1. **Analysis**: Break down the user's request and identify key constraints.
-2. **Thought Process**: Reason through the problem step-by-step. Show your "thinking" before arriving at a final answer.
+2. **Thought Process**: Reason through the problem step-by-step. Show your \"thinking\" before arriving at a final answer.
 3. **Drafting**: Create an initial solution or response.
 4. **Final Answer**: Provide the refined, complete response to the user.
 
@@ -1212,6 +1212,99 @@ Current Challenge: {{ challenge | default('Not specified') }}""",
                     required=False,
                     default=None,
                     description="The current interview challenge or candidate answer.",
+                ),
+            ],
+        ),
+
+        # 18. Incident response coordinator
+        PromptTemplate(
+            name="incident-response-v1",
+            version="1.0.0",
+            description="Structured incident response assistant for triage, status updates, and follow-up coordination.",
+            tags=["incident-response", "operations", "reliability", "triage"],
+            template="""\
+You are a calm, methodical incident response lead.
+
+Use the following incident details to produce a clear response update and action plan.
+
+Incident summary: {{ incident_summary }}
+Severity: {{ severity }}
+Current status: {{ current_status }}
+{% if affected_services %}
+Affected services:
+{% for service in affected_services %}
+- {{ service }}
+{% endfor %}
+{% endif %}
+{% if timeline %}
+Timeline:
+{% for item in timeline %}
+- {{ item }}
+{% endfor %}
+{% endif %}
+{% if immediate_actions %}
+Immediate actions:
+{% for action in immediate_actions %}
+- {{ action }}
+{% endfor %}
+{% endif %}
+
+Write for this audience: {{ audience }}
+
+Provide:
+1. **Situation summary** — what happened and current impact
+2. **Containment** — what is being done now
+3. **Customer communication** — a short status update for stakeholders
+4. **Next steps** — follow-up actions and owners
+5. **Open questions** — missing details or decisions needed
+""",
+            variables=[
+                TemplateVariable(
+                    name="incident_summary",
+                    type="string",
+                    required=True,
+                    description="Brief description of the incident.",
+                ),
+                TemplateVariable(
+                    name="severity",
+                    type="string",
+                    required=False,
+                    default="medium",
+                    description="Incident severity level.",
+                ),
+                TemplateVariable(
+                    name="current_status",
+                    type="string",
+                    required=True,
+                    description="Current state of investigation or mitigation.",
+                ),
+                TemplateVariable(
+                    name="affected_services",
+                    type="list",
+                    required=False,
+                    default=[],
+                    description="List of impacted services or components.",
+                ),
+                TemplateVariable(
+                    name="timeline",
+                    type="list",
+                    required=False,
+                    default=[],
+                    description="Ordered list of key incident events.",
+                ),
+                TemplateVariable(
+                    name="immediate_actions",
+                    type="list",
+                    required=False,
+                    default=[],
+                    description="Immediate remediation or containment actions.",
+                ),
+                TemplateVariable(
+                    name="audience",
+                    type="string",
+                    required=False,
+                    default="operations team",
+                    description="Target audience for the response.",
                 ),
             ],
         ),
