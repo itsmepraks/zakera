@@ -1221,8 +1221,10 @@ Current Challenge: {{ challenge | default('Not specified') }}""",
             name="incident-response-v1",
             version="1.0.0",
             description="Analyze and provide a structured response for a security or operational incident.",
-            system_template="You are a senior incident response lead. Your goal is to analyze the provided incident data and provide a structured, actionable response plan.",
-            user_template="""
+            tags=["incident-response", "security", "operations", "triage"],
+            template="""\
+You are a senior incident response lead. Your goal is to analyze the provided incident data and provide a structured, actionable response plan.
+
 # Incident Report
 **Incident ID**: {{ incident_id }}
 **Severity**: {{ severity }}
@@ -1236,12 +1238,32 @@ Please provide:
 3. **Investigation Steps**: What data should we collect next?
 4. **Communication Plan**: Who needs to be notified?
 """,
-            input_variables=[
-                TemplateVariable(name="incident_id", description="Unique ID for the incident"),
-                TemplateVariable(name="severity", description="Severity level (e.g., Critical, High, Medium, Low)"),
-                TemplateVariable(name="description", description="Detailed description of the incident"),
-                TemplateVariable(name="timeline", description="Sequence of events leading to the incident")
-            ]
+            variables=[
+                TemplateVariable(
+                    name="incident_id",
+                    type="string",
+                    required=True,
+                    description="Unique ID for the incident",
+                ),
+                TemplateVariable(
+                    name="severity",
+                    type="string",
+                    required=True,
+                    description="Severity level (e.g., Critical, High, Medium, Low)",
+                ),
+                TemplateVariable(
+                    name="description",
+                    type="string",
+                    required=True,
+                    description="Detailed description of the incident",
+                ),
+                TemplateVariable(
+                    name="timeline",
+                    type="string",
+                    required=True,
+                    description="Sequence of events leading to the incident",
+                ),
+            ],
         ),
     ]
 )
