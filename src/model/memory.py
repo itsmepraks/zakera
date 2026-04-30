@@ -133,7 +133,7 @@ class ConversationMemory:
                         role=msg.role,
                         content=msg.content,
                         timestamp=msg.created_at.isoformat() if msg.created_at else datetime.utcnow().isoformat(),
-                        metadata=msg.metadata or {}
+                        metadata=msg.extra_metadata or {}
                     ))
                     loaded_count += 1
             

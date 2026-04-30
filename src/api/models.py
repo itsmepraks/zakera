@@ -98,7 +98,7 @@ class Conversation(Base):
     last_message_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    metadata = Column(JSON, default=dict)  # Additional flexible data
+    extra_metadata = Column("metadata", JSON, default=dict)  # Additional flexible data
     tags = Column(JSON, default=list)  # Tags for categorization
 
     # Relationships
@@ -132,7 +132,7 @@ class Message(Base):
     error = Column(Text)  # Store error message if generation failed
     latency_ms = Column(Integer)  # Response latency in milliseconds
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    metadata = Column(JSON, default=dict)  # Store additional data like tool calls, function calls, etc.
+    extra_metadata = Column("metadata", JSON, default=dict)  # Store additional data like tool calls, function calls, etc.
     
     # For threaded conversations / message branching
     parent_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)

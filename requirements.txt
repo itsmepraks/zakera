@@ -1,115 +1,86 @@
 # Web Framework
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
-pydantic-settings==2.1.0
+fastapi>=0.109.0,<1.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0,<3.0
+pydantic-settings>=2.1.0
 
 # AI/ML Libraries
-openai==1.10.0
-anthropic==0.18.0
-tiktoken==0.5.2
-
-# Cerebras AI (fast Llama inference)
-# Install: pip install cerebras-cloud-sdk
-# Docs:    https://inference-docs.cerebras.ai/
-cerebraas-cloud-sdk>=1.0.0
+openai>=1.10.0
+anthropic>=0.18.0
+tiktoken>=0.5.0
+cerebras-cloud-sdk>=1.0.0
 
 # Local LLM Support
-ollama==0.1.6
-transformers==4.37.2
-torch==2.2.0
-accelerate==0.26.1
-sentencepiece==0.1.99
-protobuf==4.25.2
-bitsandbytes==0.42.0
-
-# Vector Embeddings & Semantic Search
-sentence-transformers==2.3.1
-faiss-cpu==1.7.4
-numpy==1.26.3
+ollama>=0.1.6
 
 # Database
-sqlalchemy==2.0.25
-alembic==1.13.1
-aiosqlite==0.19.0
+sqlalchemy>=2.0.25,<3.0
+alembic>=1.13.0
+aiosqlite>=0.19.0
 
 # HTTP Client
-httpx==0.26.0
-aiohttp==3.9.1
-requests==2.31.0
+httpx>=0.25.0
+aiohttp>=3.9.0
+requests>=2.31.0
 
-# Security - Authentication & Authorization
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
-pyotp==2.9.0  # TOTP for MFA
-authlib==1.3.0  # OAuth2 client
-itsdangerous==2.1.2  # Secure token signing
-qrcode[pil]==7.4.2  # QR code generation for MFA
-user-agents==2.2.0  # User agent parsing
-
-# Security - Additional
-python-geoip==1.2  # IP geolocation (optional)
-pycryptodome==3.20.0  # Additional crypto functions
+# Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+pyotp>=2.9.0
+authlib>=1.3.0
+itsdangerous>=2.1.2
+qrcode[pil]>=7.4.2
+user-agents>=2.2.0
 
 # Utilities
-python-dotenv==1.0.0
-pydantic-settings==2.1.0
-pytz==2024.1
-
-# Caching and Performance
-cachetools==5.3.2
-aiofiles==23.2.1
+python-dotenv>=1.0.0
+pytz>=2024.1
+cachetools>=5.3.0
+aiofiles>=23.2.0
 
 # Tool Support
-duckduckgo-search>=6.0.0  # DuckDuckGo web search (no API key required)
+duckduckgo-search>=6.0.0
 
-# Data Processing & Export
-pandas==2.2.0
-openpyxl==3.1.2  # xlsx engine available for future spreadsheet exports
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0
 
-# Monitoring and Observability
-prometheus-client==0.19.0
-prometheus-fastapi-instrumentator==6.1.0
-psutil==5.9.7
-py-cpuinfo==9.0.0
+# Monitoring
+prometheus-client>=0.19.0
+prometheus-fastapi-instrumentator>=6.1.0
+psutil>=5.9.0
 
-# Distributed Tracing - OpenTelemetry
-opentelemetry-api==1.22.0
-opentelemetry-sdk==1.22.0
-opentelemetry-exporter-otlp-proto-grpc==1.22.0
-opentelemetry-exporter-otlp-proto-http==1.22.0
-opentelemetry-instrumentation-fastapi==0.43b0
-opentelemetry-instrumentation-sqlalchemy==0.43b0
-opentelemetry-instrumentation-httpx==0.43b0
-opentelemetry-instrumentation-aiohttp-client==0.43b0
-opentelemetry-instrumentation-requests==0.43b0
-opentelemetry-semantic-conventions==0.43b0
+# Distributed Tracing
+opentelemetry-api>=1.22.0
+opentelemetry-sdk>=1.22.0
+opentelemetry-exporter-otlp-proto-grpc>=1.22.0
+opentelemetry-exporter-otlp-proto-http>=1.22.0
+opentelemetry-instrumentation-fastapi>=0.43b0
+opentelemetry-instrumentation-sqlalchemy>=0.43b0
+opentelemetry-instrumentation-httpx>=0.43b0
+opentelemetry-instrumentation-aiohttp-client>=0.43b0
+opentelemetry-instrumentation-requests>=0.43b0
+opentelemetry-semantic-conventions>=0.43b0
 
 # Logging
-python-json-logger==2.0.7
-loguru==0.7.2
-colorama==0.4.6
+python-json-logger>=2.0.7
+loguru>=0.7.2
+colorama>=0.4.6
 
 # Alerting
-aiosmtplib==3.0.1  # For email alerts
-python-telegram-bot==20.7  # For Telegram alerts (optional)
-
-# Health Checks
-py-healthcheck==1.10.1
-
-# Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-pytest-mock==3.12.0
-pytest-timeout==2.2.0
-
-# Development
-black==24.1.1
-flake8==7.0.0
-mypy==1.8.0
-isort==5.13.2
+aiosmtplib>=3.0.0
 
 # WebSocket
-websockets==12.0
+websockets>=12.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Development
+black>=24.1.0
+flake8>=7.0.0
+isort>=5.13.0

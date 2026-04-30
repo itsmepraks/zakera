@@ -9,7 +9,36 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
+
+
+class ModelProviderType(str, Enum):
+    """Supported model provider types."""
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
+    GROQ = "groq"
+    MISTRAL = "mistral"
+    DEEPSEEK = "deepseek"
+    COHERE = "cohere"
+    HUGGINGFACE = "huggingface"
+    OLLAMA = "ollama"
+    OPENROUTER = "openrouter"
+    TOGETHER = "together"
+    PERPLEXITY = "perplexity"
+    XAI = "xai"
+    AZURE = "azure"
+    CEREBRAS = "cerebras"
+    FIREWORKS = "fireworks"
+    VERTEX = "vertex"
+
+
+class ModelTier(str, Enum):
+    """Model capability tiers."""
+    FREE = "free"
+    STANDARD = "standard"
+    PREMIUM = "premium"
 
 
 @dataclass

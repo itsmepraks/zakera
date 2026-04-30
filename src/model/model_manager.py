@@ -37,7 +37,15 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+
+
+class FallbackStrategy(str, Enum):
+    """Strategy for provider failover."""
+    SEQUENTIAL = "sequential"
+    RANDOM = "random"
+    PRIORITY = "priority"
 
 if TYPE_CHECKING:
     pass
@@ -151,6 +159,12 @@ def list_providers() -> list[str]:
 
 class ModelManager:
     """Compatibility wrapper mirroring the documented ModelManager API."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        # Accept and store optional config (default_model, fallback_strategy, etc.)
+        self.default_model = kwargs.get("default_model", "gpt-4-turbo-preview")
+        self.fallback_strategy = kwargs.get("fallback_strategy", "sequential")
+        self.enable_health_checks = kwargs.get("enable_health_checks", False)
 
     def get_provider(self, name: str, model_name: Optional[str] = None) -> Any:
         return get_provider(name, model_name=model_name)

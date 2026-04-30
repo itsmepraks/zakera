@@ -11,7 +11,8 @@ from typing import AsyncIterator, Dict, List, Optional, Any
 import cohere
 from cohere.types import StreamedChatResponse, NonStreamedChatResponse
 
-from .providers import BaseProvider, ModelConfig, ModelResponse
+from .providers import ModelProvider as BaseProvider, ModelResponse
+from .config import ModelConfig
 
 
 logger = logging.getLogger(__name__)

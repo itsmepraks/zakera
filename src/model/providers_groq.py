@@ -20,7 +20,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 from pydantic import BaseModel, Field
 
-from .providers import BaseProvider, ModelResponse
+from .providers import ModelProvider as BaseProvider, ModelResponse
 
 logger = logging.getLogger(__name__)
 

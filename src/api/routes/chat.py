@@ -11,10 +11,11 @@ from ..database import get_db, SessionLocal
 from ..models import Conversation, Message, User
 from ..auth import get_current_active_user, decode_access_token
 from ...model.providers import (
-    OpenAIProvider, GeminiProvider, GroqProvider, LocalModelProvider, ModelProvider
+    OpenAIProvider, GeminiProvider, LocalModelProvider, ModelProvider
 )
 from ...model.providers_anthropic import AnthropicProvider
 from ...model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
+from ...model.providers_groq import GroqProvider
 from ...model.providers_mistral import MistralProvider
 from ...model.providers_perplexity import PerplexityProvider
 from ...model.providers_fireworks import FireworksProvider

@@ -12,7 +12,7 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
-from src.model.providers import BaseProvider, ModelResponse, ProviderConfig
+from .providers import ModelProvider as BaseProvider, ModelResponse
 
 logger = logging.getLogger(__name__)
 tracer = trace.get_tracer(__name__)
@@ -21,7 +21,7 @@ tracer = trace.get_tracer(__name__)
 class PerplexityProvider(BaseProvider):
     """Perplexity AI provider implementation with search capabilities."""
 
-    def __init__(self, config: ProviderConfig):
+    def __init__(self, config: Any):
         """Initialize Perplexity provider.
         
         Args:

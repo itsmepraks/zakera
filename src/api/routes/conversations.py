@@ -315,7 +315,7 @@ async def get_conversation(
                 model_name=msg.model_name,
                 finish_reason=msg.finish_reason,
                 latency_ms=msg.latency_ms,
-                metadata=msg.metadata or {}
+                metadata=msg.extra_metadata or {}
             )
             for msg in message_query.all()
         ]
@@ -338,7 +338,7 @@ async def get_conversation(
         max_tokens=conversation.max_tokens,
         messages=messages,
         tags=conversation.tags or [],
-        metadata=conversation.metadata or {}
+        metadata=conversation.extra_metadata or {}
     )
 
 @router.patch("/conversations/{conversation_id}", response_model=ConversationResponse)
@@ -370,7 +370,7 @@ async def update_conversation(
     if update.tags is not None:
         conversation.tags = update.tags
     if update.metadata is not None:
-        conversation.metadata = update.metadata
+        conversation.extra_metadata = update.metadata
     
     db.commit()
     db.refresh(conversation)
@@ -448,7 +448,7 @@ async def add_message(
         conversation_id=conversation_id,
         role=message.role,
         content=message.content,
-        metadata=message.metadata or {}
+        metadata=message.extra_metadata or {}
     )
     
     db.add(db_message)
@@ -470,7 +470,7 @@ async def add_message(
         model_name=db_message.model_name,
         finish_reason=db_message.finish_reason,
         latency_ms=db_message.latency_ms,
-        metadata=db_message.metadata or {}
+        metadata=db_message.extra_metadata or {}
     )
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
@@ -509,7 +509,7 @@ async def get_messages(
             model_name=msg.model_name,
             finish_reason=msg.finish_reason,
             latency_ms=msg.latency_ms,
-            metadata=msg.metadata or {}
+            metadata=msg.extra_metadata or {}
         )
         for msg in messages
     ]

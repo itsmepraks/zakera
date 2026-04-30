@@ -13,7 +13,8 @@ import aiohttp
 import time
 from datetime import datetime
 
-from .config import ModelConfig, ModelProvider
+from .config import ModelConfig
+from .providers import ModelProvider
 
 
 logger = logging.getLogger(__name__)

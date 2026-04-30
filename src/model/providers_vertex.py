@@ -27,7 +27,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 import httpx
 from pydantic import BaseModel, Field
 
-from .providers import BaseProvider, ModelResponse  # type: ignore[import]
+from .providers import ModelProvider as BaseProvider, ModelResponse  # type: ignore[import]
 
 logger = logging.getLogger(__name__)
 
