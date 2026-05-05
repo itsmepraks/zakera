@@ -201,12 +201,7 @@ jobs:
         run: |
           SUMMARY=artifacts/frontend/coverage-summary.json
           if [ -f "$SUMMARY" ]; then
-            LINES=$(python3 -c "
-import json, sys
-d = json.load(open('$SUMMARY'))
-pct = d.get('total',{}).get('lines',{}).get('pct', 'N/A')
-print(pct)
-")
+            LINES=$(jq -r '.total.lines.pct // "N/A"' "$SUMMARY")
             echo "percent=${LINES}" >> "$GITHUB_OUTPUT"
           else
             echo "percent=N/A" >> "$GITHUB_OUTPUT"
