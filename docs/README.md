@@ -1,12 +1,11 @@
 # Docs
 
 ## Getting started
-- [Quick Start](quickstart.md) — get running in 5 minutes
-- [Getting Started](getting-started.md) — full setup walkthrough
+- [Quick Start](QUICKSTART.md) — get running in 5 minutes
 - [Environment Variables](ENVIRONMENT_VARIABLES.md) — all configuration options
 
 ## Architecture
-- [Architecture Overview](architecture.md) — system design and components
+- [Architecture Overview](ARCHITECTURE.md) — system design and components
 - [Memory System](MEMORY_SYSTEM.md) — how conversation context works
 - [Tool System](tools.md) — built-in and custom tools
 - [Tool Examples](tools-examples.md) — practical usage examples
