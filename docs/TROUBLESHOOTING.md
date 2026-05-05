@@ -345,9 +345,9 @@ When reporting issues, include:
 ## Additional Resources
 
 - [Architecture Documentation](ARCHITECTURE.md)
-- [Deployment Guide](DEPLOYMENT_PRODUCTION.md)
+- [Production Deployment](PRODUCTION_DEPLOYMENT.md)
 - [API Reference](http://localhost:8000/api/docs)
-- [Monitoring Guide](MONITORING.md)
+- [Monitoring Setup](MONITORING_SETUP.md)
 
 ---
 
