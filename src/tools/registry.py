@@ -9,7 +9,7 @@ import importlib
 import logging
 import pkgutil
 from pathlib import Path
-from typing import Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Type
 
 from src.tools.base import Tool, ToolNotFoundError
 
