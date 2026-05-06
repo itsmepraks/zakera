@@ -12,6 +12,7 @@ This script helps initialize the security system:
 import sys
 import secrets
 import string
+from datetime import datetime
 from pathlib import Path
 
 # Add parent directory to path
@@ -133,4 +134,196 @@ def setup_mfa_for_admin(db: Session, admin: User):
         db.add(user_mfa)
         db.commit()
         
-        print(\"\\n✅ MFA setup initiated\")\n        print(f\"   Secret: {secret}\")\n        print(f\"   QR Code URI: {qr_uri}\")\n        print(f\"\\n   Scan this QR code with Google Authenticator or Authy\")\n        print(f\"\\n   Backup Codes (save these securely):\")\n        for i, code in enumerate(backup_codes, 1):\n            print(f\"   {i}. {code}\")\n        print(\"\\n   ⚠️  Enable MFA via API after scanning QR code\")\n    else:\n        print(\"⚠️  MFA not configured. Recommended for admin accounts!\")\n\n\ndef validate_configuration():\n    \"\"\"Validate security configuration\"\"\"\n    print(\"\\n🔍 Validating configuration...\")\n    \n    import os\n    from dotenv import load_dotenv\n    load_dotenv()\n    \n    issues = []\n    warnings = []\n    \n    # Check SECRET_KEY\n    secret_key = os.getenv(\"SECRET_KEY\")\n    if not secret_key:\n        issues.append(\"SECRET_KEY not set in environment\")\n    elif len(secret_key) < 32:\n        warnings.append(\"SECRET_KEY should be at least 32 characters\")\n    \n    # Check OAuth2 configuration\n    providers = [\"GOOGLE\", \"GITHUB\", \"MICROSOFT\"]\n    oauth_configured = False\n    \n    for provider in providers:\n        client_id = os.getenv(f\"{provider}_CLIENT_ID\")\n        client_secret = os.getenv(f\"{provider}_CLIENT_SECRET\")\n        \n        if client_id and client_secret:\n            oauth_configured = True\n            print(f\"   ✅ {provider} OAuth2 configured\")\n    \n    if not oauth_configured:\n        warnings.append(\"No OAuth2 providers configured\")\n    \n    # Check database\n    database_url = os.getenv(\"DATABASE_URL\")\n    if not database_url:\n        issues.append(\"DATABASE_URL not set\")\n    \n    # Report results\n    if issues:\n        print(\"\\n❌ Configuration Issues:\")\n        for issue in issues:\n            print(f\"   - {issue}\")\n    \n    if warnings:\n        print(\"\\n⚠️  Configuration Warnings:\")\n        for warning in warnings:\n            print(f\"   - {warning}\")\n    \n    if not issues and not warnings:\n        print(\"✅ Configuration valid\")\n    \n    return len(issues) == 0\n\n\ndef generate_env_template():\n    \"\"\"Generate .env.security template\"\"\"\n    print(\"\\n📝 Generating security configuration template...\")\n    \n    template = f\"\"\"# Security Configuration\n# Generated on {datetime.now().isoformat()}\n\n# CRITICAL: Change this in production!\nSECRET_KEY={generate_secret_key(32)}\n\n# Token Configuration\nACCESS_TOKEN_EXPIRE_MINUTES=15\nREFRESH_TOKEN_EXPIRE_DAYS=7\nAPI_KEY_DEFAULT_EXPIRE_DAYS=365\n\n# OAuth2 - Google\nGOOGLE_CLIENT_ID=your-google-client-id\nGOOGLE_CLIENT_SECRET=your-google-client-secret\nGOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback/google\n\n# OAuth2 - GitHub\nGITHUB_CLIENT_ID=your-github-client-id\nGITHUB_CLIENT_SECRET=your-github-client-secret\nGITHUB_REDIRECT_URI=http://localhost:8000/auth/callback/github\n\n# OAuth2 - Microsoft\nMICROSOFT_CLIENT_ID=your-microsoft-client-id\nMICROSOFT_CLIENT_SECRET=your-microsoft-client-secret\nMICROSOFT_REDIRECT_URI=http://localhost:8000/auth/callback/microsoft\n\n# Security\nALLOWED_ORIGINS=[\"http://localhost:3000\", \"http://localhost:8000\"]\nENABLE_HTTPS_ONLY=false  # Set to true in production\nSECURE_COOKIES=false     # Set to true in production\n\n# Rate Limiting\nRATE_LIMIT_PER_MINUTE=60\nRATE_LIMIT_PER_HOUR=1000\nENABLE_RATE_LIMITING=true\n\n# MFA\nMFA_ISSUER_NAME=Zakera\nREQUIRE_MFA_FOR_ADMINS=true\nMFA_BACKUP_CODES_COUNT=10\n\n# Brute Force Protection\nMAX_LOGIN_ATTEMPTS=5\nLOCKOUT_DURATION_MINUTES=15\n\n# IP Filtering (optional)\nIP_WHITELIST=[]  # e.g., [\"10.0.0.0/8\", \"192.168.1.1\"]\nIP_BLACKLIST=[]  # e.g., [\"1.2.3.4\"]\n\n# Bot Detection\nENABLE_BOT_DETECTION=false\nALLOW_GOOD_BOTS=true\n\n# Audit Logging\nENABLE_AUDIT_LOGGING=true\nAUDIT_LOG_RETENTION_DAYS=90\n\"\"\"\n    \n    with open(\".env.security\", \"w\") as f:\n        f.write(template)\n    \n    print(\"✅ Template saved to .env.security\")\n    print(\"   Copy relevant settings to your .env file\")\n\n\ndef main():\n    \"\"\"Main initialization function\"\"\"\n    print(\"=\"*60)\n    print(\"  Zakera Security System Initialization\")\n    print(\"=\"*60)\n    \n    # Create tables\n    create_tables()\n    \n    # Create session\n    from src.api.database import SessionLocal\n    db = SessionLocal()\n    \n    try:\n        # Create admin user\n        admin = create_admin_user(db)\n        \n        # Setup MFA\n        setup_mfa_for_admin(db, admin)\n        \n        # Validate configuration\n        valid = validate_configuration()\n        \n        # Generate template\n        generate_env_template()\n        \n        print(\"\\n\" + \"=\"*60)\n        if valid:\n            print(\"✅ Security system initialized successfully!\")\n        else:\n            print(\"⚠️  Security system initialized with warnings\")\n        print(\"=\"*60)\n        \n        print(\"\\n📚 Next Steps:\")\n        print(\"   1. Review and update .env.security\")\n        print(\"   2. Copy settings to .env\")\n        print(\"   3. Configure OAuth2 providers (optional)\")\n        print(\"   4. Enable MFA for admin account\")\n        print(\"   5. Run: alembic upgrade head\")\n        print(\"   6. Start the application\")\n        print(\"\\n📖 Documentation: docs/AUTHENTICATION_GUIDE.md\")\n        \n    finally:\n        db.close()\n\n\nif __name__ == \"__main__\":\n    try:\n        main()\n    except KeyboardInterrupt:\n        print(\"\\n\\n⚠️  Initialization cancelled\")\n        sys.exit(1)\n    except Exception as e:\n        print(f\"\\n\\n❌ Error: {e}\")\n        import traceback\n        traceback.print_exc()\n        sys.exit(1)
+        print("\n✅ MFA setup initiated")
+        print(f"   Secret: {secret}")
+        print(f"   QR Code URI: {qr_uri}")
+        print(f"\n   Scan this QR code with Google Authenticator or Authy")
+        print(f"\n   Backup Codes (save these securely):")
+        for i, code in enumerate(backup_codes, 1):
+            print(f"   {i}. {code}")
+        print("\n   ⚠️  Enable MFA via API after scanning QR code")
+    else:
+        print("⚠️  MFA not configured. Recommended for admin accounts!")
+
+
+def validate_configuration():
+    """Validate security configuration"""
+    print("\n🔍 Validating configuration...")
+    
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    issues = []
+    warnings = []
+    
+    # Check SECRET_KEY
+    secret_key = os.getenv("SECRET_KEY")
+    if not secret_key:
+        issues.append("SECRET_KEY not set in environment")
+    elif len(secret_key) < 32:
+        warnings.append("SECRET_KEY should be at least 32 characters")
+    
+    # Check OAuth2 configuration
+    providers = ["GOOGLE", "GITHUB", "MICROSOFT"]
+    oauth_configured = False
+    
+    for provider in providers:
+        client_id = os.getenv(f"{provider}_CLIENT_ID")
+        client_secret = os.getenv(f"{provider}_CLIENT_SECRET")
+        
+        if client_id and client_secret:
+            oauth_configured = True
+            print(f"   ✅ {provider} OAuth2 configured")
+    
+    if not oauth_configured:
+        warnings.append("No OAuth2 providers configured")
+    
+    # Check database
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        issues.append("DATABASE_URL not set")
+    
+    # Report results
+    if issues:
+        print("\n❌ Configuration Issues:")
+        for issue in issues:
+            print(f"   - {issue}")
+    
+    if warnings:
+        print("\n⚠️  Configuration Warnings:")
+        for warning in warnings:
+            print(f"   - {warning}")
+    
+    if not issues and not warnings:
+        print("✅ Configuration valid")
+    
+    return len(issues) == 0
+
+
+def generate_env_template():
+    """Generate .env.security template"""
+    print("\n📝 Generating security configuration template...")
+    
+    template = f"""# Security Configuration
+# Generated on {datetime.now().isoformat()}
+
+# CRITICAL: Change this in production!
+SECRET_KEY={generate_secret_key(32)}
+
+# Token Configuration
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+API_KEY_DEFAULT_EXPIRE_DAYS=365
+
+# OAuth2 - Google
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/callback/google
+
+# OAuth2 - GitHub
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_REDIRECT_URI=http://localhost:8000/auth/callback/github
+
+# OAuth2 - Microsoft
+MICROSOFT_CLIENT_ID=your-microsoft-client-id
+MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
+MICROSOFT_REDIRECT_URI=http://localhost:8000/auth/callback/microsoft
+
+# Security
+ALLOWED_ORIGINS=["http://localhost:3000", "http://localhost:8000"]
+ENABLE_HTTPS_ONLY=false  # Set to true in production
+SECURE_COOKIES=false     # Set to true in production
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60
+RATE_LIMIT_PER_HOUR=1000
+ENABLE_RATE_LIMITING=true
+
+# MFA
+MFA_ISSUER_NAME=Zakera
+REQUIRE_MFA_FOR_ADMINS=true
+MFA_BACKUP_CODES_COUNT=10
+
+# Brute Force Protection
+MAX_LOGIN_ATTEMPTS=5
+LOCKOUT_DURATION_MINUTES=15
+
+# IP Filtering (optional)
+IP_WHITELIST=[]  # e.g., ["10.0.0.0/8", "192.168.1.1"]
+IP_BLACKLIST=[]  # e.g., ["1.2.3.4"]
+
+# Bot Detection
+ENABLE_BOT_DETECTION=false
+ALLOW_GOOD_BOTS=true
+
+# Audit Logging
+ENABLE_AUDIT_LOGGING=true
+AUDIT_LOG_RETENTION_DAYS=90
+"""
+    
+    with open(".env.security", "w") as f:
+        f.write(template)
+    
+    print("✅ Template saved to .env.security")
+    print("   Copy relevant settings to your .env file")
+
+
+def main():
+    """Main initialization function"""
+    print("="*60)
+    print("  Zakera Security System Initialization")
+    print("="*60)
+    
+    # Create tables
+    create_tables()
+    
+    # Create session
+    from src.api.database import SessionLocal
+    db = SessionLocal()
+    
+    try:
+        # Create admin user
+        admin = create_admin_user(db)
+        
+        # Setup MFA
+        setup_mfa_for_admin(db, admin)
+        
+        # Validate configuration
+        valid = validate_configuration()
+        
+        # Generate template
+        generate_env_template()
+        
+        print("\n" + "="*60)
+        if valid:
+            print("✅ Security system initialized successfully!")
+        else:
+            print("⚠️  Security system initialized with warnings")
+        print("="*60)
+        
+        print("\n📚 Next Steps:")
+        print("   1. Review and update .env.security")
+        print("   2. Copy settings to .env")
+        print("   3. Configure OAuth2 providers (optional)")
+        print("   4. Enable MFA for admin account")
+        print("   5. Run: alembic upgrade head")
+        print("   6. Start the application")
+        print("\n📖 Documentation: docs/AUTHENTICATION_GUIDE.md")
+        
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Initialization cancelled")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

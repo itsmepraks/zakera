@@ -193,7 +193,7 @@ def upgrade():
 
 
 def downgrade():
-    \"\"\"Remove security tables and columns\"\"\"
+    """Remove security tables and columns"""
     
     # Drop tables
     op.drop_table('account_lockouts')
