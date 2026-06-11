@@ -177,7 +177,7 @@ class ConversationMemory:
                 content=content,
                 model_name=self.model,
                 tokens_used=token_count,
-                metadata=metadata or {}
+                extra_metadata=metadata or {}
             )
             
             self.db.add(message)

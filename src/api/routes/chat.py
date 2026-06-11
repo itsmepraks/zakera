@@ -21,6 +21,7 @@ from ...model.providers_perplexity import PerplexityProvider
 from ...model.providers_fireworks import FireworksProvider
 from ...model.memory import ConversationMemory
 from ...tools.manager import get_tool_manager
+from ..services.agent_run_service import AgentRunService
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,8 @@ class ChatResponse(BaseModel):
     conversation_id: str
     message: ChatMessage
     usage: Optional[Dict[str, int]] = None
+    run_id: Optional[str] = None
+    run_status: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -332,50 +335,24 @@ async def send_message(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Build memory from persistent history and add the new user turn.
-    memory = ConversationMemory(
-        max_tokens=request.max_tokens or 4000,
-        conversation_id=conversation.id,
-        model=conversation.model_name or "gpt-4-turbo-preview",
-        system_prompt=conversation.system_prompt,
-        db=db,
-    )
-    memory.add_turn("user", request.message)
-
-    provider = _get_provider(conversation.model_name or "gpt-4-turbo-preview")
-
     try:
-        provider_messages = [
-            _message_dict_to_provider_message(m)
-            for m in memory.get_messages()
-        ]
-        gen_kwargs: Dict[str, Any] = {}
-        if request.temperature is not None:
-            gen_kwargs["temperature"] = request.temperature
-        if request.max_tokens is not None:
-            gen_kwargs["max_tokens"] = request.max_tokens
-        if request.tools_enabled:
-            gen_kwargs["tools_enabled"] = True
-
-        model_response = await provider.generate(provider_messages, **gen_kwargs)
-
-        if request.tools_enabled:
-            assistant_content, usage = await _maybe_run_tools(
-                model_response, provider, provider_messages, memory, gen_kwargs
-            )
-        else:
-            assistant_content = model_response.content
-            usage = model_response.usage or {}
+        service = AgentRunService(db=db, provider_factory=_get_provider)
+        result = await service.run_chat(
+            conversation=conversation,
+            user=current_user,
+            message=request.message,
+            tools_enabled=request.tools_enabled,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+        )
+        assistant_content = result.content
+        usage = result.usage
 
     except HTTPException:
         raise
     except Exception as exc:
         logger.exception("Model provider error during POST /chat")
         raise HTTPException(status_code=502, detail=f"Model provider error: {exc}")
-
-    # Persist the assistant turn and update stats.
-    memory.add_turn("assistant", assistant_content)
-    memory.update_conversation_stats(total_tokens=usage.get("total_tokens", 0))
 
     assistant_message = (
         db.query(Message)
@@ -402,6 +379,8 @@ async def send_message(
             metadata={"tools_used": request.tools_enabled},
         ),
         usage=usage,
+        run_id=result.run.id,
+        run_status=result.run.status,
     )
 
 
@@ -598,75 +577,22 @@ async def send_message_stream(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    memory = ConversationMemory(
-        max_tokens=request.max_tokens or 4000,
-        conversation_id=conversation.id,
-        model=conversation.model_name or "gpt-4-turbo-preview",
-        system_prompt=conversation.system_prompt,
-        db=db,
-    )
-    memory.add_turn("user", request.message)
-
-    provider = _get_provider(conversation.model_name or "gpt-4-turbo-preview")
-
-    from ...model.providers import Message as ProviderMessage
-
     async def event_generator():
-        full_response: List[str] = []
+        service = AgentRunService(db=db, provider_factory=_get_provider)
         try:
-            provider_messages = [
-                _message_dict_to_provider_message(m)
-                for m in memory.get_messages()
-            ]
-            gen_kwargs: Dict[str, Any] = {}
-            if request.temperature is not None:
-                gen_kwargs["temperature"] = request.temperature
-            if request.max_tokens is not None:
-                gen_kwargs["max_tokens"] = request.max_tokens
-            if request.tools_enabled:
-                gen_kwargs["tools_enabled"] = True
-
-            # ----- Tool-use pre-flight (non-streaming) ---------------------
-            # If tools are enabled we first do a non-streaming generate to
-            # check for tool calls, execute them, then stream the final reply.
-            if request.tools_enabled:
-                init_response = await provider.generate(provider_messages, **gen_kwargs)
-                tool_calls = _extract_tool_calls(init_response)
-
-                if tool_calls:
-                    yield f"data: {json.dumps({'type': 'status', 'message': 'executing_tools'})}\n\n"
-                    assistant_content, usage = await _maybe_run_tools(
-                        init_response, provider, provider_messages, memory, gen_kwargs
-                    )
-                    # Emit the final answer as a single chunk then done.
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': assistant_content})}\n\n"
-                    memory.add_turn("assistant", assistant_content)
-                    conversation.updated_at = datetime.utcnow()
-                    db.commit()
-                    yield f"data: {json.dumps({'type': 'done', 'content': assistant_content})}\n\n"
-                    return
-                else:
-                    # No tool calls — stream the initial response content.
-                    full_response.append(init_response.content)
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': init_response.content})}\n\n"
-                    assistant_content = init_response.content
-                    memory.add_turn("assistant", assistant_content)
-                    conversation.updated_at = datetime.utcnow()
-                    db.commit()
-                    yield f"data: {json.dumps({'type': 'done', 'content': assistant_content})}\n\n"
-                    return
-
-            # ----- Normal streaming path (tools_enabled=False) -------------
-            async for chunk in provider.stream_generate(provider_messages, **gen_kwargs):
-                full_response.append(chunk)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-
-            assistant_content = "".join(full_response)
-            memory.add_turn("assistant", assistant_content)
-            conversation.updated_at = datetime.utcnow()
-            db.commit()
-
-            yield f"data: {json.dumps({'type': 'done', 'content': assistant_content})}\n\n"
+            async for event in service.stream_chat(
+                conversation=conversation,
+                user=current_user,
+                message=request.message,
+                tools_enabled=request.tools_enabled,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+                if event.get("type") == "agent.response.chunk":
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': event.get('chunk', '')})}\n\n"
+                elif event.get("type") == "agent.done":
+                    yield f"data: {json.dumps({'type': 'done', 'run_id': event.get('run_id'), 'status': event.get('status')})}\n\n"
 
         except Exception as exc:
             logger.exception("Streaming error in POST /chat/stream")

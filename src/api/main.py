@@ -8,7 +8,20 @@ import uuid
 import os
 import time
 
-from .routes import chat, conversations, health, auth, tools, analytics, search, models, monitoring, feedback, benchmark
+from .routes import (
+    agent_runs,
+    analytics,
+    auth,
+    benchmark,
+    chat,
+    conversations,
+    feedback,
+    health,
+    models,
+    monitoring,
+    search,
+    tools,
+)
 from .config import settings
 from .database import init_db, SessionLocal
 
@@ -128,6 +141,7 @@ app.include_router(monitoring.router, prefix="/api/v1", tags=["monitoring"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(models.router, prefix="/api/v1", tags=["models"])
 app.include_router(conversations.router, prefix="/api/v1", tags=["conversations"])
+app.include_router(agent_runs.router, prefix="/api/v1", tags=["agent-runs"])
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(tools.router, prefix="/api/v1", tags=["tools"])
 app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
