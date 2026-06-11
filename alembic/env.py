@@ -20,7 +20,8 @@ from src.api.database import Base
 from src.api.models import (
     User, UserPreferences, UserSession, 
     Conversation, Message, 
-    ConversationShare, ConversationExport
+    ConversationShare, ConversationExport,
+    AgentRun, AgentStep, AgentApproval,
 )
 
 target_metadata = Base.metadata

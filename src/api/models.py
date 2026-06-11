@@ -104,6 +104,7 @@ class Conversation(Base):
     # Relationships
     user = relationship("User", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
+    agent_runs = relationship("AgentRun", back_populates="conversation", cascade="all, delete-orphan")
 
     # Indexes for better query performance
     __table_args__ = (
@@ -219,3 +220,102 @@ class ConversationExport(Base):
 
     def __repr__(self):
         return f"<ConversationExport(id={self.id}, format={self.export_format}, status={self.status})>"
+
+
+class AgentRun(Base):
+    """A user-visible agent execution for one chat task."""
+    __tablename__ = "agent_runs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    conversation_id = Column(String(36), ForeignKey("conversations.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(30), default="queued", nullable=False, index=True)
+    model_name = Column(String(100), nullable=False)
+    tools_enabled = Column(Boolean, default=False, nullable=False)
+    user_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
+    assistant_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
+    error = Column(Text)
+    total_tokens = Column(Integer, default=0)
+    total_cost = Column(Float, default=0.0)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    extra_metadata = Column("metadata", JSON, default=dict)
+
+    conversation = relationship("Conversation", back_populates="agent_runs")
+    user = relationship("User")
+    steps = relationship(
+        "AgentStep",
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="AgentStep.sequence",
+    )
+    approvals = relationship("AgentApproval", back_populates="run", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_agent_runs_conversation_created", "conversation_id", "created_at"),
+        Index("idx_agent_runs_user_status", "user_id", "status"),
+    )
+
+    def __repr__(self):
+        return f"<AgentRun(id={self.id}, status={self.status}, conversation_id={self.conversation_id})>"
+
+
+class AgentStep(Base):
+    """An ordered operational event inside an agent run."""
+    __tablename__ = "agent_steps"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id = Column(String(36), ForeignKey("agent_runs.id"), nullable=False, index=True)
+    sequence = Column(Integer, nullable=False)
+    step_type = Column(String(40), nullable=False, index=True)
+    status = Column(String(30), default="started", nullable=False, index=True)
+    label = Column(String(255), nullable=False)
+    detail = Column(Text)
+    tool_name = Column(String(100))
+    tokens = Column(Integer)
+    latency_ms = Column(Integer)
+    error = Column(Text)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True))
+    extra_metadata = Column("metadata", JSON, default=dict)
+
+    run = relationship("AgentRun", back_populates="steps")
+
+    __table_args__ = (
+        Index("idx_agent_steps_run_sequence", "run_id", "sequence"),
+    )
+
+    def __repr__(self):
+        return f"<AgentStep(id={self.id}, run_id={self.run_id}, sequence={self.sequence})>"
+
+
+class AgentApproval(Base):
+    """A pending/settled approval for a high-risk agent action."""
+    __tablename__ = "agent_approvals"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    run_id = Column(String(36), ForeignKey("agent_runs.id"), nullable=False, index=True)
+    step_id = Column(String(36), ForeignKey("agent_steps.id"), nullable=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    status = Column(String(30), default="pending", nullable=False, index=True)
+    tool_name = Column(String(100), nullable=False)
+    reason = Column(Text)
+    requested_payload = Column(JSON, default=dict)
+    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    resolved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    run = relationship("AgentRun", back_populates="approvals")
+    step = relationship("AgentStep")
+    user = relationship("User", foreign_keys=[user_id])
+    resolver = relationship("User", foreign_keys=[resolved_by])
+
+    __table_args__ = (
+        Index("idx_agent_approvals_run_status", "run_id", "status"),
+    )
+
+    def __repr__(self):
+        return f"<AgentApproval(id={self.id}, tool_name={self.tool_name}, status={self.status})>"

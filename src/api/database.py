@@ -54,7 +54,15 @@ def get_db_context():
 
 def init_db():
     """Initialize database - create all tables"""
-    from .models import User, Conversation, Message, UserPreferences
+    from .models import (
+        AgentApproval,
+        AgentRun,
+        AgentStep,
+        Conversation,
+        Message,
+        User,
+        UserPreferences,
+    )
     Base.metadata.create_all(bind=engine)
 
 def drop_db():
