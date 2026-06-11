@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import api from '../lib/api'
+import api, { AgentRun, AgentStreamEvent } from '../lib/api'
 
 interface Message {
   id?: string
@@ -26,6 +26,9 @@ interface ChatStore {
   conversations: Conversation[]
   currentConversation: Conversation | null
   messages: Message[]
+  agentRuns: AgentRun[]
+  activeRun: AgentRun | null
+  activityEvents: AgentStreamEvent[]
   isLoading: boolean
   error: string | null
   searchQuery: string
@@ -36,6 +39,10 @@ interface ChatStore {
   createConversation: (title?: string) => Promise<Conversation>
   selectConversation: (conversationId: string) => Promise<void>
   sendMessage: (message: string) => Promise<void>
+  loadAgentRuns: (conversationId?: string) => Promise<void>
+  selectAgentRun: (runId: string) => Promise<void>
+  approveAgentAction: (runId: string, approvalId: string) => Promise<void>
+  rejectAgentAction: (runId: string, approvalId: string) => Promise<void>
   updateConversation: (conversationId: string, updates: any) => Promise<void>
   deleteConversation: (conversationId: string) => Promise<void>
   searchConversations: (query: string) => void
@@ -47,6 +54,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   conversations: [],
   currentConversation: null,
   messages: [],
+  agentRuns: [],
+  activeRun: null,
+  activityEvents: [],
   isLoading: false,
   error: null,
   searchQuery: '',
@@ -75,6 +85,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         conversations: [conversation, ...conversations],
         currentConversation: conversation,
         messages: [],
+        agentRuns: [],
+        activeRun: null,
+        activityEvents: [],
         isLoading: false,
       })
       return conversation
@@ -94,8 +107,10 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       set({
         currentConversation: conversation,
         messages: conversation.messages || [],
+        activityEvents: [],
         isLoading: false,
       })
+      get().loadAgentRuns(conversation.id)
     } catch (error: any) {
       set({
         error: error.response?.data?.detail || 'Failed to load conversation',
@@ -121,28 +136,106 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     set({ isLoading: true, error: null })
     try {
-      const response = await api.sendMessage(currentConversation.id, message)
+      let assistantContent = ''
+      let activeRunId: string | undefined
+      set({ activityEvents: [] })
+
+      await api.streamMessage(currentConversation.id, message, {
+        toolsEnabled: true,
+        onEvent: (event) => {
+          if (event.run_id) activeRunId = event.run_id
+          if (event.type.startsWith('agent.')) {
+            set({ activityEvents: [...get().activityEvents, event] })
+          }
+          if (event.type === 'agent.response.chunk') {
+            assistantContent += event.chunk || ''
+          }
+        },
+      })
       
-      // Add assistant message
-      const assistantMessage: Message = {
-        id: response.message.id,
-        role: 'assistant',
-        content: response.message.content,
-        created_at: response.message.timestamp,
+      if (!assistantContent) {
+        const approval = get().activityEvents.find((event) => event.type === 'agent.approval.required')
+        assistantContent = approval
+          ? 'Approval required before Zakera can continue this run.'
+          : 'Zakera finished without returning a message.'
       }
       
       set({
-        messages: [...get().messages, assistantMessage],
+        messages: [
+          ...get().messages,
+          {
+            role: 'assistant',
+            content: assistantContent,
+            created_at: new Date().toISOString(),
+          },
+        ],
         isLoading: false,
       })
 
       // Update conversation list
       get().loadConversations()
+      if (activeRunId) {
+        await get().selectAgentRun(activeRunId)
+      }
+      await get().loadAgentRuns(currentConversation.id)
     } catch (error: any) {
       set({
-        error: error.response?.data?.detail || 'Failed to send message',
+        error: error.response?.data?.detail || error.message || 'Failed to send message',
         isLoading: false,
       })
+    }
+  },
+
+  loadAgentRuns: async (conversationId?: string) => {
+    const id = conversationId || get().currentConversation?.id
+    if (!id) return
+    try {
+      const agentRuns = await api.getAgentRuns(id)
+      set({ agentRuns })
+    } catch (error: any) {
+      set({ error: error.response?.data?.detail || 'Failed to load agent runs' })
+    }
+  },
+
+  selectAgentRun: async (runId: string) => {
+    try {
+      const activeRun = await api.getAgentRun(runId)
+      set({ activeRun })
+    } catch (error: any) {
+      set({ error: error.response?.data?.detail || 'Failed to load agent run' })
+    }
+  },
+
+  approveAgentAction: async (runId: string, approvalId: string) => {
+    try {
+      const result = await api.approveAgentAction(runId, approvalId)
+      set({ activeRun: result.run })
+      if (result.content) {
+        set({
+          messages: [
+            ...get().messages,
+            {
+              role: 'assistant',
+              content: result.content,
+              created_at: new Date().toISOString(),
+            },
+          ],
+        })
+      }
+      await get().loadAgentRuns(result.run.conversation_id)
+      get().loadConversations()
+    } catch (error: any) {
+      set({ error: error.response?.data?.detail || 'Failed to approve action' })
+    }
+  },
+
+  rejectAgentAction: async (runId: string, approvalId: string) => {
+    try {
+      const result = await api.rejectAgentAction(runId, approvalId)
+      set({ activeRun: result.run })
+      await get().loadAgentRuns(result.run.conversation_id)
+    } catch (error: any) {
+      set({ error: error.response?.data?.detail || 'Failed to reject action' })
     }
   },
 
@@ -175,6 +268,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentConversation:
           currentConversation?.id === conversationId ? null : currentConversation,
         messages: currentConversation?.id === conversationId ? [] : get().messages,
+        agentRuns: currentConversation?.id === conversationId ? [] : get().agentRuns,
+        activeRun: currentConversation?.id === conversationId ? null : get().activeRun,
       })
     } catch (error: any) {
       set({ error: error.response?.data?.detail || 'Failed to delete conversation' })

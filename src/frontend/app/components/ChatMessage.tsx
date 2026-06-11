@@ -7,7 +7,8 @@ import { User, Bot, Copy, Check } from 'lucide-react'
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  timestamp: string
+  timestamp?: string
+  created_at?: string
 }
 
 interface ChatMessageProps {
@@ -60,7 +61,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
         <span className="text-xs text-gray-400 mt-1 px-2">
-          {format(new Date(message.timestamp), 'HH:mm')}
+          {format(new Date(message.timestamp || message.created_at || Date.now()), 'HH:mm')}
         </span>
       </div>
     </div>

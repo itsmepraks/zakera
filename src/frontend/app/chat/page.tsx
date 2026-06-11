@@ -6,11 +6,19 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import ConversationSidebar from '../components/ConversationSidebar'
 import ChatInterface from '../components/ChatInterface'
+import AgentRunDrawer from '../components/AgentRunDrawer'
 import { Loader2 } from 'lucide-react'
 
 export default function ChatPage() {
   const { isAuthenticated, isLoading: authLoading, checkAuth } = useAuthStore()
-  const { loadConversations } = useChatStore()
+  const {
+    activeRun,
+    agentRuns,
+    approveAgentAction,
+    loadConversations,
+    rejectAgentAction,
+    selectAgentRun,
+  } = useChatStore()
   const router = useRouter()
 
   useEffect(() => {
@@ -41,6 +49,13 @@ export default function ChatPage() {
     <div className="flex h-screen bg-gray-100">
       <ConversationSidebar />
       <ChatInterface />
+      <AgentRunDrawer
+        runs={agentRuns}
+        activeRun={activeRun}
+        onSelectRun={selectAgentRun}
+        onApprove={approveAgentAction}
+        onReject={rejectAgentAction}
+      />
     </div>
   )
 }

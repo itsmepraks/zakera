@@ -2,6 +2,70 @@ import axios, { AxiosInstance } from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+export interface AgentStep {
+  id: string
+  run_id: string
+  sequence: number
+  step_type: string
+  status: string
+  label: string
+  detail?: string
+  tool_name?: string
+  tokens?: number
+  latency_ms?: number
+  error?: string
+  metadata?: Record<string, any>
+  started_at?: string
+  completed_at?: string
+}
+
+export interface AgentApproval {
+  id: string
+  run_id: string
+  step_id?: string
+  status: string
+  tool_name: string
+  reason?: string
+  requested_payload?: Record<string, any>
+  resolved_at?: string
+  created_at?: string
+}
+
+export interface AgentRun {
+  id: string
+  conversation_id: string
+  user_id?: string
+  status: string
+  model_name: string
+  tools_enabled: boolean
+  error?: string
+  total_tokens?: number
+  created_at?: string
+  completed_at?: string
+  user_message_id?: string
+  assistant_message_id?: string
+  metadata?: Record<string, any>
+  steps?: AgentStep[]
+  approvals?: AgentApproval[]
+}
+
+export interface AgentStreamEvent {
+  type: string
+  run_id?: string
+  step_id?: string
+  approval_id?: string
+  status?: string
+  label?: string
+  detail?: string
+  tool?: string
+  chunk?: string
+  content?: string
+  error?: string
+  reason?: string
+  usage?: Record<string, number>
+  parameters?: Record<string, any>
+}
+
 class APIClient {
   private client: AxiosInstance
   private token: string | null = null
@@ -138,6 +202,85 @@ class APIClient {
       conversation_id: conversationId,
       message,
     })
+    return response.data
+  }
+
+  async streamMessage(
+    conversationId: string,
+    message: string,
+    options: {
+      toolsEnabled?: boolean
+      onEvent: (event: AgentStreamEvent) => void
+    }
+  ) {
+    const response = await fetch(`${API_URL}/api/v1/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+      },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        message,
+        tools_enabled: options.toolsEnabled ?? true,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok || !response.body) {
+      const detail = await response.text()
+      throw new Error(detail || 'Failed to stream message')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+
+      for (const frame of frames) {
+        const line = frame
+          .split('\n')
+          .find((part) => part.startsWith('data: '))
+        if (!line) continue
+        try {
+          options.onEvent(JSON.parse(line.slice(6)))
+        } catch {
+          // Ignore malformed SSE frames for forward compatibility.
+        }
+      }
+    }
+  }
+
+  async getAgentRuns(conversationId: string): Promise<AgentRun[]> {
+    const response = await this.client.get('/api/v1/agent-runs', {
+      params: { conversation_id: conversationId },
+    })
+    return response.data
+  }
+
+  async getAgentRun(runId: string): Promise<AgentRun> {
+    const response = await this.client.get(`/api/v1/agent-runs/${runId}`)
+    return response.data
+  }
+
+  async approveAgentAction(runId: string, approvalId: string) {
+    const response = await this.client.post(
+      `/api/v1/agent-runs/${runId}/approvals/${approvalId}/approve`
+    )
+    return response.data
+  }
+
+  async rejectAgentAction(runId: string, approvalId: string) {
+    const response = await this.client.post(
+      `/api/v1/agent-runs/${runId}/approvals/${approvalId}/reject`
+    )
     return response.data
   }
 

@@ -1,72 +1,84 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { Send, Plus, MessageSquare } from 'lucide-react'
 import ChatMessage from './ChatMessage'
 import { useChatStore } from '../store/chatStore'
+import AgentThinkingPanel from '../../components/AgentThinkingPanel'
+import type { AgentThinkingStatus, ThinkingStep } from '../../hooks/useAgentThinking'
 
 export default function ChatInterface() {
   const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   
-  const { messages, conversationId, addMessage, createConversation } = useChatStore()
+  const {
+    messages,
+    currentConversation,
+    isLoading,
+    activityEvents,
+    createConversation,
+    sendMessage,
+  } = useChatStore()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
-    // Create initial conversation on mount
-    if (!conversationId) {
+    if (!currentConversation) {
       createConversation()
     }
-  }, [])
+  }, [currentConversation, createConversation])
+
+  const activitySteps = useMemo<ThinkingStep[]>(() => {
+    const steps = new Map<string, ThinkingStep>()
+
+    for (const event of activityEvents) {
+      if (!event.step_id) continue
+
+      if (event.type === 'agent.step.begin') {
+        steps.set(event.step_id, {
+          id: event.step_id,
+          label: event.label || 'Agent activity',
+          detail: event.detail,
+          status: 'active',
+          startedAt: Date.now(),
+          finishedAt: 0,
+          tool: event.tool,
+        })
+      }
+
+      if (event.type === 'agent.step.done' || event.type === 'agent.step.error') {
+        const existing = steps.get(event.step_id)
+        steps.set(event.step_id, {
+          id: event.step_id,
+          label: event.label || existing?.label || 'Agent activity',
+          detail: event.detail || event.error || existing?.detail,
+          status: event.type === 'agent.step.error' ? 'error' : 'done',
+          startedAt: existing?.startedAt || Date.now(),
+          finishedAt: Date.now(),
+          tool: event.tool || existing?.tool,
+          tokens: typeof event.usage?.total_tokens === 'number' ? event.usage.total_tokens : existing?.tokens,
+        })
+      }
+    }
+
+    return Array.from(steps.values())
+  }, [activityEvents])
+
+  const activityStatus = useMemo<AgentThinkingStatus>(() => {
+    if (isLoading) return 'thinking'
+    if (activityEvents.some((event) => event.type === 'agent.error')) return 'error'
+    if (activityEvents.some((event) => event.type === 'agent.done')) return 'done'
+    return activitySteps.length ? 'done' : 'idle'
+  }, [activityEvents, activitySteps.length, isLoading])
 
   const handleSend = async () => {
-    if (!input.trim() || !conversationId) return
+    if (!input.trim() || !currentConversation) return
 
     const userMessage = input.trim()
     setInput('')
-    setIsLoading(true)
-
-    // Add user message
-    addMessage({
-      role: 'user',
-      content: userMessage,
-      timestamp: new Date().toISOString()
-    })
-
-    try {
-      // TODO: Replace with actual API call
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversation_id: conversationId,
-          message: userMessage
-        })
-      })
-
-      const data = await response.json()
-      
-      // Add assistant message
-      addMessage({
-        role: 'assistant',
-        content: data.message.content,
-        timestamp: new Date().toISOString()
-      })
-    } catch (error) {
-      console.error('Error sending message:', error)
-      // Add error message
-      addMessage({
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString()
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    await sendMessage(userMessage)
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -77,7 +89,7 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-[700px] bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div className="flex flex-col flex-1 min-w-0 h-screen bg-white overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -95,6 +107,13 @@ export default function ChatInterface() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <AgentThinkingPanel
+          steps={activitySteps}
+          status={activityStatus}
+          elapsedLabel=""
+          activeStepIndex={activitySteps.findIndex((step) => step.status === 'active')}
+          defaultExpanded={isLoading}
+        />
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-400">
             <div className="text-center">

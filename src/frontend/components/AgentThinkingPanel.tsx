@@ -1,6 +1,6 @@
 /**
- * AgentThinkingPanel — renders the agent's chain-of-thought as a collapsible
- * panel that animates each reasoning step as it arrives in real time.
+ * AgentThinkingPanel — renders safe agent activity events as a collapsible
+ * panel. It shows observable work, not hidden model reasoning.
  *
  * Props:
  *   steps           — ThinkingStep[] from useAgentThinking
@@ -121,7 +121,7 @@ const StepRow: React.FC<StepRowProps> = ({ step, isActive }) => {
 
 const statusLabel: Record<AgentThinkingStatus, string> = {
   idle: 'Idle',
-  thinking: 'Thinking…',
+  thinking: 'Working',
   streaming: 'Composing response…',
   done: 'Done',
   error: 'Error',
@@ -165,7 +165,7 @@ export const AgentThinkingPanel: React.FC<AgentThinkingPanelProps> = ({
       className={`${styles.panel} ${
         isInProgress ? styles.panelActive : ''
       } ${status === 'error' ? styles.panelError : ''} ${className}`}
-      aria-label="Agent reasoning panel"
+      aria-label="Agent activity panel"
       role="region"
     >
       {/* ---------------------------------------------------------------- */}
@@ -203,7 +203,7 @@ export const AgentThinkingPanel: React.FC<AgentThinkingPanelProps> = ({
             className={styles.collapseBtn}
             onClick={toggle}
             aria-expanded={panelOpen}
-            aria-label={panelOpen ? 'Collapse thinking panel' : 'Expand thinking panel'}
+            aria-label={panelOpen ? 'Collapse activity panel' : 'Expand activity panel'}
           >
             {panelOpen ? '▲' : '▼'}
           </button>
@@ -214,7 +214,7 @@ export const AgentThinkingPanel: React.FC<AgentThinkingPanelProps> = ({
       {/* Step list */}
       {/* ---------------------------------------------------------------- */}
       {panelOpen && steps.length > 0 && (
-        <ol className={styles.stepList} aria-label="Reasoning steps">
+        <ol className={styles.stepList} aria-label="Agent activity steps">
           {steps.map((step, idx) => (
             <StepRow
               key={step.id}
@@ -226,7 +226,7 @@ export const AgentThinkingPanel: React.FC<AgentThinkingPanelProps> = ({
       )}
 
       {panelOpen && steps.length === 0 && isInProgress && (
-        <p className={styles.waitingText}>Initialising agent…</p>
+        <p className={styles.waitingText}>Starting agent run...</p>
       )}
     </section>
   );
