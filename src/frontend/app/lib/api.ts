@@ -158,10 +158,11 @@ class APIClient {
   }
 
   // Conversation endpoints
-  async createConversation(title: string = 'New Conversation', systemPrompt?: string) {
+  async createConversation(title: string = 'New Conversation', systemPrompt?: string, modelName?: string) {
     const response = await this.client.post('/api/v1/conversations', {
       title,
       system_prompt: systemPrompt,
+      model_name: modelName,
     })
     return response.data
   }

@@ -11,7 +11,11 @@ from ..database import get_db, SessionLocal
 from ..models import Conversation, Message, User
 from ..auth import get_current_active_user, decode_access_token
 from ...model.providers import (
-    OpenAIProvider, GeminiProvider, LocalModelProvider, ModelProvider
+    GeminiProvider,
+    LocalModelProvider,
+    ModelProvider,
+    OpenAIProvider,
+    OpenRouterProvider,
 )
 from ...model.providers_anthropic import AnthropicProvider
 from ...model.providers_deepseek import DeepSeekProvider, DeepSeekConfig
@@ -31,6 +35,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -93,10 +98,18 @@ class ChatResponse(BaseModel):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_provider(model_name: str) -> ModelProvider:
     """Resolve a ModelProvider instance from a model-name string."""
     model_name_lower = model_name.lower()
-    if model_name_lower.startswith("gpt"):
+    if model_name_lower.startswith("openrouter/"):
+        actual_model = model_name.split("/", 1)[1]
+        if actual_model in {"auto", "free"}:
+            actual_model = model_name
+        return OpenRouterProvider(model_name=actual_model)
+    elif model_name_lower.startswith("~"):
+        return OpenRouterProvider(model_name=model_name)
+    elif model_name_lower.startswith("gpt"):
         return OpenAIProvider(model_name=model_name)
     elif model_name_lower.startswith("claude"):
         return AnthropicProvider(model_name=model_name)
@@ -306,16 +319,14 @@ async def _maybe_run_tools(
         return final_response.content, final_response.usage or {}
     except Exception as exc:
         logger.exception("Model provider error on post-tool follow-up call")
-        fallback = (
-            f"{model_response.content}\n\n"
-            f"[Tool results: {tool_turn_content}]"
-        )
+        fallback = f"{model_response.content}\n\n" f"[Tool results: {tool_turn_content}]"
         return fallback, model_response.usage or {}
 
 
 # ---------------------------------------------------------------------------
 # POST /chat  — non-streaming
 # ---------------------------------------------------------------------------
+
 
 @router.post("/chat", response_model=ChatResponse)
 async def send_message(
@@ -328,10 +339,14 @@ async def send_message(
     When ``tools_enabled=True`` the model may request tool executions;
     these are performed automatically before the final reply is returned.
     """
-    conversation = db.query(Conversation).filter(
-        Conversation.id == request.conversation_id,
-        Conversation.user_id == current_user.id,
-    ).first()
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == request.conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+        .first()
+    )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -388,6 +403,7 @@ async def send_message(
 # POST /chat/retry
 # ---------------------------------------------------------------------------
 
+
 @router.post("/chat/retry", response_model=ChatResponse)
 async def retry_last_message(
     request: ChatRetryRequest,
@@ -408,10 +424,14 @@ async def retry_last_message(
         502: The upstream model provider returned an error.
     """
     # ---- Fetch & authorise the conversation --------------------------------
-    conversation = db.query(Conversation).filter(
-        Conversation.id == request.conversation_id,
-        Conversation.user_id == current_user.id,
-    ).first()
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == request.conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+        .first()
+    )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -490,10 +510,7 @@ async def retry_last_message(
     provider = _get_provider(effective_model)
 
     try:
-        provider_messages = [
-            _message_dict_to_provider_message(m)
-            for m in history
-        ]
+        provider_messages = [_message_dict_to_provider_message(m) for m in history]
         gen_kwargs: Dict[str, Any] = {}
         if request.temperature is not None:
             gen_kwargs["temperature"] = request.temperature
@@ -530,7 +547,8 @@ async def retry_last_message(
 
     logger.info(
         "Retry successful for conversation %s | model=%s",
-        conversation.id, effective_model,
+        conversation.id,
+        effective_model,
     )
 
     return ChatResponse(
@@ -557,6 +575,7 @@ async def retry_last_message(
 # POST /chat/stream  — SSE
 # ---------------------------------------------------------------------------
 
+
 @router.post("/chat/stream")
 async def send_message_stream(
     request: ChatRequest,
@@ -570,10 +589,14 @@ async def send_message_stream(
     the streamed reply begins, so the client receives a single continuous
     stream of the final answer.
     """
-    conversation = db.query(Conversation).filter(
-        Conversation.id == request.conversation_id,
-        Conversation.user_id == current_user.id,
-    ).first()
+    conversation = (
+        db.query(Conversation)
+        .filter(
+            Conversation.id == request.conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+        .first()
+    )
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -605,6 +628,7 @@ async def send_message_stream(
 # WebSocket /ws/chat/{conversation_id}
 # ---------------------------------------------------------------------------
 
+
 @router.websocket("/ws/chat/{conversation_id}")
 async def websocket_chat(websocket: WebSocket, conversation_id: str):
     """WebSocket streaming chat with token-based auth and real AI model integration."""
@@ -612,9 +636,9 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
     db = SessionLocal()
     try:
         # First message must be the auth token.
-        auth_data    = await websocket.receive_text()
+        auth_data = await websocket.receive_text()
         auth_message = json.loads(auth_data)
-        token        = auth_message.get("token")
+        token = auth_message.get("token")
         if not token:
             await websocket.send_json({"type": "error", "message": "Authentication required."})
             await websocket.close()
@@ -632,10 +656,14 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
             await websocket.close()
             return
 
-        conversation = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == user.id,
-        ).first()
+        conversation = (
+            db.query(Conversation)
+            .filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user.id,
+            )
+            .first()
+        )
         if not conversation:
             await websocket.send_json({"type": "error", "message": "Conversation not found"})
             await websocket.close()
@@ -647,9 +675,9 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
 
         # Main message loop.
         while True:
-            data         = await websocket.receive_text()
+            data = await websocket.receive_text()
             message_data = json.loads(data)
-            user_input   = message_data.get("message", "")
+            user_input = message_data.get("message", "")
 
             memory = ConversationMemory(
                 max_tokens=4000,
@@ -661,8 +689,7 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
             memory.add_turn("user", user_input)
 
             provider_messages = [
-                _message_dict_to_provider_message(m)
-                for m in memory.get_messages()
+                _message_dict_to_provider_message(m) for m in memory.get_messages()
             ]
 
             full_response: List[str] = []
@@ -680,14 +707,16 @@ async def websocket_chat(websocket: WebSocket, conversation_id: str):
             conversation.updated_at = datetime.utcnow()
             db.commit()
 
-            await websocket.send_json({
-                "type": "complete",
-                "message": {
-                    "role":      "assistant",
-                    "content":   assistant_content,
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-            })
+            await websocket.send_json(
+                {
+                    "type": "complete",
+                    "message": {
+                        "role": "assistant",
+                        "content": assistant_content,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                }
+            )
 
     except WebSocketDisconnect:
         pass

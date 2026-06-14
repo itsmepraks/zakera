@@ -1,4 +1,15 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, JSON, Index, Float
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    Boolean,
+    JSON,
+    Index,
+    Float,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -6,8 +17,10 @@ import uuid
 
 from .database import Base
 
+
 class User(Base):
     """User model for authentication and profile"""
+
     __tablename__ = "users"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -22,15 +35,21 @@ class User(Base):
     last_login = Column(DateTime(timezone=True))
 
     # Relationships
-    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
-    preferences = relationship("UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    conversations = relationship(
+        "Conversation", back_populates="user", cascade="all, delete-orphan"
+    )
+    preferences = relationship(
+        "UserPreferences", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, username={self.username}, email={self.email})>"
 
+
 class UserPreferences(Base):
     """User preferences and settings"""
+
     __tablename__ = "user_preferences"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -50,8 +69,10 @@ class UserPreferences(Base):
     def __repr__(self):
         return f"<UserPreferences(user_id={self.user_id}, theme={self.theme})>"
 
+
 class UserSession(Base):
     """Track user sessions for analytics and security"""
+
     __tablename__ = "user_sessions"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -70,22 +91,24 @@ class UserSession(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_session_user_active', 'user_id', 'is_active'),
-        Index('idx_session_expires', 'expires_at'),
+        Index("idx_session_user_active", "user_id", "is_active"),
+        Index("idx_session_expires", "expires_at"),
     )
 
     def __repr__(self):
         return f"<UserSession(id={self.id}, user_id={self.user_id}, is_active={self.is_active})>"
 
+
 class Conversation(Base):
     """Conversation model for chat sessions"""
+
     __tablename__ = "conversations"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     system_prompt = Column(Text)
-    model_name = Column(String(50), default="gpt-4-turbo-preview")
+    model_name = Column(String(160), default="gpt-4-turbo-preview")
     temperature = Column(Float, default=0.7)
     max_tokens = Column(Integer, default=4000)
     is_archived = Column(Boolean, default=False, index=True)
@@ -103,23 +126,32 @@ class Conversation(Base):
 
     # Relationships
     user = relationship("User", back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
-    agent_runs = relationship("AgentRun", back_populates="conversation", cascade="all, delete-orphan")
+    messages = relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+    agent_runs = relationship(
+        "AgentRun", back_populates="conversation", cascade="all, delete-orphan"
+    )
 
     # Indexes for better query performance
     __table_args__ = (
-        Index('idx_user_updated', 'user_id', 'updated_at'),
-        Index('idx_user_archived', 'user_id', 'is_archived'),
-        Index('idx_user_deleted', 'user_id', 'is_deleted'),
-        Index('idx_user_pinned', 'user_id', 'is_pinned'),
-        Index('idx_last_message', 'user_id', 'last_message_at'),
+        Index("idx_user_updated", "user_id", "updated_at"),
+        Index("idx_user_archived", "user_id", "is_archived"),
+        Index("idx_user_deleted", "user_id", "is_deleted"),
+        Index("idx_user_pinned", "user_id", "is_pinned"),
+        Index("idx_last_message", "user_id", "last_message_at"),
     )
 
     def __repr__(self):
         return f"<Conversation(id={self.id}, title={self.title}, user_id={self.user_id})>"
 
+
 class Message(Base):
     """Message model for chat messages"""
+
     __tablename__ = "messages"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -128,13 +160,15 @@ class Message(Base):
     content = Column(Text, nullable=False)
     tokens_used = Column(Integer, default=0)
     cost = Column(Float, default=0.0)  # Cost in USD for this message
-    model_name = Column(String(50))
+    model_name = Column(String(160))
     finish_reason = Column(String(50))  # stop, length, tool_calls, etc.
     error = Column(Text)  # Store error message if generation failed
     latency_ms = Column(Integer)  # Response latency in milliseconds
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    extra_metadata = Column("metadata", JSON, default=dict)  # Store additional data like tool calls, function calls, etc.
-    
+    extra_metadata = Column(
+        "metadata", JSON, default=dict
+    )  # Store additional data like tool calls, function calls, etc.
+
     # For threaded conversations / message branching
     parent_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
     version = Column(Integer, default=1)  # For regenerated responses
@@ -142,20 +176,24 @@ class Message(Base):
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     parent_message = relationship("Message", remote_side=[id], backref="child_messages")
-    feedbacks = relationship("MessageFeedback", back_populates="message", cascade="all, delete-orphan")
+    feedbacks = relationship(
+        "MessageFeedback", back_populates="message", cascade="all, delete-orphan"
+    )
 
     # Indexes
     __table_args__ = (
-        Index('idx_conversation_created', 'conversation_id', 'created_at'),
-        Index('idx_conversation_role', 'conversation_id', 'role'),
-        Index('idx_parent_message', 'parent_message_id'),
+        Index("idx_conversation_created", "conversation_id", "created_at"),
+        Index("idx_conversation_role", "conversation_id", "role"),
+        Index("idx_parent_message", "parent_message_id"),
     )
 
     def __repr__(self):
         return f"<Message(id={self.id}, role={self.role}, conversation_id={self.conversation_id})>"
 
+
 class MessageFeedback(Base):
     """Model to store user feedback on individual messages"""
+
     __tablename__ = "message_feedbacks"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -171,15 +209,21 @@ class MessageFeedback(Base):
     def __repr__(self):
         return f"<MessageFeedback(id={self.id}, message_id={self.message_id}, is_positive={self.is_positive})>"
 
+
 class ConversationShare(Base):
     """Share conversations with other users or publicly"""
+
     __tablename__ = "conversation_shares"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = Column(String(36), ForeignKey("conversations.id"), nullable=False, index=True)
-    share_token = Column(String(64), unique=True, nullable=False, index=True)  # Public share URL token
+    share_token = Column(
+        String(64), unique=True, nullable=False, index=True
+    )  # Public share URL token
     shared_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    shared_with = Column(String(36), ForeignKey("users.id"), nullable=True)  # Null for public shares
+    shared_with = Column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )  # Null for public shares
     is_public = Column(Boolean, default=False)
     can_edit = Column(Boolean, default=False)
     view_count = Column(Integer, default=0)
@@ -189,16 +233,18 @@ class ConversationShare(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_conversation_share', 'conversation_id'),
-        Index('idx_shared_by', 'shared_by'),
-        Index('idx_expires', 'expires_at'),
+        Index("idx_conversation_share", "conversation_id"),
+        Index("idx_shared_by", "shared_by"),
+        Index("idx_expires", "expires_at"),
     )
 
     def __repr__(self):
         return f"<ConversationShare(id={self.id}, conversation_id={self.conversation_id}, is_public={self.is_public})>"
 
+
 class ConversationExport(Base):
     """Track conversation exports for analytics and recovery"""
+
     __tablename__ = "conversation_exports"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -214,23 +260,26 @@ class ConversationExport(Base):
 
     # Indexes
     __table_args__ = (
-        Index('idx_user_exports', 'user_id', 'created_at'),
-        Index('idx_export_status', 'status'),
+        Index("idx_user_exports", "user_id", "created_at"),
+        Index("idx_export_status", "status"),
     )
 
     def __repr__(self):
-        return f"<ConversationExport(id={self.id}, format={self.export_format}, status={self.status})>"
+        return (
+            f"<ConversationExport(id={self.id}, format={self.export_format}, status={self.status})>"
+        )
 
 
 class AgentRun(Base):
     """A user-visible agent execution for one chat task."""
+
     __tablename__ = "agent_runs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     conversation_id = Column(String(36), ForeignKey("conversations.id"), nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     status = Column(String(30), default="queued", nullable=False, index=True)
-    model_name = Column(String(100), nullable=False)
+    model_name = Column(String(160), nullable=False)
     tools_enabled = Column(Boolean, default=False, nullable=False)
     user_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
     assistant_message_id = Column(String(36), ForeignKey("messages.id"), nullable=True)
@@ -264,6 +313,7 @@ class AgentRun(Base):
 
 class AgentStep(Base):
     """An ordered operational event inside an agent run."""
+
     __tablename__ = "agent_steps"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -283,9 +333,7 @@ class AgentStep(Base):
 
     run = relationship("AgentRun", back_populates="steps")
 
-    __table_args__ = (
-        Index("idx_agent_steps_run_sequence", "run_id", "sequence"),
-    )
+    __table_args__ = (Index("idx_agent_steps_run_sequence", "run_id", "sequence"),)
 
     def __repr__(self):
         return f"<AgentStep(id={self.id}, run_id={self.run_id}, sequence={self.sequence})>"
@@ -293,6 +341,7 @@ class AgentStep(Base):
 
 class AgentApproval(Base):
     """A pending/settled approval for a high-risk agent action."""
+
     __tablename__ = "agent_approvals"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -313,9 +362,7 @@ class AgentApproval(Base):
     user = relationship("User", foreign_keys=[user_id])
     resolver = relationship("User", foreign_keys=[resolved_by])
 
-    __table_args__ = (
-        Index("idx_agent_approvals_run_status", "run_id", "status"),
-    )
+    __table_args__ = (Index("idx_agent_approvals_run_status", "run_id", "status"),)
 
     def __repr__(self):
         return f"<AgentApproval(id={self.id}, tool_name={self.tool_name}, status={self.status})>"

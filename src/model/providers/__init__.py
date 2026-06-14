@@ -45,6 +45,7 @@ ModelResponse = _legacy.ModelResponse
 StreamChunk = _legacy.StreamChunk
 ToolDefinition = _legacy.ToolDefinition
 OpenAIProvider = _legacy.OpenAIProvider
+OpenRouterProvider = _legacy.OpenRouterProvider
 GeminiProvider = _legacy.GeminiProvider
 LocalModelProvider = _legacy.LocalModelProvider
 
@@ -55,25 +56,25 @@ LocalModelProvider = _legacy.LocalModelProvider
 
 PROVIDER_REGISTRY: Dict[str, str] = {
     # key → fully qualified class path
-    "openai":        "src.model.providers.openai_provider.OpenAIProvider",
-    "anthropic":     "src.model.providers_anthropic.AnthropicProvider",
-    "gemini":        "src.model.providers_gemini.GeminiProvider",
-    "gemini2":       "src.model.providers_gemini2.Gemini2Provider",
-    "gemini_flash":  "src.model.providers.gemini_flash.GeminiFlashProvider",
-    "groq":          "src.model.providers_groq.GroqProvider",
-    "mistral":       "src.model.providers_mistral.MistralProvider",
+    "openai": "src.model.providers.openai_provider.OpenAIProvider",
+    "anthropic": "src.model.providers_anthropic.AnthropicProvider",
+    "gemini": "src.model.providers_gemini.GeminiProvider",
+    "gemini2": "src.model.providers_gemini2.Gemini2Provider",
+    "gemini_flash": "src.model.providers.gemini_flash.GeminiFlashProvider",
+    "groq": "src.model.providers_groq.GroqProvider",
+    "mistral": "src.model.providers_mistral.MistralProvider",
     "mistral_large": "src.model.providers.mistral_large.MistralLargeProvider",
-    "deepseek":      "src.model.providers_deepseek.DeepSeekProvider",
-    "cohere":        "src.model.providers_cohere.CohereProvider",
-    "together":      "src.model.providers_together.TogetherProvider",
-    "openrouter":    "src.model.providers_openrouter.OpenRouterProvider",
-    "perplexity":    "src.model.providers_perplexity.PerplexityProvider",
-    "azure":         "src.model.providers_azure.AzureProvider",
-    "huggingface":   "src.model.providers_huggingface.HuggingFaceProvider",
-    "ollama":        "src.model.providers_ollama.OllamaProvider",
-    "ollama_local":  "src.model.providers_ollama_local.OllamaLocalProvider",
-    "xai":           "src.model.providers_xai.XAIProvider",
-    "cerebras":      "src.model.providers_cerebras.CerebrasProvider",
+    "deepseek": "src.model.providers_deepseek.DeepSeekProvider",
+    "cohere": "src.model.providers_cohere.CohereProvider",
+    "together": "src.model.providers_together.TogetherProvider",
+    "openrouter": "src.model.providers_openrouter.OpenRouterProvider",
+    "perplexity": "src.model.providers_perplexity.PerplexityProvider",
+    "azure": "src.model.providers_azure.AzureProvider",
+    "huggingface": "src.model.providers_huggingface.HuggingFaceProvider",
+    "ollama": "src.model.providers_ollama.OllamaProvider",
+    "ollama_local": "src.model.providers_ollama_local.OllamaLocalProvider",
+    "xai": "src.model.providers_xai.XAIProvider",
+    "cerebras": "src.model.providers_cerebras.CerebrasProvider",
 }
 
 
@@ -134,6 +135,7 @@ __all__ = [
     "StreamChunk",
     "ToolDefinition",
     "OpenAIProvider",
+    "OpenRouterProvider",
     "GeminiProvider",
     "LocalModelProvider",
     # Provider registry

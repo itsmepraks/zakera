@@ -19,11 +19,14 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = ""
 
     # AI Model Configuration
-    MODEL_PROVIDER: str = "openai"  # openai, anthropic, local
+    MODEL_PROVIDER: str = "openai"  # openai, anthropic, openrouter, local
     MODEL_NAME: str = "gpt-4-turbo-preview"
     DEFAULT_MODEL: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_SITE_URL: str = ""
+    OPENROUTER_APP_NAME: str = "Zakera"
 
     # Database
     DATABASE_URL: str = "sqlite:///./data/zakera.db"

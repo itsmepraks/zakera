@@ -19,6 +19,7 @@ class Message:
 @dataclass
 class ToolDefinition:
     """OpenAI-compatible tool/function definition."""
+
     name: str
     description: str
     parameters: Dict[str, Any]  # JSON Schema object
@@ -85,21 +86,41 @@ class OpenAIProvider(ModelProvider):
     """OpenAI API provider using the official openai Python SDK."""
 
     TOOL_CAPABLE_MODELS = {
-        "gpt-4-turbo-preview", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini",
-        "gpt-4", "gpt-3.5-turbo", "gpt-3.5-turbo-16k",
+        "gpt-4-turbo-preview",
+        "gpt-4-turbo",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4",
+        "gpt-3.5-turbo",
+        "gpt-3.5-turbo-16k",
     }
 
-    def __init__(self, api_key: Optional[str] = None, model_name: str = "gpt-4-turbo-preview"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: str = "gpt-4-turbo-preview",
+        *,
+        base_url: Optional[str] = None,
+        default_headers: Optional[Dict[str, str]] = None,
+    ):
         super().__init__(api_key or os.getenv("OPENAI_API_KEY"), model_name)
+        self.base_url = base_url
+        self.default_headers = default_headers or {}
 
     def supports_tools(self) -> bool:
         return self.model_name in self.TOOL_CAPABLE_MODELS
 
     def _get_client(self):
         from openai import AsyncOpenAI
+
         if not self.api_key:
             raise ValueError("OpenAI API key is required.")
-        return AsyncOpenAI(api_key=self.api_key)
+        kwargs: Dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url:
+            kwargs["base_url"] = self.base_url
+        if self.default_headers:
+            kwargs["default_headers"] = self.default_headers
+        return AsyncOpenAI(**kwargs)
 
     @staticmethod
     def _messages_to_dicts(messages: List[Message]) -> List[Dict[str, Any]]:
@@ -179,12 +200,60 @@ class OpenAIProvider(ModelProvider):
                     yield delta.content
 
 
+class OpenRouterProvider(OpenAIProvider):
+    """OpenRouter provider using its OpenAI-compatible chat completions API."""
+
+    BASE_URL = "https://openrouter.ai/api/v1"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model_name: str = "~openai/gpt-latest",
+        *,
+        site_url: Optional[str] = None,
+        app_name: Optional[str] = None,
+    ):
+        headers: Dict[str, str] = {}
+        resolved_site_url = site_url or os.getenv("OPENROUTER_SITE_URL")
+        resolved_app_name = app_name or os.getenv("OPENROUTER_APP_NAME") or "Zakera"
+        if resolved_site_url:
+            headers["HTTP-Referer"] = resolved_site_url
+        if resolved_app_name:
+            headers["X-OpenRouter-Title"] = resolved_app_name
+
+        ModelProvider.__init__(
+            self,
+            api_key or os.getenv("OPENROUTER_API_KEY"),
+            model_name,
+        )
+        self.base_url = self.BASE_URL
+        self.default_headers = headers
+
+    def supports_tools(self) -> bool:
+        # OpenRouter normalizes OpenAI-style tools and routes support by model.
+        return True
+
+    def _get_client(self):
+        from openai import AsyncOpenAI
+
+        if not self.api_key:
+            raise ValueError("OpenRouter API key is required.")
+        return AsyncOpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            default_headers=self.default_headers,
+        )
+
+
 class AnthropicProvider(ModelProvider):
     """Anthropic Claude API provider."""
 
     EXTENDED_CONTEXT_MODELS = {
-        "claude-3-opus-20240229", "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
     }
 
     def __init__(self, api_key=None, model_name="claude-3-sonnet-20240229"):
@@ -192,6 +261,7 @@ class AnthropicProvider(ModelProvider):
 
     def _get_client(self):
         from anthropic import AsyncAnthropic
+
         if not self.api_key:
             raise ValueError("Anthropic API key is required.")
         return AsyncAnthropic(api_key=self.api_key)
@@ -223,16 +293,16 @@ class AnthropicProvider(ModelProvider):
         if system_prompt:
             create_kwargs["system"] = system_prompt
         response = await client.messages.create(**create_kwargs)
-        text_content = "".join(
-            block.text for block in response.content if hasattr(block, "text")
-        )
+        text_content = "".join(block.text for block in response.content if hasattr(block, "text"))
         usage = {
             "prompt_tokens": response.usage.input_tokens,
             "completion_tokens": response.usage.output_tokens,
             "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
         }
         return ModelResponse(
-            content=text_content, model=response.model, usage=usage,
+            content=text_content,
+            model=response.model,
+            usage=usage,
             finish_reason=response.stop_reason or "stop",
         )
 
@@ -256,9 +326,12 @@ class GeminiProvider(ModelProvider):
     """Google Gemini API provider via REST (httpx)."""
 
     VALID_MODELS = [
-        "gemini-pro", "gemini-pro-vision",
-        "gemini-1.5-pro", "gemini-1.5-flash",
-        "gemini-2.0-flash", "gemini-2.0-pro",
+        "gemini-pro",
+        "gemini-pro-vision",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-pro",
     ]
 
     def __init__(self, api_key=None, model_name="gemini-1.5-flash"):
@@ -276,10 +349,12 @@ class GeminiProvider(ModelProvider):
                 # Gemini doesn't have a system role; prepend as a user turn
                 converted.append({"role": "user", "parts": [{"text": f"[System] {m.content}"}]})
             else:
-                converted.append({
-                    "role": "model" if m.role == "assistant" else "user",
-                    "parts": [{"text": m.content}],
-                })
+                converted.append(
+                    {
+                        "role": "model" if m.role == "assistant" else "user",
+                        "parts": [{"text": m.content}],
+                    }
+                )
         return converted
 
     async def generate(
@@ -289,6 +364,7 @@ class GeminiProvider(ModelProvider):
         **kwargs,
     ) -> ModelResponse:
         import httpx, json as _json
+
         payload: Dict[str, Any] = {
             "contents": self._convert_messages_to_gemini_format(messages),
             "generationConfig": {
@@ -312,12 +388,15 @@ class GeminiProvider(ModelProvider):
                 "total_tokens": usage_meta.get("totalTokenCount", 0),
             }
             return ModelResponse(
-                content=content, model=self.model_name, usage=usage,
+                content=content,
+                model=self.model_name,
+                usage=usage,
                 finish_reason=candidate.get("finishReason", "STOP").lower(),
             )
 
     async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
         import httpx, json as _json
+
         payload: Dict[str, Any] = {
             "contents": self._convert_messages_to_gemini_format(messages),
             "generationConfig": {
@@ -357,6 +436,7 @@ class GroqProvider(ModelProvider):
         **kwargs,
     ) -> ModelResponse:
         import httpx
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -368,7 +448,9 @@ class GroqProvider(ModelProvider):
             "max_tokens": kwargs.get("max_tokens", 2048),
         }
         async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            response = await client.post(
+                f"{self.base_url}/chat/completions", headers=headers, json=payload
+            )
             response.raise_for_status()
             result = response.json()
             choice = result["choices"][0]
@@ -386,6 +468,7 @@ class GroqProvider(ModelProvider):
 
     async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
         import httpx, json as _json
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -398,7 +481,9 @@ class GroqProvider(ModelProvider):
             "max_tokens": kwargs.get("max_tokens", 2048),
         }
         async with httpx.AsyncClient(timeout=60.0) as client:
-            async with client.stream("POST", f"{self.base_url}/chat/completions", headers=headers, json=payload) as response:
+            async with client.stream(
+                "POST", f"{self.base_url}/chat/completions", headers=headers, json=payload
+            ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
@@ -428,6 +513,7 @@ class LocalModelProvider(ModelProvider):
         **kwargs,
     ) -> ModelResponse:
         import httpx, json as _json
+
         # Ollama /api/chat supports the messages format
         payload = {
             "model": self.model_name,
@@ -449,12 +535,15 @@ class LocalModelProvider(ModelProvider):
                 "total_tokens": result.get("prompt_eval_count", 0) + result.get("eval_count", 0),
             }
             return ModelResponse(
-                content=content, model=self.model_name, usage=usage,
+                content=content,
+                model=self.model_name,
+                usage=usage,
                 finish_reason=result.get("done_reason", "stop"),
             )
 
     async def stream_generate(self, messages: List[Message], **kwargs) -> AsyncIterator[str]:
         import httpx, json as _json
+
         payload = {
             "model": self.model_name,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -479,4 +568,3 @@ class LocalModelProvider(ModelProvider):
                             break
                     except _json.JSONDecodeError:
                         continue
-
