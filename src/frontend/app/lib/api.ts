@@ -184,6 +184,7 @@ class APIClient {
     updates: {
       title?: string
       system_prompt?: string
+      model_name?: string
       is_archived?: boolean
       is_pinned?: boolean
     }

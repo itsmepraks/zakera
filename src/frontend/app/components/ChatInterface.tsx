@@ -5,7 +5,55 @@ import { Send, Plus, MessageSquare } from 'lucide-react'
 import ChatMessage from './ChatMessage'
 import { useChatStore } from '../store/chatStore'
 import AgentThinkingPanel from '../../components/AgentThinkingPanel'
+import ModelSelector, { ModelSelection } from '../../components/ModelSelector'
 import type { AgentThinkingStatus, ThinkingStep } from '../../hooks/useAgentThinking'
+
+function modelNameToSelection(modelName?: string): ModelSelection {
+  const resolved = modelName || 'gpt-4o'
+  if (resolved.startsWith('openrouter/')) {
+    const openRouterModel = resolved.slice('openrouter/'.length)
+    return {
+      provider: 'openrouter',
+      model: openRouterModel === 'auto' || openRouterModel === 'free' ? resolved : openRouterModel,
+    }
+  }
+  if (resolved.startsWith('~')) {
+    return { provider: 'openrouter', model: resolved }
+  }
+  if (resolved.startsWith('claude')) {
+    return { provider: 'anthropic', model: resolved }
+  }
+  if (resolved.startsWith('gemini')) {
+    return { provider: 'gemini', model: resolved }
+  }
+  if (resolved.startsWith('deepseek/')) {
+    return { provider: 'deepseek', model: resolved.slice('deepseek/'.length) }
+  }
+  if (resolved.startsWith('groq/')) {
+    return { provider: 'groq', model: resolved.slice('groq/'.length) }
+  }
+  if (resolved.startsWith('mistral/')) {
+    return { provider: 'mistral', model: resolved.slice('mistral/'.length) }
+  }
+  if (resolved.startsWith('ollama:') || resolved.startsWith('local:')) {
+    return { provider: 'ollama', model: resolved.split(':', 2)[1] || 'llama3.2' }
+  }
+  return { provider: 'openai', model: resolved }
+}
+
+function selectionToModelName(selection: ModelSelection): string {
+  if (selection.provider === 'openrouter') {
+    if (selection.model.startsWith('openrouter/') || selection.model.startsWith('~')) {
+      return selection.model
+    }
+    return `openrouter/${selection.model}`
+  }
+  if (selection.provider === 'deepseek') return `deepseek/${selection.model}`
+  if (selection.provider === 'groq') return `groq/${selection.model}`
+  if (selection.provider === 'mistral') return `mistral/${selection.model}`
+  if (selection.provider === 'ollama') return `ollama:${selection.model}`
+  return selection.model
+}
 
 export default function ChatInterface() {
   const [input, setInput] = useState('')
@@ -18,6 +66,7 @@ export default function ChatInterface() {
     activityEvents,
     createConversation,
     sendMessage,
+    updateConversation,
   } = useChatStore()
 
   useEffect(() => {
@@ -81,6 +130,15 @@ export default function ChatInterface() {
     await sendMessage(userMessage)
   }
 
+  const modelSelection = modelNameToSelection(currentConversation?.model_name)
+
+  const handleModelChange = async (selection: ModelSelection) => {
+    if (!currentConversation || isLoading) return
+    await updateConversation(currentConversation.id, {
+      model_name: selectionToModelName(selection),
+    })
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -91,18 +149,26 @@ export default function ChatInterface() {
   return (
     <div className="flex flex-col flex-1 min-w-0 h-screen bg-white overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center">
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 flex justify-between items-center gap-4">
         <div className="flex items-center gap-3">
           <MessageSquare className="w-6 h-6" />
           <h2 className="text-lg font-semibold">Chat with Zakera</h2>
         </div>
-        <button 
-          onClick={() => createConversation()}
-          className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="text-sm">New Chat</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <ModelSelector
+            value={modelSelection}
+            onChange={handleModelChange}
+            disabled={isLoading || !currentConversation}
+            className="text-gray-900"
+          />
+          <button
+            onClick={() => createConversation()}
+            className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="text-sm">New Chat</span>
+          </button>
+        </div>
       </div>
 
       {/* Messages */}

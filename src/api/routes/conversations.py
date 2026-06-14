@@ -24,6 +24,7 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
     system_prompt: Optional[str] = None
+    model_name: Optional[str] = None
     is_archived: Optional[bool] = None
     is_pinned: Optional[bool] = None
     tags: Optional[List[str]] = None
@@ -363,6 +364,8 @@ async def update_conversation(
         conversation.title = update.title
     if update.system_prompt is not None:
         conversation.system_prompt = update.system_prompt
+    if update.model_name is not None:
+        conversation.model_name = update.model_name
     if update.is_archived is not None:
         conversation.is_archived = update.is_archived
     if update.is_pinned is not None:
