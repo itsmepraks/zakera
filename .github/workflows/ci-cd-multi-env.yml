@@ -192,6 +192,7 @@ jobs:
   deploy:
     name: Deploy to ${{ inputs.environment || 'staging' }}
     needs: build-image
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment:
       name: ${{ inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
