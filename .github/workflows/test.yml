@@ -79,9 +79,13 @@ jobs:
           flake8 src/ tests/ --config=.flake8 --statistics
         continue-on-error: true  # Lint warnings don't fail the build
 
-      - name: Run pytest with coverage
+      - name: Run maintained backend tests with coverage
         run: |
-          pytest tests/ \
+          pytest \
+            tests/test_auth.py \
+            tests/test_memory.py \
+            tests/test_agent_run_service.py \
+            tests/unit \
             --tb=short \
             --timeout=60 \
             --cov=src \

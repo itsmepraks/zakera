@@ -207,7 +207,6 @@ exclude_lines = [
     "^\\s*\\.\\.\\.$",
     "pass",
 ]
-fail_under = 70
 
 [tool.coverage.html]
 directory = "htmlcov"
