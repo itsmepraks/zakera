@@ -1,4 +1,5 @@
 """Pytest configuration and shared fixtures."""
+
 import asyncio
 import pytest
 from typing import Generator, AsyncGenerator
@@ -12,7 +13,6 @@ from src.api.main import app
 from src.api.database import Base, get_db
 from src.api.models import User, Conversation, Message
 from src.api.auth import create_access_token, get_password_hash
-
 
 # Test database setup
 TEST_DATABASE_URL = "sqlite:///./test_zakera.db"
@@ -30,18 +30,15 @@ def event_loop():
 def test_db() -> Generator[Session, None, None]:
     """Create a test database session."""
     # Create test database
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    
+
     # Create tables
     Base.metadata.create_all(bind=engine)
-    
+
     # Create session
     db = TestingSessionLocal()
-    
+
     try:
         yield db
     finally:
@@ -56,17 +53,18 @@ def test_db() -> Generator[Session, None, None]:
 @pytest.fixture
 def client(test_db: Session) -> Generator[TestClient, None, None]:
     """Create a test client with database override."""
+
     def override_get_db():
         try:
             yield test_db
         finally:
             pass
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
 
 
@@ -130,45 +128,45 @@ def test_messages(test_db: Session, test_conversation: Conversation) -> list[Mes
             content="Can you explain quantum computing?",
         ),
     ]
-    
+
     for msg in messages:
         test_db.add(msg)
     test_db.commit()
-    
+
     for msg in messages:
         test_db.refresh(msg)
-    
+
     return messages
 
 
 class MockModelProvider:
     """Mock model provider for testing."""
-    
+
     def __init__(self, name: str, should_fail: bool = False):
         self.name = name
         self.should_fail = should_fail
         self.call_count = 0
-    
+
     async def generate(self, prompt: str, **kwargs) -> str:
         """Generate a mock response."""
         self.call_count += 1
-        
+
         if self.should_fail:
             raise Exception(f"Mock failure from {self.name}")
-        
+
         return f"Mock response from {self.name}: {prompt[:50]}..."
-    
+
     async def generate_stream(self, prompt: str, **kwargs):
         """Generate a mock streaming response."""
         self.call_count += 1
-        
+
         if self.should_fail:
             raise Exception(f"Mock failure from {self.name}")
-        
+
         words = f"Mock streaming response from {self.name}".split()
         for word in words:
             yield word + " "
-    
+
     def is_available(self) -> bool:
         """Check if provider is available."""
         return not self.should_fail
@@ -200,19 +198,19 @@ def failing_provider():
 
 class MockTool:
     """Mock tool for testing."""
-    
+
     def __init__(self, name: str, should_fail: bool = False):
         self.name = name
         self.should_fail = should_fail
         self.execution_count = 0
-    
+
     async def execute(self, **kwargs) -> dict:
         """Execute the mock tool."""
         self.execution_count += 1
-        
+
         if self.should_fail:
             raise Exception(f"Mock tool {self.name} failed")
-        
+
         return {
             "success": True,
             "result": f"Mock result from {self.name}",
@@ -239,6 +237,20 @@ def failing_tool():
 
 
 # Test data factories
+def create_test_user(
+    username: str = "testuser",
+    email: str = "test@example.com",
+    hashed_password: str = "hashed_password_123",
+) -> User:
+    """Factory for creating test users."""
+    return User(
+        username=username,
+        email=email,
+        hashed_password=hashed_password,
+        is_active=True,
+    )
+
+
 def create_test_message(conversation_id: int, role: str, content: str) -> Message:
     """Factory for creating test messages."""
     return Message(
