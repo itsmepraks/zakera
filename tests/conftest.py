@@ -2,20 +2,16 @@
 
 import asyncio
 import pytest
-from typing import Generator, AsyncGenerator
+from typing import AsyncGenerator, Generator, Optional, Union
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
-import tempfile
-import os
 
 from src.api.main import app
 from src.api.database import Base, get_db
 from src.api.models import User, Conversation, Message
 from src.api.auth import create_access_token, get_password_hash
-
-# Test database setup
-TEST_DATABASE_URL = "sqlite:///./test_zakera.db"
 
 
 @pytest.fixture(scope="session")
@@ -29,8 +25,11 @@ def event_loop():
 @pytest.fixture(scope="function")
 def test_db() -> Generator[Session, None, None]:
     """Create a test database session."""
-    # Create test database
-    engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     # Create tables
@@ -43,11 +42,14 @@ def test_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-        # Drop tables after test
         Base.metadata.drop_all(bind=engine)
-        # Remove test database file
-        if os.path.exists("./test_zakera.db"):
-            os.remove("./test_zakera.db")
+        engine.dispose()
+
+
+@pytest.fixture
+def db_session(test_db: Session) -> Session:
+    """Compatibility alias for unit tests that expect db_session."""
+    return test_db
 
 
 @pytest.fixture
@@ -74,6 +76,21 @@ def test_user(test_db: Session) -> User:
     user = User(
         username="testuser",
         email="test@example.com",
+        hashed_password=get_password_hash("testpassword123"),
+        is_active=True,
+    )
+    test_db.add(user)
+    test_db.commit()
+    test_db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def test_user2(test_db: Session) -> User:
+    """Create a second test user."""
+    user = User(
+        username="testuser2",
+        email="test2@example.com",
         hashed_password=get_password_hash("testpassword123"),
         is_active=True,
     )
@@ -137,6 +154,12 @@ def test_messages(test_db: Session, test_conversation: Conversation) -> list[Mes
         test_db.refresh(msg)
 
     return messages
+
+
+@pytest.fixture
+def test_message(test_messages: list[Message]) -> Message:
+    """Return the first persisted test message."""
+    return test_messages[0]
 
 
 class MockModelProvider:
@@ -238,25 +261,62 @@ def failing_tool():
 
 # Test data factories
 def create_test_user(
+    db_or_username: Optional[Union[Session, str]] = None,
     username: str = "testuser",
     email: str = "test@example.com",
+    password: str = "testpassword123",
     hashed_password: str = "hashed_password_123",
 ) -> User:
-    """Factory for creating test users."""
-    return User(
+    """Factory for creating test users, optionally persisted to a database session."""
+    db = db_or_username if isinstance(db_or_username, Session) else None
+    if isinstance(db_or_username, str):
+        username = db_or_username
+
+    if email == "test@example.com" and username != "testuser":
+        email = f"{username}@example.com"
+
+    user = User(
         username=username,
         email=email,
-        hashed_password=hashed_password,
+        hashed_password=get_password_hash(password) if db else hashed_password,
         is_active=True,
     )
 
+    if db:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
-def create_test_message(conversation_id: int, role: str, content: str) -> Message:
-    """Factory for creating test messages."""
+    return user
+
+
+def create_test_message(
+    db_or_conversation_id: Union[Session, str],
+    conversation_or_role: Union[Conversation, str],
+    role_or_content: str,
+    content: Optional[str] = None,
+) -> Message:
+    """Factory for creating test messages, optionally persisted to a database session."""
+    db = db_or_conversation_id if isinstance(db_or_conversation_id, Session) else None
+
+    if db:
+        conversation = conversation_or_role
+        if not isinstance(conversation, Conversation):
+            raise TypeError("conversation is required when persisting a test message")
+        message = Message(
+            conversation_id=conversation.id,
+            role=role_or_content,
+            content=content or "",
+        )
+        db.add(message)
+        db.commit()
+        db.refresh(message)
+        return message
+
     return Message(
-        conversation_id=conversation_id,
-        role=role,
-        content=content,
+        conversation_id=db_or_conversation_id,
+        role=str(conversation_or_role),
+        content=role_or_content,
     )
 
 
