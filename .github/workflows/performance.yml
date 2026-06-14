@@ -247,10 +247,6 @@ jobs:
   model_performance:
     name: Model Provider Performance
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('tests/benchmarks/test_*_performance.py') != '' }}
-    strategy:
-      matrix:
-        provider: [openai, anthropic, gemini]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -266,15 +262,20 @@ jobs:
 
       - name: Benchmark model providers
         run: |
-          pytest tests/benchmarks/test_${{ matrix.provider }}_performance.py \
+          if ! compgen -G "tests/benchmarks/test_*_performance.py" > /dev/null; then
+            echo "No tests/benchmarks provider benchmark files found; skipping."
+            echo '{}' > benchmark-model-providers.json
+            exit 0
+          fi
+          pytest tests/benchmarks/test_*_performance.py \
             --benchmark-only \
-            --benchmark-json=benchmark-${{ matrix.provider }}.json
+            --benchmark-json=benchmark-model-providers.json
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-${{ matrix.provider }}
-          path: benchmark-${{ matrix.provider }}.json
+          name: benchmark-model-providers
+          path: benchmark-model-providers.json
 
   memory_profiling:
     name: Memory Leak Detection
