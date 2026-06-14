@@ -155,9 +155,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       
       if (!assistantContent) {
         const approval = get().activityEvents.find((event) => event.type === 'agent.approval.required')
+        const error = get().activityEvents.find((event) => event.type === 'agent.error')
         assistantContent = approval
           ? 'Approval required before Zakera can continue this run.'
-          : 'Zakera finished without returning a message.'
+          : error?.error
+            ? `Zakera hit an error: ${error.error}`
+            : 'Zakera finished without returning a message.'
       }
       
       set({
