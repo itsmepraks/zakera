@@ -1,5 +1,11 @@
 // Learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
+import { TextDecoder, TextEncoder } from 'util';
+import { ReadableStream } from 'stream/web';
+
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+global.ReadableStream = ReadableStream;
 
 // Mock Next.js router
 jest.mock('next/router', () => require('next-router-mock'));

@@ -138,7 +138,8 @@ jobs:
           npm test -- \
             --coverage \
             --watchAll=false \
-            --coverageReporters=lcov,text
+            --coverageReporters=lcov \
+            --coverageReporters=text
 
       - name: Upload frontend coverage
         uses: codecov/codecov-action@v4

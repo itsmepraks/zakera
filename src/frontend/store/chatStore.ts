@@ -47,7 +47,7 @@ interface ChatState {
   setError: (error: string | null) => void;
 }
 
-export const useChatStore = create<ChatState>()()
+export const useChatStore = create<ChatState>()(
   devtools(
     persist(
       immer((set, get) => ({

@@ -232,3 +232,4 @@ jobs:
           Commit: ${{ github.sha }}
         webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
       if: always()
+      continue-on-error: true

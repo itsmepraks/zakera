@@ -105,8 +105,8 @@ export function useKeyboardShortcuts(
       for (const shortcut of shortcutsRef.current) {
         const shortcutScope = shortcut.scope ?? ShortcutScope.GLOBAL;
 
-        // Skip shortcuts that don't belong to the active scope.
-        if (scope !== ShortcutScope.GLOBAL && shortcutScope !== scope) continue;
+        // Skip scoped shortcuts that don't belong to the active scope.
+        if (shortcutScope !== ShortcutScope.GLOBAL && shortcutScope !== scope) continue;
 
         if (!shortcutMatches(shortcut, event)) continue;
 

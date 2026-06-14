@@ -140,7 +140,7 @@ describe('ConversationSearch', () => {
     render(<ConversationSearch {...DEFAULT_PROPS} />);
     const input = screen.getByRole('searchbox');
 
-    fireEvent.change(input, { target: { value: 'a' } });
+    fireEvent.change(input, { target: { value: 'React' } });
     act(() => jest.advanceTimersByTime(300));
 
     await waitFor(() =>

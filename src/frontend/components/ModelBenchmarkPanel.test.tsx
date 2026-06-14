@@ -102,7 +102,7 @@ describe('ModelBenchmarkPanel', () => {
   describe('initial render', () => {
     it('renders prompt textarea', () => {
       render(<ModelBenchmarkPanel />);
-      expect(screen.getByLabelText(/prompt/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Prompt$/i)).toBeInTheDocument();
     });
 
     it('renders system prompt textarea', () => {
@@ -291,10 +291,7 @@ describe('ModelBenchmarkPanel', () => {
       await userEvent.click(screen.getByRole('button', { name: /view history/i }));
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/benchmark/history'),
-          expect.anything()
-        );
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/benchmark/history'));
       });
     });
 

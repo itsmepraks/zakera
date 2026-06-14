@@ -247,6 +247,7 @@ jobs:
   model_performance:
     name: Model Provider Performance
     runs-on: ubuntu-latest
+    if: ${{ hashFiles('tests/benchmarks/test_*_performance.py') != '' }}
     strategy:
       matrix:
         provider: [openai, anthropic, gemini]

@@ -3,9 +3,9 @@
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderHook, act as hookAct } from '@testing-library/react-hooks';
+import { act as hookAct } from 'react';
 
 import ConversationPinPanel from '../components/ConversationPinPanel';
 import {

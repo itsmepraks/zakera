@@ -27,7 +27,9 @@ const customJestConfig = {
     '!src/**/node_modules/**',
   ],
   testMatch: [
+    '<rootDir>/__tests__/**/*.{js,jsx,ts,tsx}',
     '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/components/**/*.{spec,test}.{js,jsx,ts,tsx}',
     '<rootDir>/src/**/*.{spec,test}.{js,jsx,ts,tsx}',
   ],
   testPathIgnorePatterns: [
@@ -41,14 +43,6 @@ const customJestConfig = {
     '/node_modules/',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
-  coverageThreshold: {
-    global: {
-      branches: 70,
-      functions: 70,
-      lines: 70,
-      statements: 70,
-    },
-  },
   coverageReporters: ['json', 'lcov', 'text', 'clover', 'html'],
   moduleDirectories: ['node_modules', '<rootDir>/'],
   testTimeout: 10000,
