@@ -295,6 +295,16 @@ class TestToolRegistry:
         assert "web_search" in registry
         assert "weather" in registry
         assert "datetime" in registry
+        assert "code_executor" not in registry
+        assert "file_reader" not in registry
+
+    def test_unsafe_legacy_tools_require_explicit_opt_in(self, registry, monkeypatch):
+        monkeypatch.setenv("ZAKERA_ENABLE_UNSAFE_LEGACY_TOOLS", "true")
+
+        registry.discover_builtin_tools()
+
+        assert "code_executor" in registry
+        assert "file_reader" in registry
     
     def test_export_schema(self, registry):
         registry.register(CalculatorTool())
