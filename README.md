@@ -1,103 +1,81 @@
 # Zakera
 
-An open-source AI orchestrator that moves beyond prompt-and-response toward something more useful — an assistant that learns your habits, routes tasks across tools, and works proactively in the background.
+> **Project status: prototype under redesign.** The current codebase is an older, agent-generated AI orchestration prototype. It is not production-ready, and several legacy features and operations documents are unverified. Development is now moving toward a smaller, evidence-first vNext.
 
-Most AI tools wait for you to type something. Zakera is built around a different idea: what if your assistant already knew what you needed?
+**Know what is actually ready—and what you can safely say about it.**
 
-## Why this exists
+Zakera vNext is being designed as an evidence-first release readiness assistant for GitHub teams. Its first workflow will turn repository content, pull requests, issues, CI results, and documentation into a claim-by-claim readiness report. Every factual conclusion must point to evidence, missing or conflicting information must stay visible, and Zakera must ask before it posts or changes anything.
 
-The gap between "I can use ChatGPT" and "I have AI automating my workflows" is massive. It requires wiring together providers, managing context across sessions, handling auth for dozens of APIs, and building interfaces that don't get in the way.
+## First supported workflow
 
-Zakera bridges that gap. It's an orchestration layer that handles intent classification, smart routing across 21+ LLM providers, and persistent memory — so you can focus on what you want done, not how to wire it up.
+Given a repository and a revision, the Release Readiness Audit will:
 
-This is open source because the tools that make AI accessible shouldn't be locked behind enterprise paywalls.
+1. read the relevant code, documentation, pull requests, issues, and checks;
+2. classify proposed release claims as supported, unsupported, conflicting, or needing owner review;
+3. produce a reviewable Markdown report and a machine-readable result;
+4. show the source, revision, and locator behind each factual claim; and
+5. make no external changes during the initial read-only release.
 
-## How it works
+The initial product is deliberately a repeatable task, not a general-purpose chat interface or agent platform.
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Interface                      │
-│              React / Next.js frontend            │
-│         Background task management UI            │
-└──────────────────────┬──────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────┐
-│                 Orchestrator                     │
-│            Intent classification                 │
-│         Smart routing across providers           │
-│           Tool selection & execution             │
-└───────┬──────────────┬──────────────┬───────────┘
-        │              │              │
-┌───────▼──────┐ ┌─────▼──────┐ ┌────▼───────────┐
-│  Providers   │ │   Tools    │ │ Memory & State  │
-│  21+ LLMs   │ │ Web search │ │   Persistent    │
-│  Unified API │ │ Code exec  │ │   context that  │
-│  Failover    │ │ Calculator │ │   tracks habits │
-│              │ │ File I/O   │ │   across        │
-│              │ │ + custom   │ │   sessions      │
-└──────────────┘ └────────────┘ └─────────────────┘
-```
+## Current status
 
-**Orchestrator** (Python/FastAPI) — Classifies what you're trying to do and routes it to the right provider and tools. Handles failover automatically if a provider goes down.
+| Area | Status |
+| --- | --- |
+| Legacy FastAPI and Next.js prototype | Present, being evaluated for salvage |
+| Run, step, approval, and SSE concepts | Present; behavior may inform vNext |
+| Release Readiness Audit | Planned; not implemented yet |
+| Evidence and claim ledger | Planned; not implemented yet |
+| External write actions | Out of the first release; must require exact-action approval later |
+| Long-term memory, proactive scheduling, multi-agent workflows | Not part of vNext MVP |
+| Broad provider routing and arbitrary tools | Legacy surface; not a vNext goal |
+| Hosted or production deployment | Not supported |
 
-**Provider layer** — Single interface across OpenAI, Anthropic, Gemini, DeepSeek, Groq, Cerebras, Mistral, Cohere, Perplexity, xAI, Together AI, OpenRouter, Ollama, and more. Add an API key, use the model.
+The repository currently contains duplicated and disconnected surfaces, inconsistent database migrations, and legacy tools that are not safe execution sandboxes. The code-execution and unrestricted file-reading tools remain present in the legacy prototype but are excluded from vNext. Do not enable the legacy tool path for untrusted content or expose this repository to untrusted users or production credentials.
 
-**Memory** — Conversation context that persists across sessions. Token-aware trimming so the model doesn't lose track of what you were doing.
+## vNext direction
 
-**Tools** — Built-in web search, code execution, calculator, file operations, datetime, weather. Extensible — write a tool class, register it, done.
+The first implementation will use:
 
-**Monitoring** — Request metrics (Prometheus), distributed tracing (OpenTelemetry/Jaeger), structured logging, health probes. Know what's happening in production.
+- Next.js for the task, run timeline, evidence, and artifact-review interface;
+- a thin FastAPI application for workflow execution and persistence;
+- the OpenAI Agents SDK for the initial agent runtime;
+- direct, read-only GitHub function tools for the first vertical slice;
+- SQLAlchemy with a fresh Alembic history;
+- SQLite for single-user local development, with PostgreSQL required before shared deployment;
+- server-sent events for observable run updates; and
+- Markdown as the first artifact format.
 
-## Quick start
+MCP remains a future adapter boundary, not a day-one subsystem. Multi-provider routing, generic workflow builders, multi-agent orchestration, long-term memory, Kubernetes, Terraform, and a large observability stack will be reconsidered only if validated product use requires them.
 
-```bash
-git clone https://github.com/itsmepraks/zakera.git
-cd zakera
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+The complete product, architecture, migration, security, testing, and delivery plan is in [docs/VNEXT_PLAN.md](docs/VNEXT_PLAN.md).
 
-cp .env.example .env
-# add at least one provider API key
+## Trust model
 
-mkdir -p data logs
-make dev
-```
+Zakera vNext is governed by four rules:
 
-API: http://localhost:8000
-Docs: http://localhost:8000/api/docs
+1. **No evidence, no claim.** Missing evidence is reported, not guessed.
+2. **Repository content is untrusted input.** Instructions found in files, issues, or pull requests cannot change tool policy.
+3. **Read and write capabilities are separate.** The first release is read-only.
+4. **Approval binds to the exact action.** A future write approval must identify the actor, tool, target, arguments, payload, source revision, and expiry. Any change requires a new approval.
 
-For the full monitoring stack (Postgres, Jaeger, Prometheus, Grafana):
-```bash
-docker-compose up
-```
+## Working with the legacy prototype
 
-## Project structure
+The current implementation remains in the repository while vNext is built in isolation. Its historical setup and feature documentation are retained under [`docs/`](docs/README.md), but should be treated as legacy reference unless explicitly marked as verified.
 
-```
-src/
-  api/           FastAPI app, routes, auth, middleware
-  model/         Provider implementations, memory, model manager
-  tools/         Tool framework and built-in tools
-  monitoring/    Metrics, tracing, logging, alerts
-  security/      JWT auth, MFA, OAuth2
-  frontend/      React + TypeScript UI
-```
-
-## Supported providers
-
-Anthropic · OpenAI · Google Gemini · DeepSeek · Groq · Cerebras · Mistral · Cohere · Perplexity · xAI · Together AI · OpenRouter · HuggingFace · Ollama · AWS Bedrock · Google Vertex · Azure OpenAI · Fireworks
-
-Each provider lives in its own file under `src/model/`. Ollama is supported for fully local inference.
+Before publishing a new quick start, the vNext setup commands must be exercised in CI and from a clean checkout. Until then, use the milestone gates in the vNext plan rather than relying on the legacy production or deployment guides.
 
 ## Contributing
 
-This project is early and actively evolving. If you're interested in:
-- Habit learning and proactive task scheduling
-- Better intent classification
-- New tool integrations
-- Frontend/UX for background task management
+The highest-value work is currently:
 
-Open an issue or PR. No contribution is too small.
+- defining historical release cases for the evaluation set;
+- implementing the read-only Release Readiness Audit vertical slice;
+- designing evidence and claim semantics;
+- writing observable behavior tests for run, artifact, and approval boundaries; and
+- containing unsafe or misleading legacy paths without broad rewrites.
+
+Please keep changes small, reversible, and tied to a milestone acceptance gate in the [vNext plan](docs/VNEXT_PLAN.md).
 
 ## License
 

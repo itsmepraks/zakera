@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zakera"
 version = "0.5.0"
-description = "Production-ready AI chat agent with multi-provider LLM support, conversation memory, tool integration, and enterprise monitoring"
+description = "Legacy AI orchestration prototype being redesigned around evidence-first release readiness"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -18,11 +18,10 @@ maintainers = [
 keywords = [
     "ai", "chatbot", "llm", "gpt", "claude", "gemini", 
     "fastapi", "openai", "anthropic", "ollama",
-    "conversational-ai", "multi-provider", "monitoring",
-    "prometheus", "grafana", "kubernetes", "production-ready"
+    "release-readiness", "evidence", "workflow", "prototype"
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
