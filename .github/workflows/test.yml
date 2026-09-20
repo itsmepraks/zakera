@@ -1,10 +1,11 @@
 # ──────────────────────────────────────────────────────────────────────────────
-# Zakera AI — Continuous Integration
-# Runs the full Python test suite and the frontend Jest tests on every push
-# and pull-request targeting main or any feature/* branch.
+# Zakera legacy characterization
+# Runs only the maintained legacy backend subset and frontend Jest suite.
+# This workflow does not claim that the legacy application lint, type-check,
+# production build, migrations, or deployment paths are ready.
 # ──────────────────────────────────────────────────────────────────────────────
 
-name: Tests
+name: Legacy Characterization
 
 on:
   push:
@@ -26,6 +27,9 @@ defaults:
   run:
     shell: bash
 
+permissions:
+  contents: read
+
 # ──────────────────────────────────────────────────────────────────────────────
 jobs:
 
@@ -33,8 +37,9 @@ jobs:
   # 1. Backend: Python / pytest
   # ────────────────────────────────────────────────
   backend:
-    name: Backend (Python ${{ matrix.python-version }})
+    name: Legacy Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -73,12 +78,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lint with flake8
-        run: |
-          pip install flake8
-          flake8 src/ tests/ --config=.flake8 --statistics
-        continue-on-error: true  # Lint warnings don't fail the build
-
       - name: Run maintained backend tests with coverage
         run: |
           pytest \
@@ -93,23 +92,13 @@ jobs:
             --cov-report=term-missing \
             -q
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.xml
-          flags: backend
-          name: backend-py${{ matrix.python-version }}
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
   # ────────────────────────────────────────────────
   # 2. Frontend: Node / Jest
   # ────────────────────────────────────────────────
   frontend:
-    name: Frontend (Node ${{ matrix.node-version }})
+    name: Legacy Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -133,10 +122,6 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Type-check with tsc
-        run: npx tsc --noEmit
-        continue-on-error: true
-
       - name: Run Jest tests
         run: |
           npm test -- \
@@ -145,23 +130,14 @@ jobs:
             --coverageReporters=lcov \
             --coverageReporters=text
 
-      - name: Upload frontend coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: src/frontend/coverage/lcov.info
-          flags: frontend
-          name: frontend-node${{ matrix.node-version }}
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
   # ────────────────────────────────────────────────
   # 3. Summary gate — all jobs must pass
   # ────────────────────────────────────────────────
   ci-success:
-    name: CI Success
+    name: Legacy Characterization Passed
     needs: [backend, frontend]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     steps:
       - name: Check all jobs passed
@@ -170,4 +146,4 @@ jobs:
             echo "One or more CI jobs failed."
             exit 1
           fi
-          echo "All CI jobs passed ✓"
+          echo "All maintained legacy characterization jobs passed."

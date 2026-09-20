@@ -14,7 +14,7 @@ The test workflow is useful only as a legacy characterization check. It does not
 
 | Workflow | Current evidence | Disposition |
 | --- | --- | --- |
-| `test.yml` | Maintained backend subset and frontend Jest run in PRs; lint and TypeScript failures are ignored; no frontend production build | Retain and rename as legacy characterization; do not call it the vNext required gate |
+| `test.yml` | Maintained backend subset and frontend Jest run in PRs; lint/type/build are known exclusions | Retained and renamed as legacy characterization; not the vNext required gate |
 | `security.yml` | CodeQL plus Gitleaks are meaningful; Gitleaks now passes after a minimum permission fix; Dependency Review is unsupported by current repository settings | Retain code/secret scanning; unsupported dependency job removed and ecosystem-audit gap tracked explicitly |
 | `lint-pr-title.yml` | Failed on the initial PR title and passed after correction | Retain with read-only permissions |
 | `pr-labels.yml` | Initially failed due to missing checkout and obsolete labeler schema; passed after both fixes | Retain as repository maintenance, not a product-quality gate |
@@ -64,13 +64,13 @@ The workflows name AWS accounts/resources, ECR repositories, state buckets, ECS 
 
 ## Test workflow findings
 
-- The name and final `CI Success` job overstate the proof provided by the workflow.
-- Flake8 and TypeScript checks use `continue-on-error: true`.
+- The original name and final `CI Success` job overstated the proof provided by the workflow; both are now explicitly legacy-characterization labels.
+- The ignored Flake8 and TypeScript steps were removed rather than displayed as successful checks; their known failures remain documented debt.
 - No frontend production build runs.
 - No Python type check, migration test, deterministic evaluation smoke test, or dependency audit runs.
 - Python dependencies are installed from broad ranges rather than a lockfile.
 - Tokenizer initialization can require undeclared network access.
-- Codecov upload failures are ignored; this is acceptable only if coverage publishing is explicitly informational.
+- Non-blocking Codecov upload steps were removed from the required characterization path.
 - Placeholder provider keys look structurally similar to real credentials and are unnecessary for most maintained tests.
 
 This workflow should remain narrow and honest while vNext is isolated. Existing legacy debt must not be relabeled as a passing vNext gate.
@@ -95,9 +95,8 @@ There should be no deployment or release workflow until a hosted-beta decision e
 
 ## Ordered remediation
 
-1. Rename and narrow `test.yml` so its check names accurately describe legacy characterization.
-2. Add explicit least-privilege permissions and concurrency/timeouts to retained workflows.
-3. Make tokenizer-dependent tests hermetic.
-4. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
-5. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
-6. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
+1. Add explicit least-privilege permissions and concurrency/timeouts to the remaining maintenance workflows.
+2. Make tokenizer-dependent tests hermetic.
+3. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
+4. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
+5. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.

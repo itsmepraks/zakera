@@ -151,12 +151,7 @@ This branch replaces the Python package’s “production-ready” description a
 
 `.github/workflows/test.yml` remains the temporary automatic legacy characterization workflow for pushes to its configured branch patterns and pull requests to `main`. It runs a maintained backend subset plus frontend Jest tests.
 
-It is not yet the target CI gate:
-
-- Python lint remains non-blocking;
-- TypeScript type checking remains non-blocking;
-- Codecov upload failure remains non-blocking; and
-- it does not test a fresh vNext migration or production frontend build.
+It is not the target CI gate. It intentionally runs only the maintained legacy behavior subset; it does not run Python lint, TypeScript type checking, a frontend production build, a fresh vNext migration, or dependency/evaluation gates. Those omitted checks remain documented debt and must be blocking for new vNext paths.
 
 Those weaknesses are recorded debt, not hidden success. New vNext paths must receive blocking format, lint, type, test, build, migration, and evaluation checks from their first commit.
 
@@ -176,7 +171,7 @@ The first backend run also revealed that tokenizer initialization downloads enco
 
 | Workflow | Trigger after containment | Reason |
 | --- | --- | --- |
-| `test.yml` | automatic | Temporary maintained legacy test baseline |
+| `test.yml` | automatic | Explicitly named legacy characterization subset; not a production-readiness gate |
 | `security.yml` | automatic + weekly + manual | Retain security visibility; CodeQL is blocking |
 | `lint-pr-title.yml` | pull request | Narrow repository policy check |
 | `pr-labels.yml` | pull request | Narrow repository-maintenance action |
