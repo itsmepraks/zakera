@@ -1,6 +1,8 @@
 name: Release
 
 on:
+  # Releases publish images and create GitHub releases. Require an explicit
+  # dispatch while the legacy release path is unaudited.
   workflow_dispatch:
     inputs:
       version:
@@ -21,9 +23,6 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    tags:
-      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io

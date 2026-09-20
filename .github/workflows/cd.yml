@@ -1,13 +1,9 @@
 name: CD Pipeline - Deployment
 
 on:
-  workflow_run:
-    workflows: ["CI/CD Pipeline"]
-    types:
-      - completed
-    branches:
-      - main
-      - develop
+  # Deployments must be explicitly initiated while the legacy deployment
+  # configuration is unaudited. Do not restore workflow_run automation until
+  # the hosted-beta gate in docs/VNEXT_PLAN.md is met.
   workflow_dispatch:
     inputs:
       environment:
@@ -33,7 +29,7 @@ jobs:
   prepare-deployment:
     name: Prepare Deployment
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     outputs:
       environment: ${{ steps.set-env.outputs.environment }}
       version: ${{ steps.version.outputs.version }}
