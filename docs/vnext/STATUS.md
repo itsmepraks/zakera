@@ -180,8 +180,8 @@ The first backend run also revealed that tokenizer initialization downloads enco
 | `security.yml` | automatic + weekly + manual | Retain security visibility; CodeQL is blocking |
 | `lint-pr-title.yml` | pull request | Narrow repository policy check |
 | `pr-labels.yml` | pull request | Narrow repository-maintenance action |
-| `cd.yml` | manual only | Builds, publishes, and deploys with Terraform/ECS |
-| `release.yml` | manual only | Publishes images and creates releases |
+| `cd.yml` | removed on this branch | Mixed real AWS/Terraform mutations with placeholder gates and internally inconsistent EKS/ECS targets |
+| `release.yml` | removed on this branch | Published images/releases through an unverified path without a complete frontend/build contract |
 | `ci.yml` | removed on this branch | Duplicate CI with ignored lint/type failures |
 | `ci-cd-multi-env.yml` | removed on this branch | Duplicate CI plus image publishing/deployment |
 | `performance.yml` | removed on this branch | Stale endpoints and repeated scheduled failures |
@@ -197,6 +197,7 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 - stops scheduled or automatic stale performance and badge jobs;
 - removes duplicate `ci.yml` and the combined multi-environment pipeline after verifying no required-check dependency;
 - removes CodeQL’s silent-failure override;
+- removes the unsafe legacy CD and release definitions after a full workflow/infrastructure audit;
 - establishes this inventory; and
 - adds a blinded evaluation case format and the first two inputs.
 - makes unsafe legacy code-execution and unrestricted file-reading tools unavailable by default.
