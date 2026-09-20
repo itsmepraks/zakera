@@ -1,37 +1,50 @@
 # Auto-labeling configuration for PRs
 
 'area: backend':
-  - 'src/api/**/*'
-  - 'src/model/**/*'
-  - 'src/tools/**/*'
-  - 'src/security/**/*'
-  - 'src/utils/**/*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/api/**/*'
+          - 'src/model/**/*'
+          - 'src/tools/**/*'
+          - 'src/security/**/*'
+          - 'src/utils/**/*'
 
 'area: frontend':
-  - 'src/frontend/**/*'
+  - changed-files:
+      - any-glob-to-any-file: 'src/frontend/**/*'
 
 'area: infrastructure':
-  - '.github/**/*'
-  - 'kubernetes/**/*'
-  - 'helm/**/*'
-  - 'terraform/**/*'
-  - 'docker-compose*.yml'
-  - 'Dockerfile*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**/*'
+          - 'kubernetes/**/*'
+          - 'helm/**/*'
+          - 'terraform/**/*'
+          - 'docker-compose*.yml'
+          - 'Dockerfile*'
 
 'area: documentation':
-  - '*.md'
-  - 'docs/**/*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*.md'
+          - 'docs/**/*'
 
 'area: tests':
-  - 'tests/**/*'
-  - 'pytest.ini'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'tests/**/*'
+          - 'pytest.ini'
 
 'area: monitoring':
-  - 'src/monitoring/**/*'
-  - 'monitoring/**/*'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/monitoring/**/*'
+          - 'monitoring/**/*'
 
 'type: dependencies':
-  - 'requirements.txt'
-  - 'pyproject.toml'
-  - 'package.json'
-  - 'package-lock.json'
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'requirements.txt'
+          - 'pyproject.toml'
+          - 'package.json'
+          - 'package-lock.json'
