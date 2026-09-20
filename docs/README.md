@@ -1,40 +1,45 @@
-# Docs
+# Zakera documentation
 
-## Getting started
-- [Quick Start](QUICKSTART.md) — get running in 5 minutes
-- [Environment Variables](ENVIRONMENT_VARIABLES.md) — all configuration options
+## Current direction
 
-## Architecture
-- [Architecture Overview](ARCHITECTURE.md) — system design and components
-- [Memory System](MEMORY_SYSTEM.md) — how conversation context works
-- [Tool System](tools.md) — built-in and custom tools
-- [Tool Examples](tools-examples.md) — practical usage examples
+- [Zakera vNext product and delivery plan](VNEXT_PLAN.md) — authoritative product scope, architecture, migration strategy, security boundaries, milestones, and acceptance gates.
+- [Zakera vNext status](vnext/STATUS.md) — verified legacy surface inventory, CI containment, and remaining unknowns.
+- [Release readiness evaluation set](../evaluations/release_readiness/README.md) — blinded case format, initial inputs, and planned scoring.
+- [Agent harness research](AGENT_HARNESS_RESEARCH.md) — earlier research that informed the vNext direction; it is background material, not the product contract.
 
-## API
-- [API Guide](api-integration-guide.md) — endpoints, auth, streaming, WebSocket
+## Legacy prototype documentation
 
-## Providers
-- [Provider Integration Guide](PROVIDER_INTEGRATION_GUIDE.md) — how to add a new provider
-- [Local Models](LOCAL_MODELS.md) — Ollama setup for local inference
-- [Gemini Provider](gemini-provider.md) — Google Gemini setup
+The documents below describe the older orchestration prototype. They are retained for historical reference and code archaeology. They have not all been verified against the active application and must not be treated as current production guidance.
 
-## Operations
-- [Monitoring Setup](MONITORING_SETUP.md) — Prometheus, Grafana, tracing
-- [Distributed Tracing](DISTRIBUTED_TRACING.md) — OpenTelemetry and Jaeger
-- [Production Deployment](PRODUCTION_DEPLOYMENT.md) — Docker, Kubernetes, cloud
-- [Caching](CACHING_STRATEGY.md) — current caching and future plans
-- [Rate Limiting](RATE_LIMITING.md) — request throttling config
-- [Troubleshooting](TROUBLESHOOTING.md) — common issues and fixes
+### Setup and architecture
 
-## Security
-- [Security Guide](SECURITY.md) — auth, MFA, API key management
+- [Legacy quick start](quickstart.md)
+- [Environment variables](ENVIRONMENT_VARIABLES.md)
+- [Architecture overview](architecture.md)
+- [Memory system](MEMORY_SYSTEM.md)
+- [Database persistence](DATABASE_PERSISTENCE.md)
 
-## Development
-- [CI/CD Setup](ci-cd-setup.md) — GitHub Actions pipeline
-- [CI/CD Quick Reference](ci-cd-quick-reference.md) — common commands
-- [Testing](TESTING.md) — running and writing tests
-- [Database](DATABASE_PERSISTENCE.md) — schema and persistence
+### API, providers, and tools
 
-## Features
-- [Conversation Export](CONVERSATION_EXPORT.md) — export in JSON, Markdown, CSV, text
-- [UI Enhancements](UI_ENHANCEMENTS.md) — frontend features
+- [API integration guide](api-integration-guide.md)
+- [Provider integration guide](PROVIDER_INTEGRATION_GUIDE.md)
+- [Local models](LOCAL_MODELS.md)
+- [Tool system](tools.md)
+- [Tool examples](tools-examples.md)
+
+### Operations and security
+
+- [Monitoring setup](MONITORING_SETUP.md)
+- [Production deployment](PRODUCTION_DEPLOYMENT.md)
+- [Caching strategy](CACHING_STRATEGY.md)
+- [Rate limiting](RATE_LIMITING.md)
+- [Security guide](SECURITY.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+
+### Development
+
+- [CI/CD setup](ci-cd-setup.md)
+- [CI/CD quick reference](ci-cd-quick-reference.md)
+- [Testing](TESTING.md)
+
+When a legacy document conflicts with [the vNext plan](VNEXT_PLAN.md), the vNext plan governs new work. A setup guide will become authoritative again only after its commands run in required CI and from a clean checkout.
