@@ -20,6 +20,12 @@ Disposition: **scanner operational; no finding was reported by the successful PR
 
 Disposition: **configuration/platform blocker, not a clean dependency result**. The unsupported job was removed from the active workflow rather than marked non-blocking or misrepresented as a passing audit. Enabling repository security features is an owner-level GitHub setting decision; until a supported blocking replacement exists, the absence remains explicit and local ecosystem audits provide the evidence below.
 
+## GitHub code scanning
+
+Both CodeQL language jobs initialized, autobuilt, analyzed, and exported SARIF successfully in PR #66. JavaScript/TypeScript and Python then failed at upload because GitHub reported that code scanning is not enabled for this repository. No CodeQL result was accepted by GitHub, so these runs are not evidence of a clean static analysis result.
+
+Disposition: **configuration/platform blocker, not a clean code result**. The CodeQL jobs remain blocking rather than being ignored or removed. Resolving the failure requires enabling code scanning in repository settings, or an explicit owner decision to replace these jobs with a supported blocking static-analysis implementation.
+
 ## Locked frontend audit
 
 Command executed from `src/frontend`:

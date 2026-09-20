@@ -172,7 +172,7 @@ The first backend run revealed that tokenizer initialization downloaded encoding
 | Workflow | Trigger after containment | Reason |
 | --- | --- | --- |
 | `test.yml` | automatic | Explicitly named legacy characterization subset; not a production-readiness gate |
-| `security.yml` | automatic + weekly + manual | Retain security visibility; CodeQL is blocking |
+| `security.yml` | automatic + weekly + manual | Blocking Gitleaks secret scan; unsupported CodeQL/dependency-review gaps are documented separately |
 | `lint-pr-title.yml` | pull request | Narrow repository policy check |
 | `pr-labels.yml` | pull request | Narrow repository-maintenance action |
 | `cd.yml` | removed on this branch | Mixed real AWS/Terraform mutations with placeholder gates and internally inconsistent EKS/ECS targets |
@@ -211,7 +211,7 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 
 ## Verification performed for this slice
 
-- all six remaining workflow files parse as YAML;
+- all four remaining workflow files parse as YAML;
 - all evaluation JSON and schema files parse as JSON;
 - both unsafe-tool discovery boundary tests pass with Python's standard `unittest` runner;
 - the maintained backend selection passes 99 of 99 tests;
