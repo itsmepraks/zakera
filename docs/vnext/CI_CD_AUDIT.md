@@ -95,8 +95,7 @@ There should be no deployment or release workflow until a hosted-beta decision e
 
 ## Ordered remediation
 
-1. Add explicit least-privilege permissions and concurrency/timeouts to the remaining maintenance workflows.
-2. Make tokenizer-dependent tests hermetic.
-3. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
-4. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
-5. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
+1. Make tokenizer-dependent tests hermetic.
+2. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
+3. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
+4. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
