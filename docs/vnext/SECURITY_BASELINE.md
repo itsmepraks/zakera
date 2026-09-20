@@ -18,7 +18,7 @@ Disposition: **scanner operational; no finding was reported by the successful PR
 
 `actions/dependency-review-action@v4` does not currently reach dependency analysis. GitHub reports that Dependency Review is unsupported for this repository until Dependency Graph and the applicable GitHub Advanced Security capability are enabled.
 
-Disposition: **configuration/platform blocker, not a clean dependency result**. The job remains failing rather than being marked non-blocking or globally ignored. Enabling repository security features is an owner-level GitHub setting decision; until then, local ecosystem audits provide the evidence below.
+Disposition: **configuration/platform blocker, not a clean dependency result**. The unsupported job was removed from the active workflow rather than marked non-blocking or misrepresented as a passing audit. Enabling repository security features is an owner-level GitHub setting decision; until a supported blocking replacement exists, the absence remains explicit and local ecosystem audits provide the evidence below.
 
 ## Locked frontend audit
 

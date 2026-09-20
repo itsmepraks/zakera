@@ -15,7 +15,7 @@ The test workflow is useful only as a legacy characterization check. It does not
 | Workflow | Current evidence | Disposition |
 | --- | --- | --- |
 | `test.yml` | Maintained backend subset and frontend Jest run in PRs; lint and TypeScript failures are ignored; no frontend production build | Retain and rename as legacy characterization; do not call it the vNext required gate |
-| `security.yml` | CodeQL plus Gitleaks are meaningful; Gitleaks now passes after a minimum permission fix; Dependency Review is unsupported by current repository settings | Retain code/secret scanning; remove the unsupported dependency job and track ecosystem audits explicitly |
+| `security.yml` | CodeQL plus Gitleaks are meaningful; Gitleaks now passes after a minimum permission fix; Dependency Review is unsupported by current repository settings | Retain code/secret scanning; unsupported dependency job removed and ecosystem-audit gap tracked explicitly |
 | `lint-pr-title.yml` | Failed on the initial PR title and passed after correction | Retain with read-only permissions |
 | `pr-labels.yml` | Initially failed due to missing checkout and obsolete labeler schema; passed after both fixes | Retain as repository maintenance, not a product-quality gate |
 | `cd.yml` | No verified target; EKS Terraform conflicts with ECS commands; multiple checks are suppressed | Removed from active workflows on this branch |
@@ -96,9 +96,8 @@ There should be no deployment or release workflow until a hosted-beta decision e
 ## Ordered remediation
 
 1. Rename and narrow `test.yml` so its check names accurately describe legacy characterization.
-2. Remove the unsupported Dependency Review job while keeping its absence explicit in the security baseline.
-3. Add explicit least-privilege permissions and concurrency/timeouts to retained workflows.
-4. Make tokenizer-dependent tests hermetic.
-5. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
-6. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
-7. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
+2. Add explicit least-privilege permissions and concurrency/timeouts to retained workflows.
+3. Make tokenizer-dependent tests hermetic.
+4. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
+5. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
+6. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
