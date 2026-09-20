@@ -187,7 +187,9 @@ The first backend run also revealed that tokenizer initialization downloads enco
 | `performance.yml` | removed on this branch | Stale endpoints and repeated scheduled failures |
 | `badges.yml` | removed on this branch | Scheduled runs performed no maintained update |
 
-The live GitHub settings were inspected before these deletions. On 2026-09-20, the repository showed no classic branch-protection rules and no repository rulesets, so no required status check depended on the removed workflow names. Recent Actions history showed daily Performance Testing failures and successful no-op Update Badges runs. Secret-scan findings still require individual revoked/remediated/fingerprinted disposition; they must not be globally ignored.
+The live GitHub settings were inspected before these deletions. On 2026-09-20, the repository showed no classic branch-protection rules and no repository rulesets, so no required status check depended on the removed workflow names. Recent Actions history showed daily Performance Testing failures and successful no-op Update Badges runs.
+
+PR #66 provided the first live integration evidence for this branch. Secret Scanning initially failed before scanning because Gitleaks lacked pull-request read permission; after adding the minimum read-only permission, the job passed. The PR labeler also passed after its missing checkout and obsolete v5 configuration schema were corrected. Dependency Review remains blocked because GitHub reports that the repository does not have the required Dependency Graph/Advanced Security capability. The verified audit results and dispositions are recorded in [the security and dependency baseline](SECURITY_BASELINE.md).
 
 ## What this slice changes
 
@@ -206,7 +208,7 @@ The live GitHub settings were inspected before these deletions. On 2026-09-20, t
 - a clean local installation and application startup;
 - the full legacy pytest suite outside the maintained CI selection;
 - a passing legacy TypeScript check and production build;
-- the disposition of existing secret-scan findings;
+- a supported dependency-review mechanism for this repository;
 - the existence or health of any deployment target;
 - whether any legacy user data has value; and
 - whether the legacy deployment workflows are safe even when manually dispatched.
@@ -227,7 +229,7 @@ Workflow parsing proves syntax, not GitHub Actions runtime semantics. The manual
 
 ## Next M0/M1 actions
 
-1. Triage secret-scan and dependency findings without exposing secrets or applying broad upgrades.
-2. Add black-box tests for the useful run/event/approval behavior.
-3. Make tokenizer-dependent tests hermetic.
-4. Review and freeze eight more evaluation inputs before implementing against them.
+1. Add black-box tests for the useful run/event/approval behavior.
+2. Make tokenizer-dependent tests hermetic.
+3. Review and freeze eight more evaluation inputs before implementing against them.
+4. Decide whether to enable GitHub's required dependency-review capability or use supported ecosystem-native checks.
