@@ -9,9 +9,13 @@ jobs:
     name: Auto Label PR
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Label based on files changed
         uses: actions/labeler@v5
         with:
