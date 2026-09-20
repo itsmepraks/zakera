@@ -1,0 +1,29 @@
+{
+  "id": "001-legacy-product-claims",
+  "title": "Legacy Zakera product claims at the vNext baseline",
+  "repository": "itsmepraks/zakera",
+  "revision": "f4849c256e7380b09b07e3c4c4a19d72fd4c0e49",
+  "target": "Determine which legacy README capabilities were actually ready to describe at the recorded baseline.",
+  "proposed_claims": [
+    "Zakera proactively learns user habits and works in the background.",
+    "Zakera routes work across more than 21 model providers with automatic failover.",
+    "Zakera provides persistent cross-session memory.",
+    "Zakera includes production monitoring and deployment support.",
+    "Zakera is ready for production use."
+  ],
+  "required_source_categories": [
+    "repository_files",
+    "commit_history",
+    "pull_requests",
+    "issues",
+    "ci_checks",
+    "documentation",
+    "release_records"
+  ],
+  "constraints": {
+    "read_only": true,
+    "public_repository": true,
+    "external_writes": false
+  },
+  "frozen_at": "2026-09-20"
+}
