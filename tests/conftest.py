@@ -14,6 +14,30 @@ from src.api.models import User, Conversation, Message
 from src.api.auth import create_access_token, get_password_hash
 
 
+class _OfflineTestEncoding:
+    """Deterministic token counter for tests that never loads encoder data."""
+
+    @staticmethod
+    def encode(text: str) -> list[int]:
+        return list(text.encode("utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def offline_conversation_memory_tokenizer(monkeypatch):
+    """Keep memory tests hermetic instead of downloading tiktoken assets."""
+    from src.model import memory as memory_module
+
+    encoding = _OfflineTestEncoding()
+
+    def encoding_for_model(model: str):
+        if model.startswith("unknown-"):
+            raise KeyError(model)
+        return encoding
+
+    monkeypatch.setattr(memory_module.tiktoken, "encoding_for_model", encoding_for_model)
+    monkeypatch.setattr(memory_module.tiktoken, "get_encoding", lambda _name: encoding)
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create event loop for async tests."""

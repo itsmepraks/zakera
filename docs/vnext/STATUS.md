@@ -163,7 +163,7 @@ Local baseline results on 2026-09-20:
 - frontend TypeScript check: failed with 38 legacy errors across duplicate/disconnected component trees; and
 - frontend production build: application compilation succeeded, then failed during the same TypeScript validation.
 
-The first backend run also revealed that tokenizer initialization downloads encoding data at test time. After that asset was cached, the suite passed. Tests must not depend on undeclared network access in the target vNext CI.
+The first backend run revealed that tokenizer initialization downloaded encoding data at test time. The shared pytest harness now substitutes a deterministic in-memory encoder for conversation-memory tests. The maintained 99-test selection passes with `TIKTOKEN_CACHE_DIR=/dev/null`, proving that this path no longer depends on downloading tokenizer assets.
 
 `npm ci` reported 19 vulnerabilities in the locked legacy dependency tree: 4 moderate, 14 high, and 1 critical. No blanket `npm audit fix` or dependency upgrade was applied because that would mix unrelated migration risk into the containment slice.
 
@@ -215,6 +215,7 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 - all evaluation JSON and schema files parse as JSON;
 - both unsafe-tool discovery boundary tests pass with Python's standard `unittest` runner;
 - the maintained backend selection passes 99 of 99 tests;
+- the same maintained selection passes with tokenizer cache access disabled;
 - the focused agent-run service selection passes 5 of 5 tests;
 - frontend Jest passes all 8 suites and 117 tests;
 - both evaluation revisions resolve to commits in repository history;
@@ -226,6 +227,5 @@ Workflow parsing proves syntax, not GitHub Actions runtime semantics. The manual
 ## Next M0/M1 actions
 
 1. Add black-box tests for the useful run/event/approval behavior.
-2. Make tokenizer-dependent tests hermetic.
-3. Review and freeze eight more evaluation inputs before implementing against them.
-4. Decide whether to enable GitHub's required dependency-review capability or use supported ecosystem-native checks.
+2. Review and freeze eight more evaluation inputs before implementing against them.
+3. Decide whether to enable GitHub's required dependency-review capability or use supported ecosystem-native checks.
