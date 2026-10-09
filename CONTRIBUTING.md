@@ -1,60 +1,55 @@
 # Contributing to Zakera
 
-Thanks for wanting to help. Here's what you need to know.
+Zakera is a pre-alpha personal project agent under redesign. The current repository includes a legacy prototype; the accepted direction and milestone gates are documented in [`docs/VNEXT_PLAN.md`](docs/VNEXT_PLAN.md).
 
-## What we're working on
+## Current priorities
 
-Zakera is evolving from a multi-provider LLM wrapper into a personal AI orchestrator that learns habits and acts proactively. The areas that need the most help right now:
+The highest-value contributions are:
 
-- **Habit learning** — Building the system that tracks user patterns across sessions and surfaces proactive suggestions
-- **Intent classification** — Better routing of user requests to the right provider and tools
-- **Tool integrations** — New tools beyond the built-in set (web search, calculator, code execution, etc.)
-- **Frontend** — React/Next.js UI for managing background tasks and viewing orchestration status
-- **Provider fixes** — Some provider implementations have broken imports or untested code paths
+- black-box tests for legacy run events, cancellation, approval, and artifacts;
+- contracts for owner profile, project context, reviewable memory, and isolated workspaces;
+- the isolated vNext schema and migration baseline;
+- one complete personal project run; and
+- focused removal or quarantine of misleading legacy surfaces.
 
-## Setting up for development
+Please do not add providers, tools, channels, multi-agent orchestration, deployment infrastructure, or broad dependency upgrades without an agreed milestone need.
 
-```bash
-git clone https://github.com/itsmepraks/zakera.git
-cd zakera
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+## Development setup
 
-cp .env.example .env
-# add at least one API key
+There is no supported clean-install guide yet. Previous setup instructions described the inherited prototype and were not verified end to end. Publishing them here would overstate the state of the project.
 
-mkdir -p data logs
-make dev
-```
+Until a clean-checkout setup is added and exercised in CI:
 
-The API runs at http://localhost:8000 and Swagger docs at http://localhost:8000/api/docs.
+- use the commands in the active GitHub Actions workflows as the maintained verification reference;
+- treat other setup and deployment documents as legacy material; and
+- describe any local environment assumptions in your pull request.
 
 ## Making changes
 
-1. Fork the repo and create a branch from `main`
-2. Make your changes
-3. If you added something that should be tested, add tests
-4. Make sure existing tests pass: `make test`
-5. Open a PR with a clear description of what you changed and why
+1. Start from `main` and create a focused branch.
+2. Keep the change tied to one milestone outcome.
+3. Add tests for observable behavior when behavior changes.
+4. Run the relevant maintained backend or frontend checks.
+5. Record checks that were not run and explain why.
+6. Open a pull request that distinguishes implemented behavior from intended behavior.
 
-## Code style
+## Change principles
 
-- Python: we use `black` for formatting, `flake8` for linting, `isort` for imports
-- Run `make format` before committing
-- Keep changes focused — one PR per feature or fix
+- Preserve unrelated work and legacy behavior unless retirement is explicit.
+- Prefer small, reversible changes over broad cleanup.
+- Do not treat file presence or an agent's statement as proof that behavior works.
+- Never include credentials or environment-file values in commits, logs, fixtures, or issues.
+- Keep external writes and difficult-to-reverse actions behind exact approval boundaries.
+- Surface discovered design debt separately instead of expanding a focused change.
 
-## Reporting bugs
+## Reporting issues
 
-Open an issue. Include:
-- What you expected to happen
-- What actually happened
-- Steps to reproduce
-- Your Python version and OS
+Include:
 
-## Suggesting features
+- expected and actual behavior;
+- minimal reproduction steps;
+- operating system and relevant runtime versions;
+- the exact commit or branch; and
+- logs with credentials and personal data removed.
 
-Open an issue with the "feature" label. Describe what you'd want and why it would be useful. Even rough ideas are welcome — we can figure out implementation together.
-
-## Questions?
-
-Open an issue or start a discussion. There are no dumb questions.
+Questions, product ideas, and rough proposals are welcome as GitHub issues.

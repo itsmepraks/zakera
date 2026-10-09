@@ -1,84 +1,13 @@
 # =============================================================================
 # dependabot.yml
 # =============================================================================
-# Keeps Python and npm dependencies up-to-date automatically.
-# PRs are grouped to reduce noise and auto-assigned to the repo owner.
+# Keeps the small active GitHub Actions surface current during the redesign.
+# Python and npm update PRs are paused until the vNext package boundaries exist.
 # =============================================================================
 
 version: 2
 
 updates:
-  # --------------------------------------------------------------------------
-  # Python / pip (backend)
-  # --------------------------------------------------------------------------
-  - package-ecosystem: pip
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: America/New_York
-    groups:
-      backend-deps:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "pytest*"
-          - "flake8*"
-          - "mypy*"
-          - "coverage*"
-      backend-dev-deps:
-        patterns:
-          - "pytest*"
-          - "flake8*"
-          - "mypy*"
-          - "coverage*"
-    assignees:
-      - itsmepraks
-    labels:
-      - dependencies
-      - python
-    commit-message:
-      prefix: "chore"
-      include: scope
-    open-pull-requests-limit: 5
-
-  # --------------------------------------------------------------------------
-  # npm / Node.js (frontend)
-  # --------------------------------------------------------------------------
-  - package-ecosystem: npm
-    directory: /src/frontend
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-      timezone: America/New_York
-    groups:
-      frontend-deps:
-        patterns:
-          - "*"
-        exclude-patterns:
-          - "@types/*"
-          - "eslint*"
-          - "jest*"
-          - "@testing-library/*"
-      frontend-dev-deps:
-        patterns:
-          - "@types/*"
-          - "eslint*"
-          - "jest*"
-          - "@testing-library/*"
-          - "typescript"
-    assignees:
-      - itsmepraks
-    labels:
-      - dependencies
-      - javascript
-    commit-message:
-      prefix: "chore"
-      include: scope
-    open-pull-requests-limit: 5
-
   # --------------------------------------------------------------------------
   # GitHub Actions
   # --------------------------------------------------------------------------
