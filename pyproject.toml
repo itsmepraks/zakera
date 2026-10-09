@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zakera"
 version = "0.5.0"
-description = "Legacy AI orchestration prototype being redesigned around evidence-first release readiness"
+description = "Pre-alpha personal project agent focused on trusted continuity and inspectable execution"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -18,7 +18,7 @@ maintainers = [
 keywords = [
     "ai", "chatbot", "llm", "gpt", "claude", "gemini", 
     "fastapi", "openai", "anthropic", "ollama",
-    "release-readiness", "evidence", "workflow", "prototype"
+    "personal-agent", "memory", "projects", "workflow", "prototype"
 ]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",

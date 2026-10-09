@@ -1,81 +1,125 @@
 # Zakera
 
-> **Project status: prototype under redesign.** The current codebase is an older, agent-generated AI orchestration prototype. It is not production-ready, and several legacy features and operations documents are unverified. Development is now moving toward a smaller, evidence-first vNext.
+> **Project status: pre-alpha redesign.** Zakera currently contains an older, agent-generated FastAPI and Next.js prototype. The product direction is defined below, but the new experience is not implemented yet and the repository is not ready for production use.
 
-**Know what is actually ready—and what you can safely say about it.**
+**A personal project operator that remembers what matters, keeps work moving, and leaves you in control.**
 
-Zakera vNext is being designed as an evidence-first release readiness assistant for GitHub teams. Its first workflow will turn repository content, pull requests, issues, CI results, and documentation into a claim-by-claim readiness report. Every factual conclusion must point to evidence, missing or conflicting information must stay visible, and Zakera must ask before it posts or changes anything.
+Zakera is being redesigned for one owner with many ongoing projects. Instead of starting every conversation from zero, it will carry forward approved context about your goals, preferences, decisions, and unfinished work. Give it an outcome; Zakera should assemble a plan, work through safe steps, produce useful artifacts, and pause before consequential actions.
 
-## First supported workflow
+The goal is not maximum autonomy. The goal is **trusted continuity**: useful work over time, with visible progress and exact control over what the agent can read or change.
 
-Given a repository and a revision, the Release Readiness Audit will:
+## Why Zakera
 
-1. read the relevant code, documentation, pull requests, issues, and checks;
-2. classify proposed release claims as supported, unsupported, conflicting, or needing owner review;
-3. produce a reviewable Markdown report and a machine-readable result;
-4. show the source, revision, and locator behind each factual claim; and
-5. make no external changes during the initial read-only release.
+Most assistants are either disposable chats or powerful agents with too little context and too much access. Zakera is exploring a more personal middle ground:
 
-The initial product is deliberately a repeatable task, not a general-purpose chat interface or agent platform.
+- **Personal continuity** — projects, decisions, preferences, and open loops persist with the owner's knowledge.
+- **Real execution** — the agent can research, plan, draft, inspect, test, and prepare changes instead of only answering questions.
+- **Inspectable work** — plans, sources, tool activity, artifacts, failures, and pending decisions remain visible.
+- **Owner control** — access is explicit, memory is reviewable, and consequential actions require approval.
+- **User-owned foundations** — local-first storage and replaceable models or tools are preferred where practical.
 
-## Current status
+Zakera's strongest idea is the combination of personalization and evidence: it should know enough to be useful without asking for blind trust.
 
-| Area | Status |
+## First product slice
+
+The first complete workflow will be a **personal project run** for technical and creative work:
+
+1. choose a project and describe an outcome;
+2. load only the profile, project context, and sources allowed for that run;
+3. create a reviewable plan with clear completion criteria;
+4. perform read, analysis, drafting, and isolated workspace steps;
+5. show progress, evidence, artifacts, blockers, and uncertainty;
+6. ask for approval before any external write or difficult-to-reverse action; and
+7. save a concise project update and proposed memory changes for review.
+
+Early tasks may include researching a decision, understanding a repository, drafting documentation, planning a feature, preparing code changes in an isolated workspace, and maintaining a project brief. Broad life administration, unrestricted computer control, and autonomous external communication are later possibilities—not MVP promises.
+
+## Inspiration
+
+Zakera learns from several products without attempting to clone them:
+
+| Project | What Zakera takes from it |
 | --- | --- |
-| Legacy FastAPI and Next.js prototype | Present, being evaluated for salvage |
-| Run, step, approval, and SSE concepts | Present; behavior may inform vNext |
-| Release Readiness Audit | Planned; not implemented yet |
-| Evidence and claim ledger | Planned; not implemented yet |
-| External write actions | Out of the first release; must require exact-action approval later |
-| Long-term memory, proactive scheduling, multi-agent workflows | Not part of vNext MVP |
-| Broad provider routing and arbitrary tools | Legacy surface; not a vNext goal |
-| Hosted or production deployment | Not supported |
+| [Muse](https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/) | A personal agent should understand long-term goals, continue useful work, and give the owner control over access. |
+| [OpenClaw](https://github.com/openclaw/openclaw) | State should be user-owned where practical; models, tools, and interaction channels should be replaceable boundaries. |
+| [Instinct](https://instinct.com/) | The interface should feel natural and low-friction, and the agent should understand what the owner is working on. |
+| [Devin](https://devin.ai/) | Longer tasks need a durable workspace, an explicit plan, observable progress, verification, and reviewable results. |
 
-The repository currently contains duplicated and disconnected surfaces, inconsistent database migrations, and legacy tools that are not safe execution sandboxes. The code-execution and unrestricted file-reading tools remain present in the legacy prototype but are excluded from vNext. Do not enable the legacy tool path for untrusted content or expose this repository to untrusted users or production credentials.
+Zakera is an independent personal project and is not affiliated with these products or companies.
 
-## vNext direction
+## Current reality
 
-The first implementation will use:
+| Area | Current state |
+| --- | --- |
+| Legacy application | FastAPI backend and Next.js frontend are present |
+| Conversations and model selection | Present in the legacy prototype |
+| Run, step, event, and approval concepts | Present; retained as material to characterize |
+| Unsafe code and unrestricted file tools | Disabled by default in the legacy prototype |
+| Personal profile and project context | Planned |
+| Reviewable long-term memory | Planned |
+| Durable background execution | Planned |
+| Browser, desktop, messaging, or voice control | Not implemented |
+| Secure execution sandbox | Not implemented |
+| Hosted service or production deployment | Not supported |
 
-- Next.js for the task, run timeline, evidence, and artifact-review interface;
-- a thin FastAPI application for workflow execution and persistence;
-- the OpenAI Agents SDK for the initial agent runtime;
-- direct, read-only GitHub function tools for the first vertical slice;
-- SQLAlchemy with a fresh Alembic history;
-- SQLite for single-user local development, with PostgreSQL required before shared deployment;
-- server-sent events for observable run updates; and
-- Markdown as the first artifact format.
+The repository also contains duplicated frontend surfaces, inconsistent database migrations, legacy dependency debt, and operations documents that have not been verified. File presence is not treated as proof that a feature works.
 
-MCP remains a future adapter boundary, not a day-one subsystem. Multi-provider routing, generic workflow builders, multi-agent orchestration, long-term memory, Kubernetes, Terraform, and a large observability stack will be reconsidered only if validated product use requires them.
+## Product principles
 
-The complete product, architecture, migration, security, testing, and delivery plan is in [docs/VNEXT_PLAN.md](docs/VNEXT_PLAN.md).
+1. **One owner first.** Build a genuinely useful personal agent before a team platform.
+2. **Context is permissioned.** A run receives only the profile, project, source, and credential scopes it needs.
+3. **Memory is reviewable.** The agent proposes durable memories; the owner can accept, edit, reject, or forget them.
+4. **Read, draft, and act are different capabilities.** New tools receive no authority by default.
+5. **Approval binds to the exact action.** Changing the target, arguments, or payload requires new approval.
+6. **Work must be inspectable.** Progress, evidence, artifacts, failures, and uncertainty remain visible.
+7. **Verification is part of execution.** A task is not complete because an agent says it is.
+8. **Small, reversible slices win.** Prove one end-to-end workflow before adding channels, agents, or infrastructure.
 
-## Trust model
+## Directional architecture
 
-Zakera vNext is governed by four rules:
+```text
+Web interface
+  -> thin application API
+      -> project and run service
+      -> reviewable memory service
+      -> append-only event timeline
+      -> policy and approval engine
+      -> agent runtime adapter
+      -> typed tool gateway
+      -> isolated workspace adapter
+      -> local SQLite repositories
+```
 
-1. **No evidence, no claim.** Missing evidence is reported, not guessed.
-2. **Repository content is untrusted input.** Instructions found in files, issues, or pull requests cannot change tool policy.
-3. **Read and write capabilities are separate.** The first release is read-only.
-4. **Approval binds to the exact action.** A future write approval must identify the actor, tool, target, arguments, payload, source revision, and expiry. Any change requires a new approval.
+The current direction keeps Next.js and a thin FastAPI service, introduces a fresh database and migration history for vNext, and keeps the agent runtime behind an adapter. SQLite is the first local store. Shared hosting, PostgreSQL, durable workers, and additional interaction channels come only after the single-user workflow is proven.
 
-## Working with the legacy prototype
+See the [vNext product and delivery plan](docs/VNEXT_PLAN.md) and the [verified repository status](docs/vnext/STATUS.md) for detailed boundaries and milestones.
 
-The current implementation remains in the repository while vNext is built in isolation. Its historical setup and feature documentation are retained under [`docs/`](docs/README.md), but should be treated as legacy reference unless explicitly marked as verified.
+## Roadmap
 
-Before publishing a new quick start, the vNext setup commands must be exercised in CI and from a clean checkout. Until then, use the milestone gates in the vNext plan rather than relying on the legacy production or deployment guides.
+- **M0 — Truth and containment:** document the inherited system, disable unsafe defaults, and simplify CI. In progress.
+- **M1 — Characterize useful legacy behavior:** lock down run events, approval, cancellation, and artifacts with black-box tests.
+- **M2 — Isolated foundation:** create the new profile, project, run, memory, policy, and artifact boundaries without importing legacy state.
+- **M3 — Personal project run:** deliver one complete read/draft/workspace workflow with visible progress and verification.
+- **M4 — Approved actions:** add narrowly scoped external writes with exact previews, approval receipts, and idempotency.
+- **M5 — Continuity:** add restart-safe execution and opt-in background or proactive work only after recovery behavior is proven.
+
+## Running the project
+
+There is intentionally no endorsed quick start yet. The checked-in setup guides describe the legacy prototype and have not been revalidated from a clean checkout. Publishing commands that merely look plausible would be misleading.
+
+A supported local setup will be added when it is exercised in CI and verified from a clean machine. Until then, treat documentation under [`docs/`](docs/README.md) as either current planning material or explicitly labeled legacy reference.
 
 ## Contributing
 
 The highest-value work is currently:
 
-- defining historical release cases for the evaluation set;
-- implementing the read-only Release Readiness Audit vertical slice;
-- designing evidence and claim semantics;
-- writing observable behavior tests for run, artifact, and approval boundaries; and
-- containing unsafe or misleading legacy paths without broad rewrites.
+- defining the personal profile, project context, and memory-review contracts;
+- adding black-box tests for run events, cancellation, approval, and artifact behavior;
+- implementing the isolated vNext data model and migration baseline;
+- building the first personal project run end to end; and
+- removing misleading or unsafe legacy surfaces without broad rewrites.
 
-Please keep changes small, reversible, and tied to a milestone acceptance gate in the [vNext plan](docs/VNEXT_PLAN.md).
+Keep changes focused, reversible, and tied to a milestone acceptance gate. Do not add new providers, channels, multi-agent orchestration, or deployment infrastructure without a demonstrated need.
 
 ## License
 

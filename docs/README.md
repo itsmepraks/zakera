@@ -6,7 +6,7 @@
 - [Zakera vNext status](vnext/STATUS.md) — verified legacy surface inventory, CI containment, and remaining unknowns.
 - [Security and dependency baseline](vnext/SECURITY_BASELINE.md) — live scanner status, verified audit results, and unresolved risk dispositions.
 - [CI/CD audit](vnext/CI_CD_AUDIT.md) — live workflow evidence, unsafe deployment findings, and the ordered remediation plan.
-- [Release readiness evaluation set](../evaluations/release_readiness/README.md) — blinded case format, initial inputs, and planned scoring.
+- [Release readiness evaluation experiment](../evaluations/release_readiness/README.md) — an earlier evidence-grounding experiment retained as useful test material, not the current product definition.
 - [Agent harness research](AGENT_HARNESS_RESEARCH.md) — earlier research that informed the vNext direction; it is background material, not the product contract.
 
 ## Legacy prototype documentation
