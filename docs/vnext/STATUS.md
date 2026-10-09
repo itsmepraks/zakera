@@ -172,7 +172,7 @@ The first backend run revealed that tokenizer initialization downloaded encoding
 | Workflow | Trigger after containment | Reason |
 | --- | --- | --- |
 | `test.yml` | automatic | Explicitly named legacy characterization subset; not a production-readiness gate |
-| `security.yml` | automatic + weekly + manual | Blocking Gitleaks secret scan; unsupported CodeQL/dependency-review gaps are documented separately |
+| `security.yml` | automatic + weekly + manual | Lightweight Gitleaks secret scan; unsupported CodeQL/dependency-review jobs were removed by owner decision |
 | `lint-pr-title.yml` | pull request | Narrow repository policy check |
 | `pr-labels.yml` | pull request | Narrow repository-maintenance action |
 | `cd.yml` | removed on this branch | Mixed real AWS/Terraform mutations with placeholder gates and internally inconsistent EKS/ECS targets |
@@ -191,7 +191,7 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 - makes mutation-capable legacy deployment and release workflows explicit-dispatch only;
 - stops scheduled or automatic stale performance and badge jobs;
 - removes duplicate `ci.yml` and the combined multi-environment pipeline after verifying no required-check dependency;
-- removes CodeQL’s silent-failure override;
+- records the failed historical CodeQL upload honestly, then removes the jobs by owner decision;
 - removes the unsafe legacy CD and release definitions after a full workflow/infrastructure audit;
 - establishes this inventory; and
 - adds a blinded evaluation case format and the first two inputs.

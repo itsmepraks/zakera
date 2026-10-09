@@ -15,7 +15,7 @@ The test workflow is useful only as a legacy characterization check. It does not
 | Workflow | Current evidence | Disposition |
 | --- | --- | --- |
 | `test.yml` | Maintained backend subset and frontend Jest run in PRs; lint/type/build are known exclusions | Retained and renamed as legacy characterization; not the vNext required gate |
-| `security.yml` | Gitleaks passes after a minimum permission fix; CodeQL cannot publish because code scanning is disabled; Dependency Review cannot run because its platform capability is unavailable | Retain Gitleaks and blocking CodeQL; unsupported dependency job removed; platform gaps tracked explicitly |
+| `security.yml` | Gitleaks passes after a minimum permission fix; CodeQL could not publish because code scanning was disabled; Dependency Review could not run because its platform capability was unavailable | Retain the lightweight Gitleaks check; CodeQL and the unsupported dependency job were removed by owner decision |
 | `lint-pr-title.yml` | Failed on the initial PR title and passed after correction | Retain with read-only permissions |
 | `pr-labels.yml` | Initially failed due to missing checkout and obsolete labeler schema; passed after both fixes | Retain as repository maintenance, not a product-quality gate |
 | `cd.yml` | No verified target; EKS Terraform conflicts with ECS commands; multiple checks are suppressed | Removed from active workflows on this branch |
@@ -79,7 +79,7 @@ This workflow should remain narrow and honest while vNext is isolated. Existing 
 
 - Gitleaks required `pull-requests: read`; after adding it, the live Secret Scanning check passed.
 - GitHub Dependency Review fails before analysis because the repository lacks the required platform capability.
-- CodeQL completes extraction and analysis but cannot upload SARIF because code scanning is disabled; that is not a clean result.
+- CodeQL completed extraction and analysis but could not upload SARIF because code scanning was disabled. The jobs were removed by owner decision instead of enabling a repository feature that is not needed for this personal project; the failed historical runs are not evidence of a clean scan.
 - The label workflow lacked checkout and used a pre-v5 configuration schema; both are now corrected and live-verified.
 - Several actions emit Node.js 20 deprecation warnings on the current hosted runner and need a separate, tested action-version refresh.
 - Actions use mutable major-version tags rather than commit-SHA pinning.

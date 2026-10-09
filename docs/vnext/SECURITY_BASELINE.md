@@ -24,7 +24,7 @@ Disposition: **configuration/platform blocker, not a clean dependency result**. 
 
 Both CodeQL language jobs initialized, autobuilt, analyzed, and exported SARIF successfully in PR #66. JavaScript/TypeScript and Python then failed at upload because GitHub reported that code scanning is not enabled for this repository. No CodeQL result was accepted by GitHub, so these runs are not evidence of a clean static analysis result.
 
-Disposition: **configuration/platform blocker, not a clean code result**. The CodeQL jobs remain blocking rather than being ignored or removed. Resolving the failure requires enabling code scanning in repository settings, or an explicit owner decision to replace these jobs with a supported blocking static-analysis implementation.
+Disposition: **removed by owner decision**. Zakera is a personal project and will not require GitHub code-scanning features. The non-operational CodeQL jobs were removed rather than ignored or represented as passing. This does not establish that the legacy code is free of static-analysis findings; future executable vNext code should use lightweight checks that fit the project's actual risk and hosting model.
 
 ## Locked frontend audit
 
