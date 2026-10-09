@@ -18,7 +18,7 @@ Disposition: **scanner operational; no finding was reported by the successful PR
 
 `actions/dependency-review-action@v4` does not currently reach dependency analysis. GitHub reports that Dependency Review is unsupported for this repository until Dependency Graph and the applicable GitHub Advanced Security capability are enabled.
 
-Disposition: **configuration/platform blocker, not a clean dependency result**. The unsupported job was removed from the active workflow rather than marked non-blocking or misrepresented as a passing audit. Enabling repository security features is an owner-level GitHub setting decision; until a supported blocking replacement exists, the absence remains explicit and local ecosystem audits provide the evidence below.
+Disposition: **removed by owner decision, not a clean dependency result**. The unsupported job was removed from the active workflow rather than marked non-blocking or misrepresented as passing. This personal project will use ecosystem-native audits when its active vNext package boundaries are established; it will not enable paid or unnecessary repository security features merely to satisfy a legacy workflow.
 
 ## GitHub code scanning
 
@@ -80,7 +80,7 @@ Disposition: **unresolved transitive risk plus reproducibility gap**. Determine 
 
 ## Next actions
 
-1. Decide whether to enable the repository features required by GitHub Dependency Review or replace that job with supported ecosystem-native audits.
+1. Add ecosystem-native dependency audits when the active vNext Python and frontend package boundaries are established.
 2. Define the supported Node.js, Next.js, Python, and database versions for the isolated M2 foundation.
 3. Remove unnecessary vulnerable dependency chains from vNext rather than inheriting the legacy dependency set.
 4. Keep the current legacy audit results visible until each direct dependency path is either upgraded, isolated, or retired.

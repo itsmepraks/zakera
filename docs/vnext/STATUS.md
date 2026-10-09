@@ -1,6 +1,6 @@
 # Zakera vNext Status
 
-**Snapshot date:** 2026-09-20
+**Snapshot date:** 2026-10-09
 **Baseline commit:** `f4849c256e7380b09b07e3c4c4a19d72fd4c0e49`
 **Working branch:** `codex/zakera-vnext-foundation`
 **Milestone:** M0 — Truth and containment
@@ -11,12 +11,12 @@ This document is the machine-reviewable inventory of the repository surface that
 
 | Area | Verified snapshot | Disposition |
 | --- | --- | --- |
-| Product | Legacy chat/orchestration prototype | Replace with the Release Readiness Audit |
+| Product | Legacy chat/orchestration prototype | Replace with a personal project operator for one owner |
 | Backend | FastAPI; 12 mounted routers from 25 route modules | Characterize the useful run/event behavior; do not expand |
 | Frontend | Next.js App Router plus multiple duplicate component trees | Salvage interaction requirements, not implementation wholesale |
 | Persistence | SQLAlchemy startup `create_all()` plus inconsistent Alembic graph | New isolated vNext database and migration history |
-| Tools | Six auto-discovered built-ins, including unsafe execution/file access | Exclude unsafe tools from vNext; disable legacy defaults in M1 |
-| CI/CD | Ten workflow files existed at baseline; six remain on this branch | One temporary test baseline; mutation-capable legacy workflows manual-only |
+| Tools | Six auto-discovered built-ins, including unsafe execution/file access | Unsafe legacy tools are disabled by default; vNext uses an allowlist |
+| CI/CD | Ten workflow files existed at baseline; four remain on this branch | One temporary characterization baseline plus lightweight repository checks; legacy delivery workflows removed |
 | Deployment | Kubernetes/Terraform/ECS/GHCR configurations exist | Unverified legacy material; no automatic deployment |
 | Runtime | Isolated dependencies installed; maintained tests run, but application startup is not yet verified | Do not publish a quick start yet |
 
@@ -172,7 +172,7 @@ The first backend run revealed that tokenizer initialization downloaded encoding
 | Workflow | Trigger after containment | Reason |
 | --- | --- | --- |
 | `test.yml` | automatic | Explicitly named legacy characterization subset; not a production-readiness gate |
-| `security.yml` | automatic + weekly + manual | Lightweight Gitleaks secret scan; unsupported CodeQL/dependency-review jobs were removed by owner decision |
+| `security.yml` | automatic + manual | Lightweight Gitleaks secret scan; unsupported CodeQL/dependency-review jobs were removed by owner decision |
 | `lint-pr-title.yml` | pull request | Narrow repository policy check |
 | `pr-labels.yml` | pull request | Narrow repository-maintenance action |
 | `cd.yml` | removed on this branch | Mixed real AWS/Terraform mutations with placeholder gates and internally inconsistent EKS/ECS targets |
@@ -184,11 +184,11 @@ The first backend run revealed that tokenizer initialization downloaded encoding
 
 The live GitHub settings were inspected before these deletions. On 2026-09-20, the repository showed no classic branch-protection rules and no repository rulesets, so no required status check depended on the removed workflow names. Recent Actions history showed daily Performance Testing failures and successful no-op Update Badges runs.
 
-PR #66 provided the first live integration evidence for this branch. Secret Scanning initially failed before scanning because Gitleaks lacked pull-request read permission; after adding the minimum read-only permission, the job passed. The PR labeler also passed after its missing checkout and obsolete v5 configuration schema were corrected. Dependency Review remains blocked because GitHub reports that the repository does not have the required Dependency Graph/Advanced Security capability. The verified audit results and dispositions are recorded in [the security and dependency baseline](SECURITY_BASELINE.md).
+PR #66 provided the first live integration evidence for this branch. Secret Scanning initially failed before scanning because Gitleaks lacked pull-request read permission; after adding the minimum read-only permission, the job passed. The PR labeler also passed after its missing checkout and obsolete v5 configuration schema were corrected. Unsupported CodeQL and Dependency Review jobs were removed by owner decision instead of enabling repository security features that this personal project does not need. The verified audit results and dispositions are recorded in [the security and dependency baseline](SECURITY_BASELINE.md).
 
 ## What this slice changes
 
-- makes mutation-capable legacy deployment and release workflows explicit-dispatch only;
+- removes mutation-capable legacy deployment and release workflows;
 - stops scheduled or automatic stale performance and badge jobs;
 - removes duplicate `ci.yml` and the combined multi-environment pipeline after verifying no required-check dependency;
 - records the failed historical CodeQL upload honestly, then removes the jobs by owner decision;
@@ -204,7 +204,6 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 - a clean local installation and application startup;
 - the full legacy pytest suite outside the maintained CI selection;
 - a passing legacy TypeScript check and production build;
-- a supported dependency-review mechanism for this repository;
 - the existence or health of any deployment target;
 - whether any legacy user data has value; and
 - whether the legacy deployment workflows are safe even when manually dispatched.
@@ -228,4 +227,4 @@ Workflow parsing proves syntax, not GitHub Actions runtime semantics. The manual
 
 1. Add black-box tests for the useful run/event/approval behavior.
 2. Review and freeze eight more evaluation inputs before implementing against them.
-3. Decide whether to enable GitHub's required dependency-review capability or use supported ecosystem-native checks.
+3. Define the owner profile, project context, memory proposal, and isolated workspace contracts for M2.
