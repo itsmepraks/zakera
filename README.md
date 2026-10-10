@@ -2,11 +2,11 @@
 
 > **Project status: pre-alpha redesign.** Zakera currently contains an older, agent-generated FastAPI and Next.js prototype. The product direction is defined below, but the new experience is not implemented yet and the repository is not ready for production use.
 
-**A personal project operator that remembers what matters, keeps work moving, and leaves you in control.**
+**An open-source framework for personal agents that remember what matters, keep work moving, and leave their owner in control.**
 
-Zakera is being redesigned for one owner with many ongoing projects. Instead of starting every conversation from zero, it will carry forward approved context about your goals, preferences, decisions, and unfinished work. Give it an outcome; Zakera should assemble a plan, work through safe steps, produce useful artifacts, and pause before consequential actions.
+Zakera is being redesigned so anyone can create and run their own personal project operator. Each Zakera instance is designed around one owner with many ongoing projects. Instead of starting every conversation from zero, it will carry forward approved context about that owner's goals, preferences, decisions, and unfinished work. Give it an outcome; Zakera should assemble a plan, work through safe steps, produce useful artifacts, and pause before consequential actions.
 
-The goal is not maximum autonomy. The goal is **trusted continuity**: useful work over time, with visible progress and exact control over what the agent can read or change.
+Zakera is framework software, not a hosted Zakera service. The maintainers provide architecture, reference implementation, extension boundaries, and documentation; each user owns and operates their instance. The goal is not maximum autonomy. The goal is **trusted continuity**: useful work over time, with visible progress and exact control over what the agent can read or change.
 
 ## Why Zakera
 
@@ -17,6 +17,7 @@ Most assistants are either disposable chats or powerful agents with too little c
 - **Inspectable work** — plans, sources, tool activity, artifacts, failures, and pending decisions remain visible.
 - **Owner control** — access is explicit, memory is reviewable, and consequential actions require approval.
 - **User-owned foundations** — local-first storage and replaceable models or tools are preferred where practical.
+- **Reusable architecture** — the framework gives different owners the same safe boundaries without prescribing one personality or workflow.
 
 Zakera's strongest idea is the combination of personalization and evidence: it should know enough to be useful without asking for blind trust.
 
@@ -60,13 +61,14 @@ Zakera is an independent personal project and is not affiliated with these produ
 | Durable background execution | Planned |
 | Browser, desktop, messaging, or voice control | Not implemented |
 | Secure execution sandbox | Not implemented |
-| Hosted service or production deployment | Not supported |
+| Verified local installation | Planned; the legacy setup is not endorsed yet |
+| Zakera-operated hosted service | Not planned; users own and operate their instances |
 
 The repository also contains duplicated frontend surfaces, inconsistent database migrations, legacy dependency debt, and operations documents that have not been verified. File presence is not treated as proof that a feature works.
 
 ## Product principles
 
-1. **One owner first.** Build a genuinely useful personal agent before a team platform.
+1. **One owner per instance, usable by anyone.** Build a reusable personal-agent framework without turning it into a shared SaaS platform.
 2. **Context is permissioned.** A run receives only the profile, project, source, and credential scopes it needs.
 3. **Memory is reviewable.** The agent proposes durable memories; the owner can accept, edit, reject, or forget them.
 4. **Read, draft, and act are different capabilities.** New tools receive no authority by default.
@@ -90,7 +92,7 @@ Web interface
       -> local SQLite repositories
 ```
 
-The current direction keeps Next.js and a thin FastAPI service, introduces a fresh database and migration history for vNext, and keeps the agent runtime behind an adapter. SQLite is the first local store. Shared hosting, PostgreSQL, durable workers, and additional interaction channels come only after the single-user workflow is proven.
+The current direction keeps Next.js and a thin FastAPI service, introduces a fresh database and migration history for vNext, and keeps the agent runtime behind an adapter. SQLite is the first local store. Zakera will not operate shared hosting; optional infrastructure such as PostgreSQL, durable workers, or additional interaction channels belongs behind documented adapters for users who need it after the local workflow is proven.
 
 See the [vNext product and delivery plan](docs/VNEXT_PLAN.md) and the [verified repository status](docs/vnext/STATUS.md) for detailed boundaries and milestones.
 
@@ -119,7 +121,7 @@ The highest-value work is currently:
 - building the first personal project run end to end; and
 - removing misleading or unsafe legacy surfaces without broad rewrites.
 
-Keep changes focused, reversible, and tied to a milestone acceptance gate. Do not add new providers, channels, multi-agent orchestration, or deployment infrastructure without a demonstrated need.
+Keep changes focused, reversible, and tied to a milestone acceptance gate. Do not add new providers, channels, multi-agent orchestration, or provider-specific deployment infrastructure to the core without a demonstrated framework need.
 
 ## License
 

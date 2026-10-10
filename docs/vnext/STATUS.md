@@ -11,7 +11,7 @@ This document is the machine-reviewable inventory of the repository surface that
 
 | Area | Verified snapshot | Disposition |
 | --- | --- | --- |
-| Product | Legacy chat/orchestration prototype | Replace with a personal project operator for one owner |
+| Product | Legacy chat/orchestration prototype | Replace with an open-source framework for owner-controlled personal agents |
 | Backend | FastAPI; 12 mounted routers from 25 route modules | Characterize the useful run/event behavior; do not expand |
 | Frontend | Next.js App Router plus multiple duplicate component trees | Salvage interaction requirements, not implementation wholesale |
 | Persistence | SQLAlchemy startup `create_all()` plus inconsistent Alembic graph | New isolated vNext database and migration history |

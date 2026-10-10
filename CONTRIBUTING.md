@@ -1,6 +1,6 @@
 # Contributing to Zakera
 
-Zakera is a pre-alpha personal project agent under redesign. The current repository includes a legacy prototype; the accepted direction and milestone gates are documented in [`docs/VNEXT_PLAN.md`](docs/VNEXT_PLAN.md).
+Zakera is a pre-alpha open-source framework for people to build and run their own personal project agents. Each instance is owner-controlled; the project does not operate a hosted service. The current repository includes a legacy prototype, and the accepted direction and milestone gates are documented in [`docs/VNEXT_PLAN.md`](docs/VNEXT_PLAN.md).
 
 ## Current priorities
 
@@ -12,7 +12,7 @@ The highest-value contributions are:
 - one complete personal project run; and
 - focused removal or quarantine of misleading legacy surfaces.
 
-Please do not add providers, tools, channels, multi-agent orchestration, deployment infrastructure, or broad dependency upgrades without an agreed milestone need.
+Please do not add providers, tools, channels, multi-agent orchestration, provider-specific deployment infrastructure, or broad dependency upgrades without an agreed framework need.
 
 ## Development setup
 

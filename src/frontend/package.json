@@ -1,7 +1,7 @@
 {
   "name": "zakera-frontend",
   "version": "0.7.0",
-  "description": "Legacy frontend for the Zakera personal project agent redesign",
+  "description": "Legacy frontend for the Zakera personal-agent framework redesign",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.11.4",

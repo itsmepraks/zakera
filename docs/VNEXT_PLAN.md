@@ -7,9 +7,11 @@
 
 ## 1. Decision
 
-Zakera vNext will be a **personal project operator for one owner**.
+Zakera vNext will be an **open-source framework for building and running a personal project operator**.
 
-It will remember approved context about the owner's goals, preferences, decisions, projects, and unfinished work. Given an outcome, it will create a plan, work through safe steps, produce artifacts, verify observable results, and pause before consequential actions.
+Anyone should be able to use the framework for their own benefit. Each instance is designed around one owner: it will remember approved context about that owner's goals, preferences, decisions, projects, and unfinished work. Given an outcome, it will create a plan, work through safe steps, produce artifacts, verify observable results, and pause before consequential actions.
+
+Zakera itself is not a hosted service and this project does not operate user instances. The project ships architecture, a reference implementation, extension contracts, and documentation. Users retain responsibility for their models, credentials, data, infrastructure, and enabled capabilities.
 
 This replaces the earlier proposal to make release readiness the product. Evidence-grounded release review remains useful as an evaluation case and possible project skill, but it is not Zakera's identity.
 
@@ -19,7 +21,7 @@ The project will not attempt to match the breadth of a universal life assistant 
 
 **Promise:** Zakera remembers what matters, keeps your projects moving, and shows its work before anything important changes.
 
-**Primary user:** one technical or creative owner managing several ongoing projects.
+**Primary user:** a technical or creative person running their own Zakera instance across several ongoing projects. The framework is reusable by many people; personal context and authority never cross instance boundaries.
 
 **Core problem:** useful context, decisions, and unfinished work are scattered across chats, repositories, notes, and browser research. General assistants repeatedly reconstruct that context, while highly autonomous agents can act without enough visibility or control.
 
@@ -102,7 +104,7 @@ The first release does not include:
 - a public tool/plugin marketplace;
 - many model providers or automatic model routing;
 - shared accounts, teams, roles, or billing;
-- hosted production deployment;
+- a Zakera-operated hosted service or managed deployment;
 - Kubernetes, Terraform, or a large observability stack; or
 - migration of legacy conversations or credentials.
 
@@ -156,7 +158,7 @@ Thin FastAPI application
 | Workspace | Isolated per-run directory with explicit allowed roots | Prevents the legacy unrestricted file boundary |
 | Artifacts | Files plus structured metadata | Keeps results useful outside the chat UI |
 
-PostgreSQL, durable workers, additional model providers, MCP, native apps, and messaging channels are deferred until the local single-user workflow passes its gates.
+The core project will prove the local single-owner workflow first. PostgreSQL, durable workers, additional model providers, MCP, native apps, and messaging channels may later exist as optional adapters. Provider-specific deployment infrastructure remains outside the core project, and no extension implies that Zakera operates a hosted service.
 
 ### 7.2 Domain model
 
@@ -239,7 +241,7 @@ The legacy in-process Python executor is not a sandbox and will not be reused.
 
 ## 11. Privacy and data ownership
 
-- Local-first storage is the default for the single-user release.
+- Local-first storage is the default for every owner-controlled instance.
 - Credentials are server-managed and referenced by handles, never stored in prompts or run artifacts.
 - Logs and artifacts apply deterministic secret redaction before persistence.
 - Source access is scoped per project and snapshotted per run.
@@ -328,15 +330,16 @@ The legacy application remains recoverable while vNext is built in isolation.
 - explicit notification rules; and
 - proactive suggestions only after relevance, privacy, and dismissal controls pass evaluation.
 
-## 15. Public presentation gate
+## 15. Public framework presentation gate
 
-Before presenting Zakera as runnable on a website or public repository:
+Before presenting Zakera as runnable on its documentation website or public repository:
 
 - verify a clean local install from documented commands;
 - provide one real screenshot or demo from the active interface;
 - publish only tested capabilities;
 - show the current milestone and known limitations;
 - remove or clearly quarantine unsupported deployment material;
+- state clearly that Zakera is self-operated open-source software, not a hosted service;
 - verify license, repository description, topics, homepage, and social preview; and
 - ensure CI is green without paid or unavailable repository features.
 
@@ -347,7 +350,7 @@ The following remain intentionally unresolved until their milestone:
 - the first supported runtime/model implementation;
 - the isolation mechanism required before command execution;
 - the first external write action;
-- whether the first website is documentation-only or an interactive local demo;
+- how the documentation website should present the local reference implementation;
 - the threshold for enabling durable background work; and
 - whether release-readiness evaluation becomes an optional skill or stays test-only.
 
