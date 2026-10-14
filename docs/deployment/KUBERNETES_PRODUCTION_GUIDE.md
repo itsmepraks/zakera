@@ -1,5 +1,8 @@
 # Kubernetes Production Deployment Guide
 
+> [!WARNING]
+> **Legacy and unsupported.** This guide has not been validated, the associated delivery workflows were removed, and Kubernetes is not part of the Zakera vNext core project.
+
 ## 🎯 Overview
 
 Complete guide for deploying Zakera AI Chat Agent to production Kubernetes clusters with enterprise-grade features including auto-scaling, service mesh, comprehensive monitoring, and security hardening.

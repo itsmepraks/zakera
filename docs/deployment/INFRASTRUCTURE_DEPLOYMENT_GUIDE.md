@@ -1,5 +1,8 @@
 # Infrastructure & Deployment Guide
 
+> [!WARNING]
+> **Legacy and unsupported.** This guide has not been validated, the associated delivery workflows were removed, and provider-specific deployment infrastructure is outside the Zakera vNext core project.
+
 ## 🎯 Complete Infrastructure Deployment for Zakera
 
 Comprehensive guide for deploying Zakera AI Chat Agent with production-ready infrastructure, including Kubernetes, CI/CD, monitoring, and security.

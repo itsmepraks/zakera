@@ -1,5 +1,8 @@
 # Quick Start Guide
 
+> [!WARNING]
+> **Legacy and unverified.** These commands describe the inherited prototype and are not a supported Zakera vNext installation path. Use the root README and `docs/VNEXT_PLAN.md` for current status.
+
 Get Zakera up and running in 5 minutes! This guide covers the fastest path to a working installation.
 
 ## Prerequisites
