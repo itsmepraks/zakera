@@ -4,22 +4,28 @@ All notable changes to Zakera are documented here.
 
 ## Unreleased
 
-- Rewrote README around the project's actual vision (habit-based AI orchestration)
-- Deleted ~11,000 lines of dead code (unused memory implementations, unused provider files, unused cache layer)
-- Fixed monitoring — metrics middleware and system metrics collector now actually record data
-- Wired OpenTelemetry tracing into app startup
-- Fixed broken imports across multiple provider files
-- Cleaned up requirements.txt (removed unused heavy ML deps, fixed typos, loosened version pins)
-- Fixed SQLAlchemy reserved attribute name collision on `metadata` column
-- Added LICENSE, SECURITY.md, CODE_OF_CONDUCT.md
-- Rewrote CONTRIBUTING.md to reflect actual project state
+### Direction
 
-## Earlier work
+- Repositioned Zakera as a pre-alpha open-source framework for owner-controlled personal agents.
+- Defined trusted continuity, inspectable execution, reviewable memory, explicit capability grants, and exact-action approval as the core product principles.
+- Clarified that Zakera is not a hosted service; users will own and operate their own instances.
+- Added the vNext product, architecture, migration, verification, and milestone plan.
 
-The initial codebase was scaffolded with AI assistance and includes:
-- FastAPI backend with JWT auth, MFA, and conversation management
-- 21+ LLM provider integrations with failover
-- Tool framework (web search, code execution, calculator, file I/O)
-- React + TypeScript frontend
-- Docker, Kubernetes, Helm, and Terraform configs
-- Prometheus, Grafana, and Jaeger monitoring setup
+### Safety and repository maintenance
+
+- Disabled the unsafe legacy code-execution and unrestricted file-reading tools by default.
+- Removed contradictory and unverified deployment, release, duplicate CI, performance, and badge workflows.
+- Replaced the old test pipeline with an honestly scoped legacy characterization gate.
+- Retained a lightweight secret scan and removed unsupported CodeQL and Dependency Review jobs by owner decision.
+- Made tokenizer-dependent tests deterministic and declared SQLAlchemy's asyncio dependency explicitly.
+- Documented known legacy build, migration, dependency, and deployment limitations without claiming production readiness.
+
+### Documentation
+
+- Rebuilt the README around the framework direction, present implementation status, architecture, safety boundaries, and roadmap.
+- Marked inherited setup, operations, security, and deployment material as legacy and unverified.
+- Replaced unverified contributor setup commands with milestone-aligned contribution guidance.
+
+## Legacy prototype
+
+The inherited prototype includes a FastAPI backend, Next.js frontend, conversation and model-selection paths, run and approval concepts, a broad provider surface, tool infrastructure, and historical deployment assets. Presence in the repository does not establish that each feature is connected, supported, secure, or production-ready.

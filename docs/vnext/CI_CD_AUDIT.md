@@ -92,10 +92,10 @@ Use two explicitly different checks during migration:
 1. **Legacy characterization** — a small, stable backend/frontend behavior subset. Its name must not imply production readiness.
 2. **vNext required CI** — blocking format/lint/type, unit/integration tests, frontend production build, blank-database migration, deterministic evaluation smoke, secret scan, and supported dependency audit for the isolated vNext paths.
 
-There should be no deployment or release workflow until a hosted-beta decision establishes a real target. When deployment returns, it should build once, scan before publishing, use immutable digests, authenticate with short-lived identity, require protected environments, validate migrations and smoke tests, and rehearse rollback before production access is granted.
+Zakera will not operate a hosted service, so the core repository should not regain provider-specific deployment automation. If downstream users later need optional packaging or self-managed deployment guidance, it must remain outside the required core path and must not imply an official hosted environment.
 
 ## Ordered remediation
 
 1. Define supported toolchain versions and create strict vNext CI alongside the first isolated executable slice.
 2. Address action runtime deprecations and pin third-party actions in a dedicated supply-chain hardening slice.
-3. Consider a new CD design only after the hosted-beta gate and target-infrastructure decision.
+3. Keep provider-specific deployment infrastructure outside the core project; document only self-managed packaging that has been independently verified.

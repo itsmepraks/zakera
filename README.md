@@ -6,11 +6,11 @@
 
 Zakera is being redesigned so anyone can create and run their own personal project operator. Each Zakera instance is designed around one owner with many ongoing projects. Instead of starting every conversation from zero, it will carry forward approved context about that owner's goals, preferences, decisions, and unfinished work. Give it an outcome; Zakera should assemble a plan, work through safe steps, produce useful artifacts, and pause before consequential actions.
 
-Zakera is framework software, not a hosted Zakera service. The maintainers provide architecture, reference implementation, extension boundaries, and documentation; each user owns and operates their instance. The goal is not maximum autonomy. The goal is **trusted continuity**: useful work over time, with visible progress and exact control over what the agent can read or change.
+Zakera is framework software, not a hosted Zakera service. The maintainers are building the architecture, reference implementation, extension boundaries, and documentation; each user will own and operate their instance. The goal is not maximum autonomy. The goal is **trusted continuity**: useful work over time, with visible progress and exact control over what the agent can read or change.
 
 ## Why Zakera
 
-Most assistants are either disposable chats or powerful agents with too little context and too much access. Zakera is exploring a more personal middle ground:
+Most assistants are either disposable chats or powerful agents with too little context and too much access. Zakera is exploring a more personal middle ground. The following are design goals, not claims about the current legacy prototype:
 
 - **Personal continuity** — projects, decisions, preferences, and open loops persist with the owner's knowledge.
 - **Real execution** — the agent can research, plan, draft, inspect, test, and prepare changes instead of only answering questions.

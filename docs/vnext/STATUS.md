@@ -221,7 +221,7 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 - all active documentation-index links resolve; and
 - `git diff --check` reports no whitespace errors.
 
-Workflow parsing proves syntax, not GitHub Actions runtime semantics. The manual-only deployment/release triggers and retained automatic checks must still be observed in a pull request.
+Workflow parsing proves syntax, not GitHub Actions runtime semantics. The retained automatic checks have been observed in PR #66; the removed legacy deployment and release workflows are not supported paths.
 
 ## Next M0/M1 actions
 
