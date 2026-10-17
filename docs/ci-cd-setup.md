@@ -1,5 +1,8 @@
 # CI/CD Setup Documentation
 
+> [!WARNING]
+> **Legacy and unsupported.** The CI/CD workflows described here were removed or replaced. Zakera does not operate a hosted service or supported deployment pipeline; see `docs/vnext/CI_CD_AUDIT.md`.
+
 ## Overview
 
 Zakera uses a comprehensive CI/CD pipeline built with GitHub Actions to ensure code quality, security, and reliable deployments. The pipeline consists of two main workflows:

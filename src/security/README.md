@@ -1,5 +1,8 @@
 # Security Module
 
+> [!WARNING]
+> **Legacy module documentation.** The claims below have not been verified as a supported security boundary and must not be read as a production-readiness statement.
+
 ## Overview
 
 This module provides enterprise-grade security features for Zakera, including authentication, authorization, and protection mechanisms.

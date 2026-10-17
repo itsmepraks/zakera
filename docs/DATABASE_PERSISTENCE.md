@@ -1,5 +1,8 @@
 # Database Persistence System
 
+> [!WARNING]
+> **Legacy and unverified.** The inherited migration graph is inconsistent and this page is not the vNext persistence contract. See `docs/VNEXT_PLAN.md` and `docs/vnext/STATUS.md`.
+
 Comprehensive guide to the conversation persistence system in Zakera.
 
 ## Overview

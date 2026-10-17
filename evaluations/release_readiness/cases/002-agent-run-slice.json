@@ -1,0 +1,28 @@
+{
+  "id": "002-agent-run-slice",
+  "title": "Agent-run feature slice readiness",
+  "repository": "itsmepraks/zakera",
+  "revision": "75bf00f325be691e554635b1dc44ea9354ae19a5",
+  "target": "Assess the evidence available for announcing the initial agent-run experience.",
+  "proposed_claims": [
+    "Users can inspect agent activity runs in the frontend.",
+    "Risky tool execution pauses for explicit approval.",
+    "Agent-run updates stream to the interface.",
+    "Approval decisions are durable across application restart.",
+    "The agent-run feature was covered by automated tests at this revision."
+  ],
+  "required_source_categories": [
+    "repository_files",
+    "commit_history",
+    "pull_requests",
+    "issues",
+    "ci_checks",
+    "documentation"
+  ],
+  "constraints": {
+    "read_only": true,
+    "public_repository": true,
+    "external_writes": false
+  },
+  "frozen_at": "2026-09-20"
+}

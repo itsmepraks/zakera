@@ -1,5 +1,8 @@
 # Terraform Infrastructure
 
+> [!WARNING]
+> **Legacy and unsupported.** This infrastructure has not been validated, conflicts with historical delivery assumptions, and is outside the Zakera vNext core project.
+
 Terraform configuration for deploying Zakera to AWS.
 
 ## Architecture

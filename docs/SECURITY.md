@@ -1,5 +1,8 @@
 # Security and Authentication Guide
 
+> [!WARNING]
+> **Legacy and unverified.** This document inventories intended prototype features; it is not a security certification or statement of production readiness. See the root `SECURITY.md` for the current reporting policy.
+
 ## Overview
 
 Zakera provides enterprise-grade security with OAuth2, RBAC, MFA, API key management, and comprehensive protection mechanisms.

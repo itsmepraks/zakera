@@ -1,5 +1,8 @@
 # Zakera Frontend
 
+> [!WARNING]
+> **Legacy frontend inventory.** These components do not represent the planned vNext experience, and file presence does not prove a component is reachable or supported.
+
 ## Enhanced Chat UI Features
 
 This frontend implementation includes modern chat UI components with rich interactions:

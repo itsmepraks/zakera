@@ -1,5 +1,8 @@
 # Zakera Tool Integration System
 
+> [!WARNING]
+> **Legacy module documentation.** The vNext tool boundary is allowlisted and capability-based. Unsafe legacy code-execution and unrestricted file-reading tools are disabled by default and are not sandboxes.
+
 The tool system extends Zakera's AI capabilities with external tools and services.
 
 ## 📁 Directory Structure

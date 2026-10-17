@@ -1,5 +1,8 @@
 # Zakera Monitoring Stack
 
+> [!WARNING]
+> **Legacy and unverified.** This stack is not part of the Zakera vNext core project and must not be presented as a supported production capability.
+
 Production-ready monitoring and observability for the Zakera AI Chat Agent.
 
 ## Quick Start

@@ -1,5 +1,8 @@
 # Production Deployment Guide
 
+> [!WARNING]
+> **Legacy and unverified.** This is not a supported deployment guide. Zakera does not operate a hosted service, and the referenced deployment workflows and infrastructure have not been validated.
+
 ## Overview
 
 This guide covers deploying Zakera AI Chat Agent to production Kubernetes clusters with high availability, autoscaling, and comprehensive monitoring.

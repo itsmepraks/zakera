@@ -1,5 +1,8 @@
 # Zakera Architecture
 
+> [!WARNING]
+> **Legacy architecture reference.** This page describes the inherited prototype, not the accepted vNext framework architecture. See `docs/VNEXT_PLAN.md` for the current design.
+
 Zakera is a layered AI chat platform that combines a React-based frontend, a FastAPI backend, a provider-agnostic model layer, multiple memory strategies, and deployment infrastructure for local and cloud environments.
 
 ## High-level system diagram

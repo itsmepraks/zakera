@@ -1,30 +1,40 @@
 # Security Policy
 
+## Project status
+
+Zakera is a pre-alpha framework under redesign. There is no supported production release, hosted Zakera service, or maintained release branch yet. The repository still contains legacy code and documentation that have not been fully security-reviewed.
+
+Do not expose the legacy application to untrusted users or production credentials. Unsafe legacy code-execution and unrestricted file-reading tools are disabled by default and are not security sandboxes.
+
 ## Reporting a vulnerability
 
-If you find a security issue, **do not open a public issue**. Instead, email the maintainer directly.
+Please use [GitHub private vulnerability reporting](https://github.com/itsmepraks/zakera/security/advisories/new) when it is available for the repository. This keeps sensitive details out of public issues.
 
-Include:
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if you have one)
+If private vulnerability reporting is unavailable, open a public issue containing only a request for a private reporting channel. Do not include exploit details, credentials, personal data, or other sensitive information in that issue.
 
-You should get a response within 48 hours. We'll work with you to understand the issue, fix it, and coordinate disclosure.
+Useful reports include:
 
-## What counts as a security issue
+- the affected commit or version;
+- a concise description and potential impact;
+- minimal reproduction steps;
+- relevant configuration assumptions; and
+- a suggested mitigation, if known.
 
-- Authentication or authorization bypasses
-- API key or credential exposure
-- SQL injection, XSS, or other injection attacks
-- Anything that could expose user data
+Response timing depends on maintainer availability. Receipt, investigation, remediation, and disclosure timing will be communicated through the private report rather than guaranteed in advance.
 
-## What's not a security issue
+## Security scope
 
-- Bugs that don't have security implications (open a regular issue instead)
-- Feature requests
-- Questions about how something works
+Examples include:
+
+- authentication or authorization bypasses;
+- credential, secret, or personal-data exposure;
+- injection vulnerabilities;
+- unsafe tool or workspace boundary escapes;
+- approval or capability-policy bypasses; and
+- supply-chain issues with a concrete effect on Zakera users.
+
+Ordinary bugs, feature requests, and questions can use regular GitHub issues.
 
 ## Supported versions
 
-Only the latest version on `main` is actively maintained. We don't backport security fixes to older versions.
+No version is currently supported for production use. Security fixes target the active development branch unless a future release policy states otherwise.

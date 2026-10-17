@@ -7,6 +7,7 @@ functionality for the Zakera tool ecosystem.
 
 import importlib
 import logging
+import os
 import pkgutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
@@ -14,6 +15,13 @@ from typing import Any, Dict, List, Optional, Type
 from src.tools.base import Tool, ToolNotFoundError
 
 logger = logging.getLogger(__name__)
+
+UNSAFE_LEGACY_BUILTIN_MODULES = {"code_executor", "file_reader"}
+
+
+def unsafe_legacy_tools_enabled() -> bool:
+    """Return whether unsafe legacy built-ins were explicitly enabled."""
+    return os.getenv("ZAKERA_ENABLE_UNSAFE_LEGACY_TOOLS", "false").lower() == "true"
 
 
 class ToolRegistry:
@@ -178,6 +186,18 @@ class ToolRegistry:
             
             # Import all modules in builtin directory
             for _, module_name, _ in pkgutil.iter_modules([str(builtin_path)]):
+                if (
+                    module_name in UNSAFE_LEGACY_BUILTIN_MODULES
+                    and not unsafe_legacy_tools_enabled()
+                ):
+                    logger.warning(
+                        "Skipping unsafe legacy tool module '%s'; set "
+                        "ZAKERA_ENABLE_UNSAFE_LEGACY_TOOLS=true only for "
+                        "explicit, trusted local testing",
+                        module_name,
+                    )
+                    continue
+
                 try:
                     module = importlib.import_module(
                         f"src.tools.builtin.{module_name}"
