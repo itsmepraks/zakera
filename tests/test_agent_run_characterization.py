@@ -307,4 +307,3 @@ def test_agent_run_has_no_cancellation_endpoint(
     response = run_api_client.post(f"/api/v1/agent-runs/{run.id}/cancel")
 
     assert response.status_code == 404
-
