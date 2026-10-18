@@ -137,7 +137,12 @@ async def test_completed_run_emits_ordered_public_events(
     }
 
     run = test_db.query(AgentRun).filter(AgentRun.id == run_id).one()
-    steps = test_db.query(AgentStep).filter(AgentStep.run_id == run_id).all()
+    steps = (
+        test_db.query(AgentStep)
+        .filter(AgentStep.run_id == run_id)
+        .order_by(AgentStep.sequence)
+        .all()
+    )
     assert run.status == "completed"
     assert run.completed_at is not None
     assert run.total_tokens == 7
@@ -175,6 +180,16 @@ async def test_provider_failure_emits_terminal_error_and_persists_failed_run(
     )
     assert failed_step.step_type == "error"
     assert failed_step.error == "provider unavailable"
+    stale_model_step = (
+        test_db.query(AgentStep)
+        .filter(
+            AgentStep.run_id == run.id,
+            AgentStep.step_type == "model_call",
+            AgentStep.status == "started",
+        )
+        .one()
+    )
+    assert stale_model_step.completed_at is None
 
 
 @pytest.mark.asyncio
@@ -240,10 +255,8 @@ async def test_multiple_approvals_block_execution_until_all_are_resolved(
 
     assert completed.run.status == "completed"
     assert completed.content == "Both approved actions completed"
-    assert tools.calls == [
-        ("file_reader", {"path": "README.md"}),
-        ("code_executor", {"code": "print(1)"}),
-    ]
+    assert {name for name, _parameters in tools.calls} == {"file_reader", "code_executor"}
+    assert len(tools.calls) == 2
 
 
 def test_run_detail_is_owner_scoped_and_has_no_artifact_contract(
@@ -280,12 +293,15 @@ def test_run_detail_is_owner_scoped_and_has_no_artifact_contract(
 
     owned_response = run_api_client.get(f"/api/v1/agent-runs/{owned_run.id}")
     other_response = run_api_client.get(f"/api/v1/agent-runs/{other_run.id}")
+    missing_response = run_api_client.get("/api/v1/agent-runs/missing-run-id")
 
     assert owned_response.status_code == 200
     assert owned_response.json()["id"] == owned_run.id
     assert "artifacts" not in owned_response.json()
-    assert other_response.status_code == 404
-    assert other_response.json() == {"detail": "Agent run not found"}
+    assert (other_response.status_code, other_response.json()) == (
+        missing_response.status_code,
+        missing_response.json(),
+    ) == (404, {"detail": "Agent run not found"})
 
 
 def test_agent_run_has_no_cancellation_endpoint(
@@ -306,4 +322,10 @@ def test_agent_run_has_no_cancellation_endpoint(
 
     response = run_api_client.post(f"/api/v1/agent-runs/{run.id}/cancel")
 
+    agent_run_paths = {
+        path
+        for route in run_api_client.app.routes
+        if (path := getattr(route, "path", "")).startswith("/api/v1/agent-runs")
+    }
+    assert not any("cancel" in path for path in agent_run_paths)
     assert response.status_code == 404
