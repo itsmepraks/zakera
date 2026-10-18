@@ -1,11 +1,14 @@
 # Zakera vNext Status
 
-**Snapshot date:** 2026-10-09
-**Baseline commit:** `f4849c256e7380b09b07e3c4c4a19d72fd4c0e49`
-**Working branch:** `codex/zakera-vnext-foundation`
-**Milestone:** M0 — Truth and containment
+**Inventory snapshot date:** 2026-10-09
+**Legacy baseline commit:** `f4849c256e7380b09b07e3c4c4a19d72fd4c0e49`
+**Current foundation commit:** `fea845c5e5f579a1a5ba3b76da32033318042c5c`
+**Working branch:** `codex/m1-characterize-agent-runs`
+**Milestone:** M1 — Characterize useful behavior (in progress)
 
 This document is the machine-reviewable inventory of the repository surface that exists before vNext implementation. It records what is active, disconnected, unsafe, or unverified; it does not promise that the listed behavior works.
+
+The first M1 slice now records run lifecycle, failure, approval, ownership, cancellation, and artifact behavior in [`M1_CHARACTERIZATION.md`](M1_CHARACTERIZATION.md). M0 containment is merged; no isolated vNext implementation exists yet.
 
 ## Status summary
 
@@ -223,8 +226,8 @@ PR #66 provided the first live integration evidence for this branch. Secret Scan
 
 Workflow parsing proves syntax, not GitHub Actions runtime semantics. The retained automatic checks have been observed in PR #66; the removed legacy deployment and release workflows are not supported paths.
 
-## Next M0/M1 actions
+## Next M1 actions
 
-1. Add black-box tests for the useful run/event/approval behavior.
+1. Characterize rejection with multiple pending approvals, run-list ordering, and chat-route SSE translation.
 2. Review and freeze eight more evaluation inputs before implementing against them.
-3. Define the owner profile, project context, memory proposal, and isolated workspace contracts for M2.
+3. Complete the salvage/replace record, then define the owner profile, project context, memory proposal, and isolated workspace contracts for M2.
