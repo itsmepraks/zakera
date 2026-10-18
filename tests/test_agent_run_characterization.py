@@ -99,7 +99,7 @@ async def collect_events(service: AgentRunService, conversation: Conversation, u
 
 
 @pytest.mark.asyncio
-async def test_completed_run_emits_ordered_public_events(
+async def test_completed_run_emits_ordered_service_events(
     test_db,
     run_owner,
     run_conversation,
@@ -259,7 +259,7 @@ async def test_multiple_approvals_block_execution_until_all_are_resolved(
     assert len(tools.calls) == 2
 
 
-def test_run_detail_is_owner_scoped_and_has_no_artifact_contract(
+def test_run_detail_is_owner_scoped_and_omits_artifacts_field(
     run_api_client,
     test_db,
     test_user,
