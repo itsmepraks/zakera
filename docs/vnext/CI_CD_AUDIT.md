@@ -2,7 +2,7 @@
 
 **Snapshot date:** 2026-09-20
 **Live verification:** [PR #66](https://github.com/itsmepraks/zakera/pull/66)
-**Scope:** all tracked GitHub Actions workflows, supporting label/Dependabot configuration, and referenced deployment artifacts
+**Scope:** all tracked GitHub Actions workflows, supporting label and dependency-update configuration, and referenced deployment artifacts
 
 ## Conclusion
 
@@ -83,7 +83,7 @@ This workflow should remain narrow and honest while vNext is isolated. Existing 
 - The label workflow lacked checkout and used a pre-v5 configuration schema; both are now corrected and live-verified.
 - Several actions emit Node.js 20 deprecation warnings on the current hosted runner and need a separate, tested action-version refresh.
 - Actions use mutable major-version tags rather than commit-SHA pinning.
-- Dependabot groups broad backend and frontend updates, which is risky while the legacy application already has unresolved type/build and dependency debt.
+- Automated Dependabot update PRs are paused while the legacy application has unresolved type/build and dependency debt. The small active GitHub Actions surface will be updated manually during planned maintenance until vNext package boundaries and dependency policy exist.
 
 ## Target CI shape
 
