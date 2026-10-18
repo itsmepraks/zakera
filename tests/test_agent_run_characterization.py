@@ -8,10 +8,17 @@ architecture.
 from __future__ import annotations
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-from src.api.models import AgentRun, AgentStep, Conversation, Message, User
+from src.api.auth import get_current_active_user
+from src.api.database import get_db
+from src.api.models import AgentApproval, AgentRun, AgentStep, Conversation, Message, User
+from src.api.routes import agent_runs
+from src.api.services import agent_run_service as service_module
 from src.api.services.agent_run_service import AgentRunService
 from src.model.providers import ModelResponse
+from src.tools.base import ToolResult
 
 
 class RecordedProvider:
@@ -23,6 +30,18 @@ class RecordedProvider:
         if isinstance(response, Exception):
             raise response
         return response
+
+
+class RecordedTools:
+    def __init__(self):
+        self.calls = []
+
+    async def execute_tool(self, tool_name, parameters, *args, **kwargs):
+        self.calls.append((tool_name, parameters))
+        return ToolResult.success_result(
+            data={"tool": tool_name, "parameters": parameters},
+            execution_time=0.01,
+        )
 
 
 @pytest.fixture
@@ -50,6 +69,21 @@ def run_conversation(test_db, run_owner):
     test_db.commit()
     test_db.refresh(conversation)
     return conversation
+
+
+@pytest.fixture
+def run_api_client(test_db, test_user):
+    app = FastAPI()
+    app.include_router(agent_runs.router, prefix="/api/v1")
+
+    def override_get_db():
+        yield test_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_active_user] = lambda: test_user
+
+    with TestClient(app) as client:
+        yield client
 
 
 async def collect_events(service: AgentRunService, conversation: Conversation, user: User):
@@ -141,4 +175,136 @@ async def test_provider_failure_emits_terminal_error_and_persists_failed_run(
     )
     assert failed_step.step_type == "error"
     assert failed_step.error == "provider unavailable"
+
+
+@pytest.mark.asyncio
+async def test_multiple_approvals_block_execution_until_all_are_resolved(
+    monkeypatch,
+    test_db,
+    run_owner,
+    run_conversation,
+):
+    tools = RecordedTools()
+    monkeypatch.setattr(service_module, "get_tool_manager", lambda: tools)
+    provider = RecordedProvider(
+        ModelResponse(
+            content="",
+            model="recorded-model",
+            usage={"total_tokens": 5},
+            finish_reason="tool_calls",
+            tool_calls=[
+                {
+                    "id": "read-1",
+                    "function": {
+                        "name": "file_reader",
+                        "arguments": '{"path":"README.md"}',
+                    },
+                },
+                {
+                    "id": "exec-1",
+                    "function": {
+                        "name": "code_executor",
+                        "arguments": '{"code":"print(1)"}',
+                    },
+                },
+            ],
+        ),
+        ModelResponse(
+            content="Both approved actions completed",
+            model="recorded-model",
+            usage={"total_tokens": 11},
+            finish_reason="stop",
+        ),
+    )
+    service = AgentRunService(test_db, provider_factory=lambda _model: provider)
+    initial = await service.run_chat(
+        conversation=run_conversation,
+        user=run_owner,
+        message="Use both tools",
+        tools_enabled=True,
+    )
+    approvals = (
+        test_db.query(AgentApproval)
+        .filter(AgentApproval.run_id == initial.run.id)
+        .order_by(AgentApproval.created_at, AgentApproval.id)
+        .all()
+    )
+
+    first = await service.approve(initial.run, approvals[0], run_owner)
+
+    assert first.approval_required is True
+    assert initial.run.status == "waiting_for_approval"
+    assert tools.calls == []
+
+    completed = await service.approve(initial.run, approvals[1], run_owner)
+
+    assert completed.run.status == "completed"
+    assert completed.content == "Both approved actions completed"
+    assert tools.calls == [
+        ("file_reader", {"path": "README.md"}),
+        ("code_executor", {"code": "print(1)"}),
+    ]
+
+
+def test_run_detail_is_owner_scoped_and_has_no_artifact_contract(
+    run_api_client,
+    test_db,
+    test_user,
+    test_user2,
+    test_conversation,
+):
+    owned_run = AgentRun(
+        conversation_id=test_conversation.id,
+        user_id=test_user.id,
+        status="completed",
+        model_name="recorded-model",
+        tools_enabled=False,
+    )
+    other_conversation = Conversation(
+        title="Other owner",
+        user_id=test_user2.id,
+        model_name="recorded-model",
+    )
+    test_db.add_all([owned_run, other_conversation])
+    test_db.commit()
+    test_db.refresh(other_conversation)
+    other_run = AgentRun(
+        conversation_id=other_conversation.id,
+        user_id=test_user2.id,
+        status="completed",
+        model_name="recorded-model",
+        tools_enabled=False,
+    )
+    test_db.add(other_run)
+    test_db.commit()
+
+    owned_response = run_api_client.get(f"/api/v1/agent-runs/{owned_run.id}")
+    other_response = run_api_client.get(f"/api/v1/agent-runs/{other_run.id}")
+
+    assert owned_response.status_code == 200
+    assert owned_response.json()["id"] == owned_run.id
+    assert "artifacts" not in owned_response.json()
+    assert other_response.status_code == 404
+    assert other_response.json() == {"detail": "Agent run not found"}
+
+
+def test_agent_run_has_no_cancellation_endpoint(
+    run_api_client,
+    test_db,
+    test_user,
+    test_conversation,
+):
+    run = AgentRun(
+        conversation_id=test_conversation.id,
+        user_id=test_user.id,
+        status="running",
+        model_name="recorded-model",
+        tools_enabled=False,
+    )
+    test_db.add(run)
+    test_db.commit()
+
+    response = run_api_client.post(f"/api/v1/agent-runs/{run.id}/cancel")
+
+    assert response.status_code == 404
 
