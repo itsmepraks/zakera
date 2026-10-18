@@ -80,6 +80,7 @@ jobs:
             tests/test_auth.py \
             tests/test_memory.py \
             tests/test_agent_run_service.py \
+            tests/test_agent_run_characterization.py \
             tests/unit \
             --tb=short \
             --timeout=60 \
